@@ -5,71 +5,57 @@
     </header>
 
     <main class="forms-wrapper">
-      <section class="auth-section">
-        <div class="auth-card">
-          <h2>LOG IN</h2>
-          
-          <form @submit.prevent="handleLogin" class="auth-form">
-            <div class="input-group">
-              <span class="icon">#</span> <input 
-                type="text" 
-                v-model="loginHash" 
-                placeholder="HASH / ACCESS CODE" 
-                required
-              />
-            </div>
+      <div class="auth-card">
+        <h2>ACCOUNT ACCESS</h2>
+        
+        <form @submit.prevent class="auth-form">
+          <div class="input-group">
+            <span class="icon">#</span> 
+            <input 
+              type="text" 
+              v-model="userHash" 
+              placeholder="HASH / ACCESS CODE" 
+              required
+            />
+          </div>
 
-            <div class="input-group">
-              <span class="icon">🔒</span> <input 
-                type="password" 
-                v-model="loginPassword" 
-                placeholder="PASSWORD" 
-                required
-              />
-            </div>
+          <div class="input-group">
+            <span class="icon">🔒</span> 
+            <input 
+              type="password" 
+              v-model="userPassword" 
+              placeholder="PASSWORD" 
+              required
+            />
+          </div>
 
-            <button type="submit" class="btn btn-login">LOG IN</button>
-          </form>
-
-          <p class="forgot-password">
-            Forgot Password? Email sg@scvmun.com to reset it.
-          </p>
-        </div>
-      </section>
-
-      <section class="auth-section">
-        <div class="auth-card">
-          <h2>FIRST-TIME REGISTRATION</h2>
-          
-          <form @submit.prevent="handleRegister" class="auth-form">
-            <div class="input-group">
-              <span class="icon">#</span>
-              <input 
-                type="text" 
-                v-model="registerHash" 
-                placeholder="HASH / ACCESS CODE" 
-                required
-              />
-            </div>
-
-            <div class="input-group">
-              <span class="icon">🔒</span>
-              <input 
-                type="password" 
-                v-model="registerPassword" 
-                placeholder="PASSWORD" 
-                required
-              />
-            </div>
-
-            <button type="submit" class="btn btn-register">REGISTER</button>
-          </form>
-        </div>
+          <div class="button-group">
+            <button 
+              type="button" 
+              @click="handleLogin" 
+              class="btn btn-login"
+            >
+              LOG IN
+            </button>
+            
+            <button 
+              type="button" 
+              @click="handleRegister" 
+              class="btn btn-register"
+            >
+              FIRST-TIME REGISTER
+            </button>
+          </div>
+        </form>
 
         <p class="registration-note">
-          If unregistered, your chosen password will be linked to this unique hash on the backend.
+          First time? Entering your details and clicking <strong>First-Time Register</strong> will link your password to your unique hash on the backend.
         </p>
-      </section>
+
+        <p class="forgot-password">
+          Forgot Password? Email sg@scvmun.com to reset it.
+        </p>
+      </div>
     </main>
 
     <footer class="bottom-notes-section">
@@ -85,20 +71,25 @@
 <script setup>
 import { ref } from 'vue'
 
-// Reactive state for forms
-const loginHash = ref('')
-const loginPassword = ref('')
-const registerHash = ref('')
-const registerPassword = ref('')
+// Unified reactive state for both actions
+const userHash = ref('')
+const userPassword = ref('')
 
-// Placeholder functions for form submission
 const handleLogin = () => {
-  console.log('Logging in with:', loginHash.value, loginPassword.value)
+  if (!userHash.value || !userPassword.value) {
+    alert('Please enter both your hash and password.')
+    return
+  }
+  console.log('Logging in with:', userHash.value, userPassword.value)
   // Connect to your authService here
 }
 
 const handleRegister = () => {
-  console.log('Registering with:', registerHash.value, registerPassword.value)
+  if (!userHash.value || !userPassword.value) {
+    alert('Please enter both your hash and password.')
+    return
+  }
+  console.log('Registering with:', userHash.value, userPassword.value)
   // Connect to your authService here
 }
 </script>
@@ -107,12 +98,11 @@ const handleRegister = () => {
 /* GENERAL LAYOUT */
 .page-container {
   min-height: 100vh;
-  /* Muted solid dark background */
   background-color: #1a1d21;
   color: #ffffff;
   display: flex;
   flex-direction: column;
-  font-family: Arial, sans-serif; /* Clean, standard font */
+  font-family: Arial, sans-serif;
   padding: 0 20px;
 }
 
@@ -129,31 +119,22 @@ const handleRegister = () => {
 
 /* FORMS SECTION */
 .forms-wrapper {
-  flex: 1; /* Pushes footer down */
+  flex: 1;
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 40px; /* Space between boxes */
-  max-width: 1200px;
-  margin: 0 auto;
   padding: 40px 0;
 }
 
-.auth-section {
-  flex: 1;
-  max-width: 500px;
-  display: flex;
-  flex-direction: column;
-}
-
-/* CARDS - Solid and Opaque */
+/* CARD LAYOUT - Centered Single Box */
 .auth-card {
-  /* Slightly lighter solid background to distinguish card */
+  width: 100%;
+  max-width: 480px;
   background-color: #2a2e35;
   padding: 40px;
-  border-radius: 8px; /* Regular slight rounded corners */
-  border: 1px solid #3f444e; /* Added subtle border for definition */
-  box-shadow: 0 4px 6px rgba(0,0,0,0.3); /* Standard shadow, no fancy glow */
+  border-radius: 8px;
+  border: 1px solid #3f444e;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
 
 .auth-card h2 {
@@ -174,7 +155,7 @@ const handleRegister = () => {
 .input-group {
   display: flex;
   align-items: center;
-  background-color: #1a1d21; /* Solid input background */
+  background-color: #1a1d21;
   border: 1px solid #3f444e;
   border-radius: 4px;
   padding: 10px 15px;
@@ -193,7 +174,6 @@ const handleRegister = () => {
   outline: none;
 }
 
-/* placeholder color */
 .input-group input::placeholder {
   color: #888888;
 }
@@ -202,19 +182,26 @@ const handleRegister = () => {
   color: #aaaaaa;
 }
 
-/* BUTTONS - Solid colors */
-.btn {
+/* BUTTON GROUP (SIDE-BY-SIDE) */
+.button-group {
+  display: flex;
+  gap: 12px;
   margin-top: 15px;
+}
+
+.btn {
+  flex: 1;
   padding: 12px;
   border: none;
   border-radius: 4px;
   font-weight: bold;
   cursor: pointer;
-  font-size: 1rem;
+  font-size: 0.95rem;
+  transition: background-color 0.2s ease;
 }
 
 .btn-login {
-  background-color: #6366f1; /* Solid indigo */
+  background-color: #6366f1;
   color: #ffffff;
 }
 
@@ -223,7 +210,7 @@ const handleRegister = () => {
 }
 
 .btn-register {
-  background-color: #22d3ee; /* Solid cyan */
+  background-color: #22d3ee;
   color: #111111;
 }
 
@@ -232,19 +219,23 @@ const handleRegister = () => {
 }
 
 /* CONTEXT TEXT */
-.forgot-password {
-  margin-top: 20px;
-  text-align: center;
-  font-size: 0.9rem;
-  color: #aaaaaa;
-}
-
 .registration-note {
-  margin-top: 20px;
-  font-size: 0.9rem;
+  margin-top: 25px;
+  font-size: 0.85rem;
   color: #aaaaaa;
   text-align: center;
   line-height: 1.4;
+}
+
+.registration-note strong {
+  color: #ffffff;
+}
+
+.forgot-password {
+  margin-top: 15px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: #aaaaaa;
 }
 
 /* FOOTER NOTES */
@@ -255,7 +246,6 @@ const handleRegister = () => {
 }
 
 .notes-container {
-  /* Solid background for footer notes block */
   background-color: #2a2e35;
   border: 1px solid #3f444e;
   border-radius: 8px;
@@ -273,10 +263,9 @@ const handleRegister = () => {
 }
 
 /* Responsive adjustment for small screens */
-@media (max-width: 768px) {
-  .forms-wrapper {
+@media (max-width: 480px) {
+  .button-group {
     flex-direction: column;
-    padding: 20px 0;
   }
 }
 </style>
