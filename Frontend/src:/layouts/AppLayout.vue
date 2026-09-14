@@ -36,27 +36,18 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '../stores/auth'
 
 const router = useRouter()
+const authStore = useAuthStore()
 
-// Mock user session data (Replace with Pinia store or auth state)
-const currentUser = ref({
-  name: 'Alex Johnson',
-  role: 'chair', // 'admin', 'chair', 'delegate'
-  committee: 'DISEC'
-})
-
-const handleImageError = (e) => {
-  // Graceful fallback if logo image is not found in src/assets/
-  e.target.style.display = 'none'
-}
+const currentUser = computed(() => authStore.user || { name: 'Guest', role: 'none' })
 
 const handleLogout = () => {
-  console.log('Logging out user...')
-  // Clear auth tokens / session state here
-  router.push('/login')
+  authStore.logout()
+  router.push('/')
 }
 </script>
 

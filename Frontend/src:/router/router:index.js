@@ -100,33 +100,32 @@ const getHomeRouteForRole = (role) => {
   }
 }
 
+import { useAuthStore } from '../stores/auth'
+
 // Global Navigation Guard
 router.beforeEach((to, from, next) => {
-  // Replace these with your global state/Pinia store
-  const isLoggedIn = false 
-  const userRole = null    
+  const authStore = useAuthStore()
+  const isLoggedIn = authStore.isLoggedIn
+  const userRole = authStore.userRole
 
-  // 1. If user is logged in and tries to access Login page, send them to their dashboard
+  // 1. If logged in and navigating to login page, send to home
   if (to.name === 'login-register' && isLoggedIn) {
     return next(getHomeRouteForRole(userRole))
   }
 
-  // 2. Route Requires Auth Check
+  // 2. Auth Check
   if (to.meta.requiresAuth) {
     if (!isLoggedIn) {
-      // Unauthenticated -> Redirect to Login
       return next({ name: 'login-register' })
     }
 
     // 3. Role Authorization Check
     const allowedRoles = to.meta.roles
     if (allowedRoles && !allowedRoles.includes(userRole)) {
-      // User lacks role access -> Redirect to 403
       return next({ name: 'unauthorized' })
     }
   }
 
-  // Allow access
   next()
 })
 
