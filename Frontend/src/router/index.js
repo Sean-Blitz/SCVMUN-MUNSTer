@@ -100,7 +100,7 @@ const getHomeRouteForRole = (role) => {
   }
 }
 
-import { useAuthStore } from '../stores/auth'
+import { useAuthStore } from '../stores/auth.js'
 
 // Global Navigation Guard
 router.beforeEach((to, from, next) => {
