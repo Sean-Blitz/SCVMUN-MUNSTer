@@ -124,8 +124,11 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import apiClient from '@/api/client'
+import { useToastStore } from '@/stores/toast'
 
 const router = useRouter()
+const toastStore = useToastStore()
 
 // Reactive State
 const chairName = ref('')
@@ -165,7 +168,7 @@ const getNextTimestamp = (section, index) => {
   }
   
   // If at end of pre-conference, bridge to first item of during-conference
-  if (section === 'pre' && timeline.value.duringConference.length > 0) {
+  if (section === 'pre' && timeline.value.duringConference?.length > 0) {
     return timeline.value.duringConference[0].timestamp
   }
   
@@ -197,28 +200,23 @@ const getStatusLabel = (status) => {
   }
 }
 
-// Fetch initial data on mount
+// Fetch initial data from backend on mount
 onMounted(async () => {
-  // Mock API payload response
-  chairName.value = 'Sarah'
-  committeeName.value = 'Disarmament and International Security (DISEC)'
-  delegatesRegistered.value = 18
-  totalDelegates.value = 20
-  papersGraded.value = 14
-  totalPapersSubmitted.value = 18
+  try {
+    const response = await apiClient.get('/chair/committee/overview')
+    
+    // Assign stats and committee details
+    chairName.value = response.data.chairName
+    committeeName.value = response.data.committeeName
+    delegatesRegistered.value = response.data.delegatesRegistered
+    totalDelegates.value = response.data.totalDelegates
+    papersGraded.value = response.data.papersGraded
+    totalPapersSubmitted.value = response.data.totalPapersSubmitted
 
-  timeline.value = {
-    preConference: [
-      { label: 'Background Guide Published', timestamp: '2026-08-15T09:00:00Z' },
-      { label: 'Position Paper Deadline', timestamp: '2026-09-01T23:59:00Z' },
-      { label: 'Pre-Conference Chair Briefing', timestamp: '2026-09-06T18:00:00Z' }
-    ],
-    duringConference: [
-      { label: 'Roll Call & Opening Statements (Session 1)', timestamp: '2026-09-07T08:30:00Z' },
-      { label: 'Unmoderated Caucusing & Working Papers', timestamp: '2026-09-07T11:00:00Z' },
-      { label: 'Draft Resolution Review (Session 2)', timestamp: '2026-09-07T14:00:00Z' },
-      { label: 'Voting Procedure & Closing Session', timestamp: '2026-09-07T16:30:00Z' }
-    ]
+    // Assign schedule timeline
+    timeline.value = response.data.timeline
+  } catch (error) {
+    // Errors automatically trigger global Toast notifications via client.js
   }
 })
 </script>

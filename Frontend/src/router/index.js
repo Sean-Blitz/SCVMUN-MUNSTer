@@ -41,7 +41,7 @@ const routes = [
       },
       {
         path: 'advisor/school-overview',
-        name: 'advisor-school',
+        name: 'school-overview',
         component: () => import('../views/advisor/AdvisorSchoolView.vue'),
         meta: { roles: ['advisor'] }
       },

@@ -160,19 +160,20 @@ const handleFileSelect = (event) => {
 }
 
 // Upload submission function
-const submitPaper = async () => {
-  if (!selectedFile.value) return
-
+const submitPaper = async (file) => {
   const formData = new FormData()
-  formData.append('file', selectedFile.value)
+  formData.append('paper', file)
 
-  console.log('Submitting PDF to server:', selectedFile.value.name)
-  // Call paper submission service here
+  await apiClient.post('/delegate/upload-paper', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+  toastStore.showToast('Paper submitted successfully!', 'success')
 }
 
 // Fetch dashboard data from backend on mount
 onMounted(async () => {
-  // Replace with API client fetch
+  const response = await apiClient.get('/delegate/my-assignment')
+  assignment.value = response.data
 })
 </script>
 

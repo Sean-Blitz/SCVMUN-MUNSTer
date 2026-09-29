@@ -120,6 +120,8 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import apiClient from '@/api/client'
+import { useToastStore } from '@/stores/toast'
 
 // Reactive State
 const totalDelegates = ref(0)
@@ -128,6 +130,7 @@ const storage = ref({ usedGb: 0, totalGb: 0 })
 const ports = ref([])
 const downtimeEvents = ref([])
 const checkingPorts = ref(false)
+const toastStore = useToastStore() // Assuming you have a global toast store for notifications
 
 // Computed
 const storagePercentage = computed(() => {
@@ -135,69 +138,59 @@ const storagePercentage = computed(() => {
   return Number(((storage.value.usedGb / storage.value.totalGb) * 100).toFixed(1))
 })
 
-// File Download Helper
-const downloadFile = (url, fileName) => {
-  console.log(`Triggering direct file download from: ${url}`)
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = fileName
-  document.body.appendChild(anchor)
-  anchor.click()
-  document.body.removeChild(anchor)
+// 1. Refactored File Download Helper (Fetches secure files/logs via Axios)
+const downloadFile = async (endpoint, fileName) => {
+  try {
+    const response = await apiClient.get(endpoint, {
+      responseType: 'blob' // Essential for binary/text file downloads
+    })
+
+    // Create a temporary browser download link
+    const blob = new Blob([response.data])
+    const url = window.URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = fileName
+    document.body.appendChild(anchor)
+    anchor.click()
+    document.body.removeChild(anchor)
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    toastStore.showToast(`Failed to download ${fileName}.`, 'error')
+  }
 }
 
-// Fetch Port Health on Button Click
+// 2. Refactored Port Health Fetch (Real network ping endpoint)
 const fetchPortHealth = async () => {
   checkingPorts.value = true
-  
-  // Simulated Backend Port Ping Response
-  setTimeout(() => {
-    ports.value = [
-      { name: 'HTTP Web API', port: 8080, status: 'healthy' },
-      { name: 'Database (PostgreSQL)', port: 5432, status: 'healthy' },
-      { name: 'WebSocket Stream', port: 3001, status: 'healthy' },
-      { name: 'SMTP Gateway', port: 587, status: 'unreachable' }
-    ]
+
+  try {
+    const response = await apiClient.get('/admin/ports/health')
+    ports.value = response.data
+  } catch (error) {
+    // Errors automatically pop up via global toast interceptor
+  } finally {
     checkingPorts.value = false
-  }, 600)
+  }
 }
 
 // Fetch Initial Dashboard Data
 onMounted(async () => {
-  // Mock Data Feed
-  totalDelegates.value = 142
-  committeeCounts.value = [
-    { committee: 'DISEC', count: 35 },
-    { committee: 'SOCHUM', count: 48 },
-    { committee: 'WHO', count: 44 },
-    { committee: 'UNSC', count: 15 }
-  ]
+  try {
+    // 2. Fetch system overview data from your API
+    const response = await apiClient.get('/admin/dashboard-stats')
+    
+    // 3. Assign the backend data directly to your reactive refs
+    totalDelegates.value = response.data.totalDelegates
+    committeeCounts.value = response.data.committeeCounts
+    storage.value = response.data.storage
+    downtimeEvents.value = response.data.downtimeEvents
 
-  storage.value = {
-    usedGb: 18.4,
-    totalGb: 64.0
+    // Existing port fetch
+    await fetchPortHealth()
+  } catch (error) {
+    // Backend errors will automatically pop up via your global toast store!
   }
-
-  // Downtime incidents logged by server (only sent when downtime occurred)
-  downtimeEvents.value = [
-    {
-      id: 1,
-      startTime: 'Sep 5, 2026 03:14 AM',
-      endTime: 'Sep 5, 2026 03:22 AM',
-      duration: '8 mins',
-      reason: 'Database Connection Timeout during backup'
-    },
-    {
-      id: 2,
-      startTime: 'Sep 2, 2026 11:45 PM',
-      endTime: 'Sep 3, 2026 12:01 AM',
-      duration: '16 mins',
-      reason: 'Unscheduled Server Reboot'
-    }
-  ]
-
-  // Initial fetch for ports
-  await fetchPortHealth()
 })
 </script>
 

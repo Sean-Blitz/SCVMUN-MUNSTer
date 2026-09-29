@@ -2,18 +2,18 @@
   <div class="advisor-page">
     <!-- TOP VIEW TOGGLE BUTTONS -->
     <div class="toggle-container">
-      <button 
-        class="toggle-btn active" 
-        @click="switchView('/advisor/delegates')"
-      >
-        Delegates Overview
-      </button>
-      <button 
-        class="toggle-btn" 
-        @click="switchView('/advisor/school')"
-      >
-        School Overview
-      </button>
+    <button 
+      class="toggle-btn active" 
+      @click="switchView('advisor-roster')"
+    >
+      Delegates Overview
+    </button>
+    <button 
+      class="toggle-btn" 
+      @click="switchView('school-overview')"
+    >
+      School Overview
+    </button>
     </div>
 
     <!-- STATS SUMMARY -->
@@ -123,10 +123,13 @@
 </template>
 
 <script setup>
+import apiClient from '@/api/client'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useToastStore } from '@/stores/toast'
 
 const router = useRouter()
+const toastStore = useToastStore()
 
 // Reactive State
 const totalDelegates = ref(0)
@@ -139,8 +142,8 @@ const passwordInput = ref('')
 const errorMessage = ref('')
 
 // Navigation toggle
-const switchView = (path) => {
-  router.push(path)
+const switchView = (routeName) => {
+  router.push({ name: routeName })
 }
 
 // Map paper status to badge colors
@@ -156,13 +159,28 @@ const getStatusClass = (status) => {
   }
 }
 
-// Paper Download Handler
+// 1. Refactored Paper Download Handler
 const downloadPaper = async (delegateId) => {
-  console.log(`Downloading PDF for delegate ID: ${delegateId}`)
-  // Connect to API service to fetch blob endpoint
+  try {
+    const response = await apiClient.get(`/advisor/delegates/${delegateId}/paper`, {
+      responseType: 'blob' // Required for PDF/file download
+    })
+
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `delegate_${delegateId}_paper.pdf`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (err) {
+    toastStore.showToast('Failed to download position paper.', 'error')
+  }
 }
 
-// Password Verification Logic
+// 2. Refactored Password Verification & Hash Unlocking
 const verifyPasswordAndReveal = async () => {
   if (!passwordInput.value) {
     errorMessage.value = 'Password is required.'
@@ -170,14 +188,18 @@ const verifyPasswordAndReveal = async () => {
   }
 
   try {
-    // Replace with backend authentication API call
-    console.log('Verifying password with backend...')
-    
-    // On success: populate/reveal hashes
+    // Send password to unlock decrypted delegate hashes
+    const response = await apiClient.post('/advisor/verify-hashes', {
+      password: passwordInput.value
+    })
+
+    // Update delegates list with returned unmasked hashes
+    delegates.value = response.data.delegates
     hashesRevealed.value = true
+    toastStore.showToast('Delegate hashes revealed successfully.', 'success')
     closeModal()
   } catch (err) {
-    errorMessage.value = 'Incorrect password. Access denied.'
+    errorMessage.value = err.response?.data?.message || 'Incorrect password. Access denied.'
   }
 }
 
@@ -187,39 +209,15 @@ const closeModal = () => {
   errorMessage.value = ''
 }
 
-// Fetch initial list on mount
+// 3. Refactored Initial Data Fetch on Mount
 onMounted(async () => {
-  // Mock initial payload matching expected server structure
-  totalDelegates.value = 3
-  delegates.value = [
-    {
-      id: 1,
-      country: 'France',
-      committee: 'DISEC',
-      paperStatus: 'graded',
-      paperGrade: '95/100',
-      hash: 'FR-9021',
-      registered: true
-    },
-    {
-      id: 2,
-      country: 'Brazil',
-      committee: 'UNHCR',
-      paperStatus: 'submitted',
-      paperGrade: 'N/A',
-      hash: 'BR-4092',
-      registered: true
-    },
-    {
-      id: 3,
-      country: 'Japan',
-      committee: 'ECOFIN',
-      paperStatus: 'unsubmitted',
-      paperGrade: 'N/A',
-      hash: 'JP-1102',
-      registered: false
-    }
-  ]
+  try {
+    const response = await apiClient.get('/advisor/delegates')
+    delegates.value = response.data.delegates
+    totalDelegates.value = response.data.total
+  } catch (err) {
+    // Global toast interceptor handles network/server errors automatically
+  }
 })
 </script>
 

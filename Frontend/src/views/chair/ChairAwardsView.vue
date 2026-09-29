@@ -135,6 +135,8 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useToastStore } from '@/stores/toast'
+import apiClient from '@/api/client'
 
 const router = useRouter()
 
@@ -218,13 +220,19 @@ const closeModal = () => {
   validationError.value = ''
 }
 
-// Award Submission & Validation Logic
+// 1. Refactored Award Submission & Validation Logic
 const submitAwardAndScore = async () => {
   if (!activeDelegate.value) return
 
+  validationError.value = ''
+
   // Frontend Validation Check:
-  // If an award (Verbal, Honorable, Outstanding, Best) is selected, rubric must be completed
-  const requiresRubric = ['Verbal Commendation', 'Honorable Mention', 'Outstanding Delegate', 'Best Delegate'].includes(selectedAward.value)
+  const requiresRubric = [
+    'Verbal Commendation',
+    'Honorable Mention',
+    'Outstanding Delegate',
+    'Best Delegate'
+  ].includes(selectedAward.value)
 
   if (requiresRubric) {
     const scoredCategoriesCount = Object.keys(gradingScores.value).length
@@ -243,92 +251,38 @@ const submitAwardAndScore = async () => {
     totalScore: calculatedTotalScore.value
   }
 
-  console.log('Persisting award/rubric update to backend:', payload)
+  try {
+    // Send award assignment and scores to backend
+    await apiClient.post(`/chair/awards/${activeDelegate.value.id}`, payload)
 
-  // Update local view state immediately
-  activeDelegate.value.assignedAward = selectedAward.value
-  activeDelegate.value.scores = { ...gradingScores.value }
-  activeDelegate.value.totalScore = calculatedTotalScore.value
+    // Update local view state upon success
+    activeDelegate.value.assignedAward = selectedAward.value
+    activeDelegate.value.scores = { ...gradingScores.value }
+    activeDelegate.value.totalScore = calculatedTotalScore.value
 
-  closeModal()
+    toastStore.showToast('Award saved successfully.', 'success')
+    closeModal()
+  } catch (error) {
+    // Errors handle popup automatically via client.js
+  }
 }
 
-// Fetch Initial State on Mount (Data includes current awards and scores)
+// 2. Refactored Fetch Initial State on Mount
 onMounted(async () => {
-  // Mock Backend API Payload
-  awardsList.value = [
-    'Verbal Commendation',
-    'Honorable Mention',
-    'Outstanding Delegate',
-    'Best Delegate'
-  ]
+  try {
+    // Fetch available awards, evaluation rubric, and delegate list concurrently
+    const [awardsRes, rubricRes, delegatesRes] = await Promise.all([
+      apiClient.get('/chair/awards/options'),
+      apiClient.get('/chair/rubric'),
+      apiClient.get('/chair/awards/delegates')
+    ])
 
-  rubricMatrix.value = [
-    {
-      id: 'speech',
-      label: 'Public Speaking & Debate',
-      levels: [
-        { score: 5, label: 'Developing', description: 'Hesitant delivery, rare contributions, struggles to articulate policy clearly.' },
-        { score: 10, label: 'Proficient', description: 'Clear speeches, actively participates in moderated debate, represents country well.' },
-        { score: 15, label: 'Exemplary', description: 'Commands the room, highly persuasive, framing discussion and driving committee debate.' }
-      ]
-    },
-    {
-      id: 'leadership',
-      label: 'Caucus & Coalition Leadership',
-      levels: [
-        { score: 5, label: 'Developing', description: 'Passive in bloc discussions, follows majority without contributing core ideas.' },
-        { score: 10, label: 'Proficient', description: 'Collaborates with peers, helps draft clauses, aids unmoderated caucus flow.' },
-        { score: 15, label: 'Exemplary', description: 'Primary coalition leader, builds consensus across opposing blocs, authors key clauses.' }
-      ]
-    },
-    {
-      id: 'resolutions',
-      label: 'Resolution & Policy Accuracy',
-      levels: [
-        { score: 5, label: 'Developing', description: 'Working papers lack proper UN formatting or deviate from assigned national policy.' },
-        { score: 10, label: 'Proficient', description: 'Accurate national policy adherence, well-structured operative clauses.' },
-        { score: 15, label: 'Exemplary', description: 'Comprehensive solutions, flawless UN resolution formatting, solves complex key issues.' }
-      ]
-    }
-  ]
-
-  // Mock 25 delegates with initial backend states (retaining persistent awards/scores)
-  const sampleCountries = [
-    'Germany', 'France', 'Brazil', 'Japan', 'United Kingdom',
-    'Egypt', 'India', 'Canada', 'South Africa', 'Mexico',
-    'Australia', 'South Korea', 'Argentina', 'Nigeria', 'Italy',
-    'Spain', 'China', 'United States', 'Saudi Arabia', 'Indonesia',
-    'Turkey', 'Sweden', 'Norway', 'Poland', 'Vietnam'
-  ]
-
-  delegates.value = sampleCountries.map((country, index) => {
-    // Mocking existing data fetched from server
-    let assignedAward = 'None'
-    let scores = {}
-    let totalScore = null
-
-    if (index === 0) {
-      assignedAward = 'Best Delegate'
-      scores = { speech: 15, leadership: 15, resolutions: 15 }
-      totalScore = 45
-    } else if (index === 1) {
-      assignedAward = 'Outstanding Delegate'
-      scores = { speech: 15, leadership: 10, resolutions: 15 }
-      totalScore = 40
-    } else if (index === 2) {
-      assignedAward = 'Candidate'
-    }
-
-    return {
-      id: 200 + index,
-      country,
-      committee: 'DISEC',
-      assignedAward,
-      scores,
-      totalScore
-    }
-  })
+    awardsList.value = awardsRes.data
+    rubricMatrix.value = rubricRes.data
+    delegates.value = delegatesRes.data
+  } catch (error) {
+    // Automatic error notification handled globally
+  }
 })
 </script>
 

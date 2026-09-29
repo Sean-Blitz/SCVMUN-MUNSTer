@@ -130,7 +130,10 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import apiClient from '@/api/client'
+import { useToastStore } from '@/stores/toast'
 
+const toastStore = useToastStore()
 const router = useRouter()
 
 // Reactive State
@@ -175,34 +178,8 @@ const paymentStatusClass = computed(() => {
 
 // Fetch initial data on mount
 onMounted(async () => {
-  // Mock API response payload
-  school.value = {
-    name: 'Oakridge High School',
-    address: '123 Main Street',
-    city: 'San Jose',
-    state: 'CA',
-    zip: '95112',
-    advisorName: 'Jane Doe',
-    advisorEmail: 'jdoe@oakridge.edu',
-    advisorPhone: '(555) 019-2831',
-    headDelegateName: 'Alex Smith',
-    headDelegateEmail: 'alex.smith@oakridge.edu',
-    headDelegatePhone: '(555) 019-9982'
-  }
-
-  billing.value = {
-    invoiceUrl: 'https://www.spreadsheet.com',
-    paymentStatus: 'partially paid'
-  }
-
-  checklist.value = [
-    { label: 'Register School Delegation', completed: true },
-    { label: 'Submit Initial Registration Deposit', completed: true },
-    { label: 'Assign Committees & Countries', completed: true },
-    { label: 'Submit Delegate Position Papers', completed: false },
-    { label: 'Pay Remaining Balance', completed: false },
-    { label: 'Review Conference Day Schedule', completed: false }
-  ]
+  const response = await apiClient.get('/your-endpoint')
+  delegates.value = response.data
 })
 </script>
 

@@ -74,27 +74,79 @@
 
 <script setup>
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import apiClient from '@/api/client'
+import { useAuthStore } from '@/stores/auth'
+import { useToastStore } from '@/stores/toast'
+
+const router = useRouter()
+const authStore = useAuthStore()
+const toastStore = useToastStore()
 
 // Unified reactive state for both actions
 const userHash = ref('')
 const userPassword = ref('')
+const isLoading = ref(false)
 
-const handleLogin = () => {
+const handleLogin = async () => {
   if (!userHash.value || !userPassword.value) {
-    alert('Please enter both your hash and password.')
+    toastStore.showToast('Please enter both your hash and password.', 'error')
     return
   }
-  console.log('Logging in with:', userHash.value, userPassword.value)
-  // Connect to your authService here
+
+  isLoading.value = true
+  try {
+    // 1. Send credentials to backend login endpoint
+    const response = await apiClient.post('/auth/login', {
+      hash: userHash.value,
+      password: userPassword.value
+    })
+
+    // 2. Extract returned user and token
+    const { user, token } = response.data
+
+    // 3. Save session into Pinia Auth Store
+    authStore.setAuth(user, token)
+
+    toastStore.showToast(`Welcome back, ${user.name || 'User'}!`, 'success')
+
+    // 4. Redirect based on their role
+    router.push(`/${user.role}/dashboard`)
+  } catch (error) {
+    // Backend error message will automatically trigger via the global Toast Interceptor
+  } finally {
+    isLoading.value = false
+  }
 }
 
-const handleRegister = () => {
+const handleRegister = async () => {
   if (!userHash.value || !userPassword.value) {
-    alert('Please enter both your hash and password.')
+    toastStore.showToast('Please enter both your hash and password.', 'error')
     return
   }
-  console.log('Registering with:', userHash.value, userPassword.value)
-  // Connect to your authService here
+
+  isLoading.value = true
+  try {
+    // 1. Send registration payload to backend
+    const response = await apiClient.post('/auth/register', {
+      hash: userHash.value,
+      password: userPassword.value
+    })
+
+    const { user, token } = response.data
+
+    // 2. Save session into Pinia Auth Store
+    authStore.setAuth(user, token)
+
+    toastStore.showToast('Account registered successfully!', 'success')
+
+    // 3. Redirect to role portal
+    router.push(`/${user.role}/dashboard`)
+  } catch (error) {
+    // Backend error message handles popup automatically
+  } finally {
+    isLoading.value = false
+  }
 }
 </script>
 

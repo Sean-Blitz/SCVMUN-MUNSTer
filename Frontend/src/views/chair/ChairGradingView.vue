@@ -143,6 +143,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import apiClient from '@/api/client'
+import { useToastStore } from '@/stores/toast'
+const toastStore = useToastStore()
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
@@ -196,7 +199,7 @@ const closeGradingModal = () => {
   gradingComments.value = ''
 }
 
-// Save / Submit Grade Handler
+// 1. Refactored Save/Submit Grade Handler
 const saveGrade = async () => {
   if (!activeDelegate.value) return
 
@@ -207,167 +210,59 @@ const saveGrade = async () => {
     comments: gradingComments.value
   }
 
-  console.log('Submitting grade to backend:', gradePayload)
+  try {
+    // Send grade and feedback to backend
+    await apiClient.post(`/chair/papers/${activeDelegate.value.id}/grade`, gradePayload)
 
-  // Update local view state immediately
-  activeDelegate.value.status = 'graded'
-  activeDelegate.value.totalScore = gradePayload.totalScore
-  activeDelegate.value.scores = { ...gradingScores.value }
-  activeDelegate.value.comments = gradingComments.value
+    // Update local state upon successful response
+    activeDelegate.value.status = 'graded'
+    activeDelegate.value.totalScore = gradePayload.totalScore
+    activeDelegate.value.scores = { ...gradingScores.value }
+    activeDelegate.value.comments = gradingComments.value
 
-  closeGradingModal()
+    toastStore.showToast('Grade saved successfully.', 'success')
+    closeGradingModal()
+  } catch (error) {
+    // Backend errors handle popup automatically via client.js interceptor
+  }
 }
 
-// Download Handler
-const downloadPaper = (delegate) => {
-  console.log(`Triggering direct PDF download for delegate: ${delegate.country}`)
+// 2. Refactored Download Handler
+const downloadPaper = async (delegate) => {
+  try {
+    const response = await apiClient.get(`/chair/papers/${delegate.id}/download`, {
+      responseType: 'blob' // Essential for binary file downloads
+    })
+
+    // Create a temporary browser download link for the PDF
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute('download', `${delegate.country}_Position_Paper.pdf`)
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    toastStore.showToast('Failed to download position paper.', 'error')
+  }
 }
 
-// Fetch Initial Data on Mount
+// 3. Refactored Data Fetching on Mount
 onMounted(async () => {
-  // Mock Rubric Definition
-  rubric.value = [
-    { id: 'research', label: 'Research', maxScore: 25 },
-    { id: 'policy', label: 'Policy', maxScore: 25 },
-    { id: 'solutions', label: 'Solutions', maxScore: 25 },
-    { id: 'formatting', label: 'Formatting', maxScore: 25 }
-  ]
+  try {
+    // Fetch rubric criteria and assigned delegate papers in parallel
+    const [rubricResponse, delegatesResponse] = await Promise.all([
+      apiClient.get('/chair/rubric'),
+      apiClient.get('/chair/delegates')
+    ])
 
-  // Mock Delegates Payload (Sample to demonstrate 12-15 layout density)
-  delegates.value = [
-    {
-      id: 1,
-      country: 'France',
-      committee: 'DISEC',
-      status: 'graded',
-      submissionDate: 'Sep 1, 14:30',
-      totalScore: '92/100',
-      comments: 'Thorough research and realistic policy solutions.',
-      scores: { research: 24, policy: 23, solutions: 22, formatting: 23 },
-      pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-    },
-    {
-      id: 2,
-      country: 'Brazil',
-      committee: 'DISEC',
-      status: 'submitted',
-      submissionDate: 'Sep 2, 09:15',
-      totalScore: null,
-      comments: '',
-      scores: {},
-      pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-    },
-    {
-      id: 3,
-      country: 'Japan',
-      committee: 'DISEC',
-      status: 'unsubmitted',
-      submissionDate: null,
-      totalScore: null,
-      comments: '',
-      scores: {},
-      pdfUrl: null
-    },
-    {
-      id: 4,
-      country: 'Germany',
-      committee: 'DISEC',
-      status: 'submitted',
-      submissionDate: 'Sep 2, 11:40',
-      totalScore: null,
-      comments: '',
-      scores: {},
-      pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-    },
-    {
-      id: 5,
-      country: 'United Kingdom',
-      committee: 'DISEC',
-      status: 'graded',
-      submissionDate: 'Aug 30, 18:20',
-      totalScore: '88/100',
-      comments: 'Good policy focus.',
-      scores: { research: 22, policy: 23, solutions: 21, formatting: 22 },
-      pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-    },
-    {
-      id: 6,
-      country: 'Egypt',
-      committee: 'DISEC',
-      status: 'unsubmitted',
-      submissionDate: null,
-      totalScore: null,
-      comments: '',
-      scores: {},
-      pdfUrl: null
-    },
-    {
-      id: 7,
-      country: 'India',
-      committee: 'DISEC',
-      status: 'submitted',
-      submissionDate: 'Sep 1, 22:10',
-      totalScore: null,
-      comments: '',
-      scores: {},
-      pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-    },
-    {
-      id: 8,
-      country: 'Canada',
-      committee: 'DISEC',
-      status: 'graded',
-      submissionDate: 'Sep 1, 10:05',
-      totalScore: '95/100',
-      comments: 'Exceptional position paper.',
-      scores: { research: 24, policy: 25, solutions: 23, formatting: 23 },
-      pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-    },
-    {
-      id: 9,
-      country: 'South Africa',
-      committee: 'DISEC',
-      status: 'unsubmitted',
-      submissionDate: null,
-      totalScore: null,
-      comments: '',
-      scores: {},
-      pdfUrl: null
-    },
-    {
-      id: 10,
-      country: 'Mexico',
-      committee: 'DISEC',
-      status: 'submitted',
-      submissionDate: 'Sep 2, 08:00',
-      totalScore: null,
-      comments: '',
-      scores: {},
-      pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-    },
-    {
-      id: 11,
-      country: 'Australia',
-      committee: 'DISEC',
-      status: 'graded',
-      submissionDate: 'Aug 31, 14:15',
-      totalScore: '85/100',
-      comments: 'Solid work.',
-      scores: { research: 21, policy: 22, solutions: 20, formatting: 22 },
-      pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-    },
-    {
-      id: 12,
-      country: 'South Korea',
-      committee: 'DISEC',
-      status: 'submitted',
-      submissionDate: 'Sep 1, 19:45',
-      totalScore: null,
-      comments: '',
-      scores: {},
-      pdfUrl: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf'
-    }
-  ]
+    rubric.value = rubricResponse.data
+    delegates.value = delegatesResponse.data
+  } catch (error) {
+    // Automatic error notification handled globally
+  }
 })
 </script>
 
