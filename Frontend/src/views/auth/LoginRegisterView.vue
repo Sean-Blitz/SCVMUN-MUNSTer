@@ -1,12 +1,16 @@
 <template>
   <div class="page-container">
     <header class="app-header">
-      <h1>ACCESS PORTAL</h1>
+      <img 
+    src="@/assets/logo.png" 
+    alt="SCVMUN Logo" 
+    class="header-logo"
+  />
     </header>
 
     <main class="forms-wrapper">
       <div class="auth-card">
-        <h2>ACCOUNT ACCESS</h2>
+        <h2>Account Access</h2>
         
         <form @submit.prevent class="auth-form">
           <div class="input-group">
@@ -14,7 +18,7 @@
             <input 
               type="text" 
               v-model="userHash" 
-              placeholder="HASH / ACCESS CODE" 
+              placeholder="Hash / Access Code" 
               required
             />
           </div>
@@ -24,7 +28,7 @@
             <input 
               type="password" 
               v-model="userPassword" 
-              placeholder="PASSWORD" 
+              placeholder="Password" 
               required
             />
           </div>
@@ -35,7 +39,7 @@
               @click="handleLogin" 
               class="btn btn-login"
             >
-              LOG IN
+              Log In
             </button>
             
             <button 
@@ -43,13 +47,13 @@
               @click="handleRegister" 
               class="btn btn-register"
             >
-              FIRST-TIME REGISTER
+              First-Time Register
             </button>
           </div>
         </form>
 
         <p class="registration-note">
-          First time? Entering your details and clicking <strong>First-Time Register</strong> will link your password to your unique hash on the backend.
+          Click <strong>First-Time Register</strong> to create your account using the hash you received from your advisor. Afterwards, you can use the password you set above to log in again.
         </p>
 
         <p class="forgot-password">
@@ -60,9 +64,9 @@
 
     <footer class="bottom-notes-section">
       <div class="notes-container">
-        <p>Your access code is confidential. Do not share it with other delegates!</p>
+        <p><strong>Note: </strong>Your access code/hash is confidential. Do not share it with other delegates!</p>
         <p>If you do not yet have your access code, talk with your advisor.</p>
-        <p>Good luck on conference day.</p>
+        <p>Good luck on conference day!</p>
       </div>
     </footer>
   </div>
@@ -98,7 +102,17 @@ const handleRegister = () => {
 /* GENERAL LAYOUT */
 .page-container {
   min-height: 100vh;
-  background-color: #1a1d21;
+  background: 
+    /* Subtle geometric angled lines */
+    repeating-linear-gradient(
+      225deg,
+      rgba(255, 255, 255, 0) 10px,
+      rgba(246, 246, 246, 0.076) 10px,
+      transparent 20px,
+      transparent 40px
+    ),
+    /* Main color gradient: Top-Right to Bottom-Left */
+    linear-gradient(225deg, #009ddbda 20%,#00007e93 80%);
   color: #ffffff;
   display: flex;
   flex-direction: column;
@@ -108,12 +122,21 @@ const handleRegister = () => {
 
 .app-header {
   padding: 20px 0;
+  display: flex;
+  justify-content: flex-start; /* Aligns content to the top right */
+  align-items: center;
+}
+
+.header-logo {
+  height: 175px; /* Adjust height as needed */
+  width: auto;  /* Maintains aspect ratio */
+  object-fit: contain;
 }
 
 .app-header h1 {
   font-size: 1.5rem;
   font-weight: bold;
-  color: #e0e0e0;
+  color: #FFFFFF;
   margin: 0;
 }
 
@@ -130,19 +153,19 @@ const handleRegister = () => {
 .auth-card {
   width: 100%;
   max-width: 480px;
-  background-color: #2a2e35;
+  background-color: #009ddbda;
   padding: 40px;
   border-radius: 8px;
-  border: 1px solid #3f444e;
+  border: 3px solid #e8c604;
   box-shadow: 0 4px 6px rgba(0,0,0,0.3);
 }
 
 .auth-card h2 {
   font-size: 1.25rem;
-  font-weight: normal;
+  font-weight: bold;
   text-align: center;
   margin-bottom: 30px;
-  color: #ffffff;
+  color: #00007e;
 }
 
 /* FORMS & INPUTS */
@@ -155,8 +178,8 @@ const handleRegister = () => {
 .input-group {
   display: flex;
   align-items: center;
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #FFFFFF;
+  border: 2px solid #e8c604;
   border-radius: 4px;
   padding: 10px 15px;
 }
@@ -165,7 +188,7 @@ const handleRegister = () => {
   flex: 1;
   background: transparent;
   border: none;
-  color: #ffffff;
+  color: #00007e;
   padding-left: 10px;
   font-size: 1rem;
 }
@@ -175,7 +198,7 @@ const handleRegister = () => {
 }
 
 .input-group input::placeholder {
-  color: #888888;
+  color: #00007e;
 }
 
 .icon {
@@ -193,7 +216,7 @@ const handleRegister = () => {
   flex: 1;
   padding: 12px;
   border: none;
-  border-radius: 4px;
+  border-radius: 8px;
   font-weight: bold;
   cursor: pointer;
   font-size: 0.95rem;
@@ -201,41 +224,41 @@ const handleRegister = () => {
 }
 
 .btn-login {
-  background-color: #6366f1;
+  background-color: #00007e;
   color: #ffffff;
 }
 
 .btn-login:hover {
-  background-color: #4f46e5;
+  background-color: #e8c604;
 }
 
 .btn-register {
-  background-color: #22d3ee;
-  color: #111111;
+  background-color: #FFFFFF;
+  color: #00007e;
 }
 
 .btn-register:hover {
-  background-color: #06b6d4;
+  background-color: #e8c604;
 }
 
 /* CONTEXT TEXT */
 .registration-note {
   margin-top: 25px;
   font-size: 0.85rem;
-  color: #aaaaaa;
+  color: #00007e;
   text-align: center;
   line-height: 1.4;
 }
 
 .registration-note strong {
-  color: #ffffff;
+  color: #00007e;
 }
 
 .forgot-password {
   margin-top: 15px;
   text-align: center;
   font-size: 0.85rem;
-  color: #aaaaaa;
+  color: #00007e;
 }
 
 /* FOOTER NOTES */
@@ -246,8 +269,8 @@ const handleRegister = () => {
 }
 
 .notes-container {
-  background-color: #2a2e35;
-  border: 1px solid #3f444e;
+  background-color: #009ddbda;
+  border: 3px solid #e8c604;
   border-radius: 8px;
   padding: 20px 30px;
   text-align: center;
@@ -258,7 +281,7 @@ const handleRegister = () => {
 .notes-container p {
   margin: 5px 0;
   font-size: 0.9rem;
-  color: #cccccc;
+  color: #00007e;
   line-height: 1.5;
 }
 
