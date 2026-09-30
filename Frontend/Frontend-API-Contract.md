@@ -1,0 +1,471 @@
+# Frontend → Backend API Contract
+
+The JSON (and file-blob) responses the frontend expects from the backend, derived from the
+Vue views in `Frontend/src/views/`. Every view that calls the API is covered below.
+
+---
+
+## Global Conventions
+
+### Base URL
+
+`Frontend/src/api/client.js`:
+
+```js
+baseURL: import.meta.env.VITE_API_BASE_URL || '/api'
+```
+
+Every relative path in this document resolves against that base. `GET /auth/login` therefore
+becomes `GET /api/auth/login` by default.
+
+### Authentication
+
+- Every request is sent with `Authorization: Bearer <token>`, populated automatically from
+  `stores/auth`.
+- The token is the one returned by `/auth/login` or `/auth/register`.
+
+### Response shape
+
+Data fields are returned at the **top level** of the response body. Views read
+`response.data.<field>` or `response.data.<collection>` directly; responses are not wrapped.
+
+### Error shape
+
+Error responses are sent as:
+
+```json
+{ "message": "Human-readable error string" }
+```
+
+The client interceptor reads `error.response.data.message` and displays it as a toast; if it
+is absent, a generic `"Server Error (<status>)"` message is shown instead. A `401` also
+clears the auth session and redirects to the login page.
+
+### File responses
+
+Endpoints documented as **blob** return raw binary or text (`responseType: 'blob'`), not JSON.
+PDF endpoints are consumed as `application/pdf`; the admin log/export endpoints are consumed
+as `.txt` and `.csv` respectively.
+
+---
+
+## 1. Auth — `LoginRegisterView.vue`
+
+### 1.1 `POST /auth/login`
+
+Request:
+
+```json
+{ "hash": "string", "password": "string" }
+```
+
+Response `200`:
+
+```json
+{
+  "user": {
+    "name": "string",
+    "role": "delegate | advisor | chair | admin"
+  },
+  "token": "string"
+}
+```
+
+Field notes:
+- `user.name` is used in the welcome toast (falls back to `"User"`).
+- `user.role` determines the post-login redirect: `/{role}/dashboard`.
+
+### 1.2 `POST /auth/register`
+
+Request: identical to login (`{ hash, password }`).
+
+Response `200`: identical to login (`{ user, token }`).
+
+---
+
+## 2. Delegate — `DelegateDashboardView.vue`
+
+### 2.1 `GET /delegate/my-assignment`
+
+```json
+{
+  "announcements": ["string"],
+  "delegate": {
+    "committee": "string",
+    "country": "string"
+  },
+  "conferenceLinks": [
+    { "text": "string", "url": "string" }
+  ],
+  "positionPaper": {
+    "status": "unsubmitted | submitted | graded",
+    "score": "string | number",
+    "feedback": "string",
+    "instructions": ["string"]
+  }
+}
+```
+
+Field notes:
+- `announcements[0]` is displayed when the array is non-empty.
+- `conferenceLinks` is padded/trimmed client-side to exactly 5 slots; surplus entries are ignored.
+- `score` and `feedback` are only rendered when `positionPaper.status` is `"graded"`.
+- `instructions` renders as an ordered list.
+- `delegate.committee` and `delegate.country` fall back to `"Unassigned"` when empty.
+
+### 2.2 `POST /delegate/upload-paper`
+
+Request: `multipart/form-data` with a single field named **`paper`** (PDF).
+
+Response: body is not read; only the status code matters.
+
+---
+
+## 3. Advisor — `AdvisorDelegatesView.vue`
+
+### 3.1 `GET /advisor/delegates`
+
+```json
+{
+  "delegates": [
+    {
+      "id": 1,
+      "country": "string",
+      "committee": "string",
+      "paperStatus": "unsubmitted | submitted | graded",
+      "paperGrade": "string | null",
+      "hash": "string",
+      "registered": true
+    }
+  ],
+  "total": 12
+}
+```
+
+Field notes:
+- `total` is shown in the stats bar; `delegates` drives the list.
+- `hash` is masked as `••••••••` until hashes are revealed via §3.3.
+- `paperStatus` must be one of the three literals: it selects the badge style and disables the
+  download button when `"unsubmitted"`.
+- `paperGrade` displays as `"N/A"` when falsy.
+
+### 3.2 `GET /advisor/delegates/{delegateId}/paper`
+
+Response: **blob** — PDF, saved as `delegate_<id>_paper.pdf`.
+
+### 3.3 `POST /advisor/verify-hashes`
+
+Request:
+
+```json
+{ "password": "string" }
+```
+
+Response `200`:
+
+```json
+{ "delegates": [ /* delegate objects as in §3.1, with real `hash` values */ ] }
+```
+
+Field notes:
+- On failure, the 4xx body's `message` is shown inside the password modal, falling back to
+  `"Incorrect password. Access denied."`.
+
+---
+
+## 4. Advisor — `AdvisorSchoolView.vue`
+
+### 4.1 `GET /advisor/school`
+
+```json
+{
+  "school": {
+    "name": "string",
+    "address": "string",
+    "city": "string",
+    "state": "string",
+    "zip": "string",
+    "advisorName": "string",
+    "advisorEmail": "string",
+    "advisorPhone": "string",
+    "headDelegateName": "string",
+    "headDelegateEmail": "string",
+    "headDelegatePhone": "string"
+  },
+  "billing": {
+    "invoiceUrl": "string",
+    "paymentStatus": "paid | partially paid | unpaid"
+  },
+  "checklist": [
+    { "label": "string", "completed": true }
+  ]
+}
+```
+
+Field notes:
+- Empty string values render as `"N/A"` in the school panels.
+- `billing.paymentStatus` is matched case-insensitively; `paid`, `partially paid`, and `unpaid`
+  (default) each have a distinct badge style.
+- `billing.invoiceUrl` renders as a link when present, otherwise "No invoice available".
+- `checklist[].completed` toggles the check indicator on each row.
+
+---
+
+## 5. Chair — `ChairCommitteeView.vue`
+
+### 5.1 `GET /chair/committee/overview`
+
+```json
+{
+  "chairName": "string",
+  "committeeName": "string",
+  "delegatesRegistered": 10,
+  "totalDelegates": 15,
+  "papersGraded": 4,
+  "totalPapersSubmitted": 7,
+  "timeline": {
+    "preConference": [
+      { "label": "string", "timestamp": "ISO-8601 date string" }
+    ],
+    "duringConference": [
+      { "label": "string", "timestamp": "ISO-8601 date string" }
+    ]
+  }
+}
+```
+
+Field notes:
+- `timeline` must always contain both keys, even when empty; the template iterates both directly.
+- `timestamp` must be a parseable date string. It is compared against the current time to derive
+  each event's completed/active/upcoming status, and is formatted for display.
+- Counts render as `delegatesRegistered / totalDelegates` and `papersGraded / totalPapersSubmitted`.
+
+---
+
+## 6. Chair — `ChairGradingView.vue`
+
+### 6.1 `GET /chair/rubric`
+
+```json
+[
+  { "id": "string | number", "label": "string", "maxScore": 10 }
+]
+```
+
+Field notes:
+- `id` is the list key and the key used in the `scores` map.
+- `maxScore` values are summed to compute the maximum possible total.
+- This is the grading rubric. The awards rubric at `/chair/awards/rubric` (§7.2) has a
+  different shape.
+
+### 6.2 `GET /chair/delegates`
+
+```json
+[
+  {
+    "id": 1,
+    "country": "string",
+    "committee": "string",
+    "status": "unsubmitted | submitted | graded",
+    "submissionDate": "string",
+    "totalScore": "string",
+    "scores": { "<rubricId>": 8 },
+    "comments": "string",
+    "pdfUrl": "string"
+  }
+]
+```
+
+Field notes:
+- Top-level array.
+- `status` gates the View & Grade and PDF buttons (`"unsubmitted"` disables both).
+- `scores` keys correspond to rubric `id` values.
+- `submissionDate` and `totalScore` are display strings.
+- `pdfUrl` is bound directly to an `<iframe>` src, so it must be a URL loadable without the
+  Authorization header (e.g. a signed URL).
+
+### 6.3 `POST /chair/papers/{delegateId}/grade`
+
+Request:
+
+```json
+{
+  "delegateId": 1,
+  "scores": { "<rubricId>": 8 },
+  "totalScore": "18/20",
+  "comments": "string"
+}
+```
+
+Field notes:
+- `totalScore` is a **string** in `"<earned>/<max>"` form.
+
+Response: body is not read.
+
+### 6.4 `GET /chair/papers/{delegateId}/download`
+
+Response: **blob** — PDF, saved as `<country>_Position_Paper.pdf`.
+
+---
+
+## 7. Chair — `ChairAwardsView.vue`
+
+### 7.1 `GET /chair/awards/options`
+
+```json
+["Verbal Commendation", "Honorable Mention", "Outstanding Delegate", "Best Delegate"]
+```
+
+Field notes:
+- Top-level array of strings.
+- `"None"` and `"Candidate"` are built into the template and must not be included here.
+
+### 7.2 `GET /chair/awards/rubric`
+
+```json
+[
+  {
+    "id": "string | number",
+    "label": "string",
+    "levels": [
+      { "score": 4, "label": "string", "description": "string" }
+    ]
+  }
+]
+```
+
+Field notes:
+- `levels[].score` is both the list key and the value stored in `scores`.
+- Each criterion's maximum is derived client-side as the highest `level.score`.
+- One score per criterion is stored, selected by clicking a level cell.
+
+### 7.3 `GET /chair/awards/delegates`
+
+```json
+[
+  {
+    "id": 1,
+    "country": "string",
+    "committee": "string",
+    "assignedAward": "Candidate | Verbal Commendation | Honorable Mention | Outstanding Delegate | Best Delegate | None",
+    "scores": { "<criterionId>": 4 },
+    "totalScore": 12
+  }
+]
+```
+
+Field notes:
+- `assignedAward` drives both the summary counters and the card colour class; it must match one
+  of the listed values.
+- `totalScore` renders as `"<n> pts"` and is hidden when `null`.
+
+### 7.4 `POST /chair/awards/{delegateId}`
+
+Request:
+
+```json
+{
+  "delegateId": 1,
+  "assignedAward": "Honorable Mention",
+  "scores": { "<criterionId>": 4 },
+  "totalScore": 12
+}
+```
+
+Field notes:
+- `totalScore` is a **number** here.
+- The frontend requires every rubric criterion to be scored before an official award
+  (anything other than `"None"` or `"Candidate"`) can be assigned.
+
+Response: body is not read.
+
+---
+
+## 8. Admin — `AdminDashboardView.vue`
+
+### 8.1 `GET /admin/dashboard-stats`
+
+```json
+{
+  "totalDelegates": 128,
+  "committeeCounts": [
+    { "committee": "DISEC", "count": 42 }
+  ],
+  "storage": {
+    "usedGb": 12.4,
+    "totalGb": 100
+  },
+  "downtimeEvents": [
+    {
+      "id": 1,
+      "startTime": "string",
+      "endTime": "string",
+      "duration": "string",
+      "reason": "string"
+    }
+  ]
+}
+```
+
+Field notes:
+- `committeeCounts[].committee` is the list key and the displayed committee name.
+- `storage.totalGb` of `0` renders the capacity bar at `0%`.
+- `startTime`, `endTime`, and `duration` are pre-formatted display strings.
+- An empty `downtimeEvents` array renders the "100% Uptime" message.
+
+### 8.2 `GET /admin/ports/health`
+
+```json
+[
+  { "name": "Backend API", "port": 8000, "status": "healthy" },
+  { "name": "Database", "port": 5432, "status": "unreachable" }
+]
+```
+
+Field notes:
+- Top-level array; `port` is the list key and must be unique.
+- `status` must be exactly `"healthy"` or `"unreachable"`; any other value renders as unreachable.
+
+### 8.3 File downloads
+
+| Endpoint | Response |
+| --- | --- |
+| `GET /admin/logs/business.txt` | **blob** — plain text |
+| `GET /admin/logs/technology.txt` | **blob** — plain text |
+| `GET /admin/export/database.csv` | **blob** — CSV |
+
+Field notes:
+- Fetched with `responseType: 'blob'` and saved as `business-log.txt`, `technology-log.txt`,
+  and `database-export.csv` respectively.
+
+---
+
+## Quick Reference
+
+| # | View | Method | Path (relative to `/api`) | Response |
+| --- | --- | --- | --- | --- |
+| 1 | Auth | POST | `/auth/login` | `{user, token}` |
+| 2 | Auth | POST | `/auth/register` | `{user, token}` |
+| 3 | Delegate | GET | `/delegate/my-assignment` | dashboard object |
+| 4 | Delegate | POST | `/delegate/upload-paper` | (ignored) |
+| 5 | Advisor | GET | `/advisor/delegates` | `{delegates[], total}` |
+| 6 | Advisor | GET | `/advisor/delegates/{id}/paper` | blob PDF |
+| 7 | Advisor | POST | `/advisor/verify-hashes` | `{delegates[]}` |
+| 8 | Advisor | GET | `/advisor/school` | `{school, billing, checklist}` |
+| 9 | Chair | GET | `/chair/committee/overview` | overview object |
+| 10 | Chair | GET | `/chair/rubric` | `[{id, label, maxScore}]` |
+| 11 | Chair | GET | `/chair/delegates` | delegate array |
+| 12 | Chair | POST | `/chair/papers/{id}/grade` | (ignored) |
+| 13 | Chair | GET | `/chair/papers/{id}/download` | blob PDF |
+| 14 | Chair | GET | `/chair/awards/options` | `[string]` |
+| 15 | Chair | GET | `/chair/awards/rubric` | `[{id, label, levels[]}]` |
+| 16 | Chair | GET | `/chair/awards/delegates` | delegate array |
+| 17 | Chair | POST | `/chair/awards/{id}` | (ignored) |
+| 18 | Admin | GET | `/admin/dashboard-stats` | stats object |
+| 19 | Admin | GET | `/admin/ports/health` | port array |
+| 20 | Admin | GET | `/admin/logs/business.txt` | blob text |
+| 21 | Admin | GET | `/admin/logs/technology.txt` | blob text |
+| 22 | Admin | GET | `/admin/export/database.csv` | blob CSV |
+
+**Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
+`admin`.

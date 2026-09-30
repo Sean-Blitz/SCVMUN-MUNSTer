@@ -273,7 +273,7 @@ onMounted(async () => {
     // Fetch available awards, evaluation rubric, and delegate list concurrently
     const [awardsRes, rubricRes, delegatesRes] = await Promise.all([
       apiClient.get('/chair/awards/options'),
-      apiClient.get('/chair/rubric'),
+      apiClient.get('/chair/awards/rubric'),
       apiClient.get('/chair/awards/delegates')
     ])
 

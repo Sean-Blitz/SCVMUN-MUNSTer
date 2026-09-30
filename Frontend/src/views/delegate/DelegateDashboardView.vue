@@ -108,6 +108,10 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import apiClient from '@/api/client'
+import { useToastStore } from '@/stores/toast'
+
+const toastStore = useToastStore()
 
 // Local state for dashboard data
 const dashboardData = ref({
@@ -160,20 +164,50 @@ const handleFileSelect = (event) => {
 }
 
 // Upload submission function
-const submitPaper = async (file) => {
-  const formData = new FormData()
-  formData.append('paper', file)
+const submitPaper = async () => {
+  if (!selectedFile.value) return
 
-  await apiClient.post('/delegate/upload-paper', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  })
-  toastStore.showToast('Paper submitted successfully!', 'success')
+  const formData = new FormData()
+  formData.append('paper', selectedFile.value)
+
+  try {
+    await apiClient.post('/delegate/upload-paper', formData, {
+      headers: { 'Content-Type': 'multipart/form-data' }
+    })
+
+    // Reflect the new status locally so the panel updates immediately
+    dashboardData.value.positionPaper.status = 'submitted'
+    selectedFile.value = null
+    toastStore.showToast('Paper submitted successfully!', 'success')
+  } catch (error) {
+    // Backend errors are surfaced globally by the client.js toast interceptor
+  }
 }
 
 // Fetch dashboard data from backend on mount
 onMounted(async () => {
-  const response = await apiClient.get('/delegate/my-assignment')
-  assignment.value = response.data
+  try {
+    const response = await apiClient.get('/delegate/my-assignment')
+    const data = response.data || {}
+
+    // Merge defensively so a partial payload still renders (and never throws in template)
+    dashboardData.value = {
+      announcements: data.announcements || [],
+      delegate: {
+        committee: data.delegate?.committee || '',
+        country: data.delegate?.country || ''
+      },
+      conferenceLinks: data.conferenceLinks || [],
+      positionPaper: {
+        status: data.positionPaper?.status || 'unsubmitted',
+        score: data.positionPaper?.score ?? '',
+        feedback: data.positionPaper?.feedback || '',
+        instructions: data.positionPaper?.instructions || []
+      }
+    }
+  } catch (error) {
+    // Backend errors are surfaced globally by the client.js toast interceptor
+  }
 })
 </script>
 

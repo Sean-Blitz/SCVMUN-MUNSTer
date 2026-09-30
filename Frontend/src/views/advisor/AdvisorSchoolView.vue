@@ -178,8 +178,34 @@ const paymentStatusClass = computed(() => {
 
 // Fetch initial data on mount
 onMounted(async () => {
-  const response = await apiClient.get('/your-endpoint')
-  delegates.value = response.data
+  try {
+    const response = await apiClient.get('/advisor/school')
+    const data = response.data || {}
+
+    // Merge defensively so a partial payload still renders
+    school.value = {
+      name: data.school?.name || '',
+      address: data.school?.address || '',
+      city: data.school?.city || '',
+      state: data.school?.state || '',
+      zip: data.school?.zip || '',
+      advisorName: data.school?.advisorName || '',
+      advisorEmail: data.school?.advisorEmail || '',
+      advisorPhone: data.school?.advisorPhone || '',
+      headDelegateName: data.school?.headDelegateName || '',
+      headDelegateEmail: data.school?.headDelegateEmail || '',
+      headDelegatePhone: data.school?.headDelegatePhone || ''
+    }
+
+    billing.value = {
+      invoiceUrl: data.billing?.invoiceUrl || '',
+      paymentStatus: data.billing?.paymentStatus || 'unpaid'
+    }
+
+    checklist.value = data.checklist || []
+  } catch (error) {
+    // Backend errors are surfaced globally by the client.js toast interceptor
+  }
 })
 </script>
 
