@@ -1,18 +1,35 @@
-from fastapi import FastAPI
+"""
+Authentication endpoints (/auth/*) — Frontend-API-Contract.md §1.
 
-app = FastAPI()
+These are the only routes with no role gate: they are how a client obtains a token.
+"""
 
-@app.post("/auth/register")
-def register_user(username: str, password: str):
-    """
-    Register a new user with the provided username and password. If they are not already registered.
-    Also create a session token for the user and return it in the response. The session token can be used to authenticate future requests.
-    """
-    pass
+from fastapi import APIRouter, HTTPException, status
 
-@app.post("/auth/login")
-def login_user(username: str, password: str):
+from schemas.request_models import LoginRequest
+from schemas.response_models import LoginResponse
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/login", response_model=LoginResponse)
+def login(payload: LoginRequest) -> LoginResponse:
     """
-    Authenticate a user with the provided username and password. If they are registered, return a session token in the response. The session token can be used to authenticate future requests.
+    Exchange a delegate/advisor/chair/admin hash and password for a session token.
+
+    TODO: look the account up by `payload.hash`, verify `payload.password`, create a
+    session token, and return {user, token}. Raise 401 with a clear message on failure
+    (the frontend shows it in a toast).
     """
-    pass
+    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Login is not implemented yet.")
+
+
+@router.post("/register", response_model=LoginResponse)
+def register(payload: LoginRequest) -> LoginResponse:
+    """
+    Register the delegate/advisor/chair/admin identified by a hash, then log them in.
+
+    TODO: create the account, then behave as /auth/login. The frontend redirects to
+    `/{role}/dashboard` on success, so `user.role` must be one of the four role names.
+    """
+    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Registration is not implemented yet.")

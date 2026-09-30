@@ -1,0 +1,89 @@
+"""
+SCVMUN Platform API entry point.
+
+Run from the Backend/ directory so the `API` and `schemas` packages resolve:
+
+    uvicorn main:app --reload
+
+Interactive docs (generated from the response models) are at /docs.
+"""
+
+import os
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from API.endpoints import api_router
+
+API_PREFIX = "/api"
+
+app = FastAPI(
+    title="SCVMUN Platform API",
+    description="Backend for the SCVMUN conference platform. See Frontend-API-Contract.md.",
+)
+
+
+# --- CORS ---
+# The Vite dev server and this API run on different origins, so the browser needs an
+# explicit allow-list. Override with CORS_ALLOW_ORIGINS="https://a.com,https://b.com".
+_origins = os.getenv(
+    "CORS_ALLOW_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[origin.strip() for origin in _origins.split(",") if origin.strip()],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+# --- Error shape ---
+# The frontend reads `error.response.data.message` (Frontend/src/api/client.js), so every
+# error path is normalised to {"message": "..."} instead of FastAPI's default
+# {"detail": ...}. Without these handlers the UI would only ever show "Server Error (NNN)".
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    return JSONResponse(status_code=exc.status_code, content={"message": exc.detail})
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(
+    request: Request, exc: RequestValidationError
+) -> JSONResponse:
+    """Collapse Pydantic's error list into a single human-readable message."""
+    errors = exc.errors()
+    if not errors:
+        return JSONResponse(status_code=422, content={"message": "Invalid request."})
+
+    first = errors[0]
+    location = ".".join(
+        str(part) for part in first.get("loc", []) if part not in ("body", "query", "path")
+    )
+    detail = first.get("msg", "Invalid request.")
+    message = f"{location}: {detail}" if location else detail
+
+    return JSONResponse(status_code=422, content={"message": message})
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
+    return JSONResponse(status_code=500, content={"message": "Internal server error."})
+
+
+# --- Routes ---
+# Every route group lives under /api, matching the frontend's axios baseURL.
+app.include_router(api_router, prefix=API_PREFIX)
+
+
+@app.get("/", tags=["meta"])
+def root() -> dict[str, str]:
+    """Convenience landing route; not part of the frontend contract."""
+    return {"message": "SCVMUN Platform API", "docs": "/docs"}
