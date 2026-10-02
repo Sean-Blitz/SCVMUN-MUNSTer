@@ -101,7 +101,10 @@ Response `200`: identical to login (`{ user, token }`).
     "status": "unsubmitted | submitted | graded",
     "score": "string | number",
     "feedback": "string",
-    "instructions": ["string"]
+    "instructions": ["string"],
+    "criteria": [
+      { "id": "string | number", "label": "string", "score": 8, "maxScore": 10 }
+    ]
   }
 }
 ```
@@ -109,9 +112,18 @@ Response `200`: identical to login (`{ user, token }`).
 Field notes:
 - `announcements[0]` is displayed when the array is non-empty.
 - `conferenceLinks` is padded/trimmed client-side to exactly 5 slots; surplus entries are ignored.
-- `score` and `feedback` are only rendered when `positionPaper.status` is `"graded"`.
 - `instructions` renders as an ordered list.
 - `delegate.committee` and `delegate.country` fall back to `"Unassigned"` when empty.
+- `score`, `feedback`, and `criteria` populate the **Grade & Chair Feedback** panel and are
+  only displayed when `positionPaper.status` is `"graded"`. While the paper is `"submitted"`
+  or `"unsubmitted"` the panel shows a waiting message instead.
+- `criteria` supplies the per-criterion breakdown: each row renders `label`, `score`,
+  `maxScore`, and a bar showing `score / maxScore`. Leave it empty until the paper is graded.
+  The backend must join the chair's stored `scores` map (see §6.3) against the grading rubric
+  (see §6.1) to resolve `label` and `maxScore` — a delegate cannot read `/chair/rubric`.
+- `feedback` is the chair's written comment (see §6.3); when graded without a comment it
+  falls back to "No comments were provided."
+- `score` is rendered verbatim as the final score, so send it pre-formatted (e.g. `"18/20"`).
 
 ### 2.2 `POST /delegate/upload-paper`
 

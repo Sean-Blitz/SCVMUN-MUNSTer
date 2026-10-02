@@ -25,10 +25,17 @@ def get_my_assignment(
 ) -> DelegateAssignmentResponse:
     """
     Return everything the delegate dashboard renders: announcements, their committee
-    and country, the conference links, and the position-paper panel state.
+    and country, the conference links, and the position-paper panel state including the
+    chair's grade and feedback.
 
     TODO: load the assignment for `user.id`. Return empty/absent collections rather
     than omitting keys — the template addresses them directly.
+
+    TODO: once the paper is graded, join the chair's stored `scores` map against the
+    grading rubric so `positionPaper.criteria` carries a ready-to-render row per
+    criterion (id, label, score, maxScore). The delegate cannot call /chair/rubric —
+    it is role-gated — so the labels have to be resolved here. Leave `criteria` empty
+    while the paper is unsubmitted or awaiting grading.
     """
     raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
 

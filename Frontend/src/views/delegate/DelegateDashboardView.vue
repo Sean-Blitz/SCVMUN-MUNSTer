@@ -45,64 +45,110 @@
       </section>
     </div>
 
-    <!-- WIDE POSITION PAPER PANEL -->
-    <section class="panel paper-panel">
-      <h2 class="panel-title">Position Paper Submission</h2>
+    <!-- POSITION PAPER SUBMISSION + CHAIR FEEDBACK -->
+    <div class="paper-grid">
+      <!-- SUBMISSION PANEL -->
+      <section class="panel paper-panel">
+        <h2 class="panel-title">Position Paper Submission</h2>
 
-      <!-- INSTRUCTIONS LIST -->
-      <div v-if="dashboardData.positionPaper.instructions.length" class="instructions-block">
-        <ol class="instructions-list">
-          <li 
-            v-for="(instruction, index) in dashboardData.positionPaper.instructions" 
-            :key="index"
+        <!-- INSTRUCTIONS LIST -->
+        <div v-if="positionPaper.instructions.length" class="instructions-block">
+          <ol class="instructions-list">
+            <li 
+              v-for="(instruction, index) in positionPaper.instructions" 
+              :key="index"
+            >
+              {{ instruction }}
+            </li>
+          </ol>
+        </div>
+
+        <!-- STATUS DISPLAY -->
+        <div class="status-block">
+          <span class="status-label">Current Status:</span>
+          <span :class="['status-badge', statusClass]">
+            {{ positionPaper.status.toUpperCase() }}
+          </span>
+        </div>
+
+        <!-- FILE UPLOAD BOX -->
+        <form @submit.prevent="submitPaper" class="upload-box">
+          <label for="pdf-upload" class="upload-label">Select PDF Document</label>
+          <input 
+            id="pdf-upload" 
+            type="file" 
+            accept="application/pdf" 
+            @change="handleFileSelect"
+            class="file-input"
+          />
+          <button 
+            type="submit" 
+            class="btn-submit" 
+            :disabled="!selectedFile"
           >
-            {{ instruction }}
-          </li>
-        </ol>
-      </div>
+            Upload Position Paper
+          </button>
+        </form>
+      </section>
 
-      <!-- STATUS DISPLAY -->
-      <div class="status-block">
-        <span class="status-label">Current Status:</span>
-        <span :class="['status-badge', statusClass]">
-          {{ dashboardData.positionPaper.status.toUpperCase() }}
-        </span>
-      </div>
+      <!-- GRADE & FEEDBACK PANEL -->
+      <section class="panel grade-panel">
+        <h2 class="panel-title">Grade &amp; Chair Feedback</h2>
 
-      <!-- GRADED DETAILS (SCORE & FEEDBACK) -->
-      <div 
-        v-if="dashboardData.positionPaper.status === 'graded'" 
-        class="grading-block"
-      >
-        <div class="score-row">
-          <span>Score:</span>
-          <strong class="score-value">{{ dashboardData.positionPaper.score }}</strong>
+        <!-- AWAITING GRADING -->
+        <div v-if="!isGraded" class="grade-empty">
+          <span class="grade-empty-icon">⏳</span>
+          <p v-if="positionPaper.status === 'submitted'">
+            Your position paper has been submitted and is awaiting grading by your chair.
+          </p>
+          <p v-else>
+            Upload your position paper to receive a grade and written feedback from your chair.
+          </p>
         </div>
-        <div class="feedback-box">
-          <p class="feedback-title">Chair Comments:</p>
-          <p class="feedback-text">{{ dashboardData.positionPaper.feedback }}</p>
-        </div>
-      </div>
 
-      <!-- FILE UPLOAD BOX -->
-      <form @submit.prevent="submitPaper" class="upload-box">
-        <label for="pdf-upload" class="upload-label">Select PDF Document</label>
-        <input 
-          id="pdf-upload" 
-          type="file" 
-          accept="application/pdf" 
-          @change="handleFileSelect"
-          class="file-input"
-        />
-        <button 
-          type="submit" 
-          class="btn-submit" 
-          :disabled="!selectedFile"
-        >
-          Upload Position Paper
-        </button>
-      </form>
-    </section>
+        <!-- GRADED -->
+        <template v-else>
+          <div class="grade-summary">
+            <div class="grade-total">
+              <span class="grade-total-label">Final Score</span>
+              <strong class="grade-total-value">{{ scoreDisplay }}</strong>
+            </div>
+            <span :class="['status-badge', statusClass]">
+              {{ positionPaper.status.toUpperCase() }}
+            </span>
+          </div>
+
+          <div v-if="criteria.length" class="rubric-breakdown">
+            <h3 class="subsection-title">Rubric Breakdown</h3>
+            <div 
+              v-for="criterion in criteria" 
+              :key="criterion.id" 
+              class="criterion-row"
+            >
+              <div class="criterion-head">
+                <span class="criterion-label">{{ criterion.label }}</span>
+                <span class="criterion-score">{{ criterion.score }} / {{ criterion.maxScore }}</span>
+              </div>
+              <div class="criterion-bar-bg">
+                <div 
+                  class="criterion-bar-fill" 
+                  :class="{ low: criterionPercent(criterion) < 50 }"
+                  :style="{ width: criterionPercent(criterion) + '%' }"
+                ></div>
+              </div>
+            </div>
+          </div>
+          <p v-else class="grade-muted">
+            No per-criterion breakdown was recorded for this paper.
+          </p>
+
+          <div class="feedback-block">
+            <h3 class="subsection-title">Chair Comments</h3>
+            <p class="feedback-text">{{ feedback || 'No comments were provided.' }}</p>
+          </div>
+        </template>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -125,11 +171,15 @@ const dashboardData = ref({
     status: 'unsubmitted', // 'unsubmitted', 'submitted', 'graded'
     score: '',
     feedback: '',
-    instructions: []
+    instructions: [],
+    criteria: []
   }
 })
 
 const selectedFile = ref(null)
+
+// Shorthand for the position paper panel state
+const positionPaper = computed(() => dashboardData.value.positionPaper)
 
 // Pad or trim links array to strictly 5 slot boxes
 const formattedLinks = computed(() => {
@@ -152,6 +202,27 @@ const statusClass = computed(() => {
       return 'status-unsubmitted'
   }
 })
+
+/* --- Chair grade & feedback --- */
+
+// The grade panel only shows results once a chair has graded the paper
+const isGraded = computed(() => positionPaper.value.status === 'graded')
+
+// Per-criterion marks, already joined with their labels and maxima by the backend
+const criteria = computed(() => positionPaper.value.criteria || [])
+
+const scoreDisplay = computed(() => {
+  const raw = positionPaper.value.score
+  return raw === '' || raw === null || raw === undefined ? '—' : raw
+})
+const feedback = computed(() => positionPaper.value.feedback || '')
+
+// Percentage of the maximum for a single rubric criterion (guards against maxScore 0)
+const criterionPercent = (criterion) => {
+  const max = Number(criterion.maxScore)
+  if (!max) return 0
+  return Math.min(100, Number(((Number(criterion.score) / max) * 100).toFixed(1)))
+}
 
 // File selection handler
 const handleFileSelect = (event) => {
@@ -202,7 +273,8 @@ onMounted(async () => {
         status: data.positionPaper?.status || 'unsubmitted',
         score: data.positionPaper?.score ?? '',
         feedback: data.positionPaper?.feedback || '',
-        instructions: data.positionPaper?.instructions || []
+        instructions: data.positionPaper?.instructions || [],
+        criteria: data.positionPaper?.criteria || []
       }
     }
   } catch (error) {
@@ -324,6 +396,14 @@ onMounted(async () => {
   color: #ffffff;
 }
 
+/* POSITION PAPER + FEEDBACK GRID */
+.paper-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  align-items: start;
+}
+
 /* POSITION PAPER PANEL */
 .paper-panel {
   gap: 20px;
@@ -380,41 +460,141 @@ onMounted(async () => {
   border: 1px solid #22c55e;
 }
 
-/* GRADED SECTION */
-.grading-block {
+/* GRADE & FEEDBACK PANEL */
+.grade-panel {
+  gap: 18px;
+}
+
+.grade-empty {
+  background-color: #1a1d21;
+  border: 1px dashed #3f444e;
+  border-radius: 4px;
+  padding: 24px 20px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+  color: #aaaaaa;
+}
+
+.grade-empty p {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.5;
+}
+
+.grade-empty-icon {
+  font-size: 1.6rem;
+}
+
+.grade-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: #1a1d21;
+  border: 1px solid #3f444e;
+  border-radius: 6px;
+  padding: 14px 16px;
+}
+
+.grade-total {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.grade-total-label {
+  font-size: 0.75rem;
+  color: #aaaaaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.grade-total-value {
+  font-size: 1.6rem;
+  color: #22c55e;
+}
+
+.rubric-breakdown {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.subsection-title {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: bold;
+  color: #aaaaaa;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.criterion-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.criterion-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 0.88rem;
+}
+
+.criterion-label {
+  color: #e0e0e0;
+}
+
+.criterion-score {
+  font-weight: bold;
+  color: #ffffff;
+  white-space: nowrap;
+}
+
+.criterion-bar-bg {
   background-color: #1a1d21;
   border: 1px solid #3f444e;
   border-radius: 4px;
-  padding: 15px;
+  height: 8px;
+  overflow: hidden;
+}
+
+.criterion-bar-fill {
+  height: 100%;
+  background-color: #22c55e;
+  transition: width 0.4s ease;
+}
+
+.criterion-bar-fill.low {
+  background-color: #f59e0b;
+}
+
+.grade-muted {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #888888;
+  font-style: italic;
+}
+
+.feedback-block {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.score-row {
-  font-size: 1rem;
-  color: #aaaaaa;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.score-value {
-  color: #22c55e;
-  font-size: 1.2rem;
-}
-
-.feedback-title {
-  margin: 0 0 5px 0;
-  color: #aaaaaa;
-  font-size: 0.9rem;
+  gap: 8px;
 }
 
 .feedback-text {
   margin: 0;
   color: #ffffff;
-  line-height: 1.4;
+  line-height: 1.5;
   font-size: 0.95rem;
+  background-color: #1a1d21;
+  border: 1px solid #3f444e;
+  border-radius: 4px;
+  padding: 12px 14px;
+  white-space: pre-wrap;
 }
 
 /* FILE UPLOAD */
@@ -456,7 +636,8 @@ onMounted(async () => {
 
 /* RESPONSIVE */
 @media (max-width: 768px) {
-  .top-grid {
+  .top-grid,
+  .paper-grid {
     grid-template-columns: 1fr;
   }
 }

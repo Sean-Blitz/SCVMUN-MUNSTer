@@ -35,11 +35,21 @@ class ConferenceLink(BaseModel):
     url: str
 
 
+class GradedCriterion(BaseModel):
+    """One rubric criterion, joined with the mark the chair awarded it."""
+
+    id: int | str
+    label: str
+    score: float
+    maxScore: float
+
+
 class PositionPaper(BaseModel):
     status: str = "unsubmitted"  # 'unsubmitted' | 'submitted' | 'graded'
-    score: int | str = ""
-    feedback: str = ""
+    score: int | str = ""  # display string, e.g. "18/20"
+    feedback: str = ""  # the chair's written comments
     instructions: list[str] = []
+    criteria: list[GradedCriterion] = []  # empty until the paper is graded
 
 
 class DelegateAssignmentResponse(BaseModel):
