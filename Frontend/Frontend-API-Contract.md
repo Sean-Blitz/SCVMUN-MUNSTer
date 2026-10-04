@@ -450,6 +450,105 @@ Field notes:
 - Fetched with `responseType: 'blob'` and saved as `business-log.txt`, `technology-log.txt`,
   and `database-export.csv` respectively.
 
+### 8.4 Delegate hashes
+
+Moved here from the retired CLI app (`administrator.py`). They now live under the
+admin router, so they require an admin session like the rest of §8.
+
+#### 8.4.1 `POST /admin/hashes`
+
+Request:
+
+```json
+{
+  "finalAssignments": {
+    "Lincoln High School - #1": ["DISEC", "General Assembly", "France"]
+  }
+}
+```
+
+Field notes:
+- Each key is a delegate's display name; its value is positional —
+  `[committee, committeeType, country]` (the CLI's `FinalAssignments` shape).
+- The response echoes those names, one entry per submitted delegate.
+
+Response `201`:
+
+```json
+{
+  "hashes": [
+    { "name": "Lincoln High School - #1", "hash": "hash123abc" }
+  ]
+}
+```
+
+#### 8.4.2 `POST /admin/hashes/regenerate/delegate`
+
+Request:
+
+```json
+{ "committee": "DISEC", "country": "France" }
+```
+
+Response `200`:
+
+```json
+{ "name": "France (DISEC)", "hash": "hash789ghi" }
+```
+
+#### 8.4.3 `POST /admin/hashes/regenerate/school`
+
+Request:
+
+```json
+{ "school": "Lincoln High School" }
+```
+
+Response `200`: `{ "hashes": [ { "name": "string", "hash": "string" } ] }`
+
+#### 8.4.4 `DELETE /admin/hashes`
+
+Request:
+
+```json
+{ "countryAndCommitteeList": [["France", "DISEC", "General Assembly"]] }
+```
+
+Field notes:
+- Each entry is `[country, committee, committeeType]` (the CLI's `CountryAndCommitteeList`).
+
+Response `200`:
+
+```json
+{ "dropped": [ { "name": "string", "hash": "string" } ] }
+```
+
+#### 8.4.5 `GET /admin/hashes`
+
+Query: `schoolName` (optional) — narrows the list to a single school.
+
+Response `200`: `{ "hashes": [ { "name": "string", "hash": "string" } ] }`
+
+### 8.5 `GET /admin/awards`
+
+```json
+{
+  "committees": [
+    {
+      "committee": "DISEC",
+      "awards": [
+        { "country": "France", "award": "Best Delegate" }
+      ]
+    }
+  ]
+}
+```
+
+Field notes:
+- Read-only, conference-wide report of assigned awards. The writable, chair-scoped award
+  routes remain §7.4.
+- `committees[].committee` is the list key; `awards[].country` is the per-row key.
+
 ---
 
 ## Quick Reference
@@ -478,6 +577,12 @@ Field notes:
 | 20 | Admin | GET | `/admin/logs/business.txt` | blob text |
 | 21 | Admin | GET | `/admin/logs/technology.txt` | blob text |
 | 22 | Admin | GET | `/admin/export/database.csv` | blob CSV |
+| 23 | Admin | POST | `/admin/hashes` | `{hashes[]}` |
+| 24 | Admin | POST | `/admin/hashes/regenerate/delegate` | `{name, hash}` |
+| 25 | Admin | POST | `/admin/hashes/regenerate/school` | `{hashes[]}` |
+| 26 | Admin | DELETE | `/admin/hashes` | `{dropped[]}` |
+| 27 | Admin | GET | `/admin/hashes?schoolName=` | `{hashes[]}` |
+| 28 | Admin | GET | `/admin/awards` | `{committees[]}` |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.

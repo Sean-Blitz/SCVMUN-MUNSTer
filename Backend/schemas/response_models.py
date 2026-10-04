@@ -201,3 +201,43 @@ class PortHealth(BaseModel):
     name: str
     port: int
     status: str  # 'healthy' | 'unreachable'
+
+
+# --- Admin: hash management & award reporting ---
+# Shapes for the routes ported from the legacy CLI app (administrator.py). The CLI
+# returned ad-hoc dicts (some with tuple values); on the platform they are modelled
+# explicitly so /docs publishes them and the dashboard can render them directly.
+
+
+class HashEntry(BaseModel):
+    """One delegate account and its login hash."""
+
+    name: str  # display key, e.g. "Lincoln High - #1" or "France (DISEC)"
+    hash: str
+
+
+class HashListResponse(BaseModel):
+    hashes: list[HashEntry] = []
+
+
+class DroppedDelegate(BaseModel):
+    name: str
+    hash: str  # the hash that was deleted along with the delegate
+
+
+class DropDelegatesResponse(BaseModel):
+    dropped: list[DroppedDelegate] = []
+
+
+class AwardEntry(BaseModel):
+    country: str
+    award: str
+
+
+class CommitteeAwards(BaseModel):
+    committee: str
+    awards: list[AwardEntry] = []
+
+
+class AwardsOverviewResponse(BaseModel):
+    committees: list[CommitteeAwards] = []
