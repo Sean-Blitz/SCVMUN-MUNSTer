@@ -4,117 +4,321 @@
       <h1>Admin Dashboard & Diagnostics</h1>
     </header>
 
-    <!-- LOG & EXPORT ACTIONS -->
-    <div class="section-card">
-      <h2>Data & Log Exports</h2>
-      <div class="action-buttons-grid">
-        <button class="btn-action" @click="downloadFile('/api/admin/logs/business.txt', 'business-log.txt')">
-          📄 Download Business Log (.txt)
-        </button>
-        <button class="btn-action" @click="downloadFile('/api/admin/logs/technology.txt', 'technology-log.txt')">
-          🛠️ Download Technology Log (.txt)
-        </button>
-        <button class="btn-action btn-export" @click="downloadFile('/api/admin/export/database.csv', 'database-export.csv')">
-          📊 Export Database (.csv)
-        </button>
-      </div>
+    <!-- VIEW TOGGLE -->
+    <div class="toggle-container">
+      <button
+        :class="['toggle-btn', { active: activeTab === 'diagnostics' }]"
+        @click="switchTab('diagnostics')"
+      >
+        Diagnostics
+      </button>
+      <button
+        :class="['toggle-btn', { active: activeTab === 'hashes' }]"
+        @click="switchTab('hashes')"
+      >
+        Hash Management
+      </button>
+      <button
+        :class="['toggle-btn', { active: activeTab === 'awards' }]"
+        @click="switchTab('awards')"
+      >
+        Awards Overview
+      </button>
     </div>
 
-    <!-- METRICS GRID: DELEGATES & STORAGE -->
-    <div class="metrics-grid">
-      <!-- DELEGATE COUNTS -->
+    <!-- ============================= DIAGNOSTICS ============================= -->
+    <template v-if="activeTab === 'diagnostics'">
+      <!-- LOG & EXPORT ACTIONS -->
       <div class="section-card">
-        <h2>Delegate Distribution</h2>
-        <div class="total-badge">
-          <span>Total Delegates</span>
-          <strong>{{ totalDelegates }}</strong>
+        <h2>Data & Log Exports</h2>
+        <div class="action-buttons-grid">
+          <button class="btn-action" @click="downloadFile('/admin/logs/business.txt', 'business-log.txt')">
+            📄 Download Business Log (.txt)
+          </button>
+          <button class="btn-action" @click="downloadFile('/admin/logs/technology.txt', 'technology-log.txt')">
+            🛠️ Download Technology Log (.txt)
+          </button>
+          <button class="btn-action btn-export" @click="downloadFile('/admin/export/database.csv', 'database-export.csv')">
+            📊 Export Database (.csv)
+          </button>
         </div>
-        <div class="committee-list">
-          <div 
-            v-for="item in committeeCounts" 
-            :key="item.committee" 
-            class="committee-item"
+      </div>
+
+      <!-- METRICS GRID: DELEGATES & STORAGE -->
+      <div class="metrics-grid">
+        <!-- DELEGATE COUNTS -->
+        <div class="section-card">
+          <h2>Delegate Distribution</h2>
+          <div class="total-badge">
+            <span>Total Delegates</span>
+            <strong>{{ totalDelegates }}</strong>
+          </div>
+          <div class="committee-list">
+            <div
+              v-for="item in committeeCounts"
+              :key="item.committee"
+              class="committee-item"
+            >
+              <span class="committee-name">{{ item.committee }}</span>
+              <span class="committee-count">{{ item.count }} delegates</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- STORAGE CAPACITY -->
+        <div class="section-card">
+          <h2>Server Storage</h2>
+          <div class="storage-info">
+            <div class="storage-values">
+              <span>Disk Space Used</span>
+              <strong>{{ storage.usedGb }} GB / {{ storage.totalGb }} GB</strong>
+            </div>
+            <div class="progress-bar-bg">
+              <div
+                class="progress-bar-fill"
+                :style="{ width: storagePercentage + '%' }"
+                :class="{ warning: storagePercentage > 80 }"
+              ></div>
+            </div>
+            <div class="percentage-label">{{ storagePercentage }}% capacity utilized</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PORT HEALTH MONITOR -->
+      <div class="section-card">
+        <div class="card-header-action">
+          <h2>Port Health Monitor</h2>
+          <button class="btn-refresh" :disabled="checkingPorts" @click="fetchPortHealth">
+            {{ checkingPorts ? 'Checking...' : '🔄 Check Port Health' }}
+          </button>
+        </div>
+
+        <div class="ports-grid">
+          <div
+            v-for="port in ports"
+            :key="port.port"
+            :class="['port-card', port.status]"
           >
-            <span class="committee-name">{{ item.committee }}</span>
-            <span class="committee-count">{{ item.count }} delegates</span>
+            <div class="port-info">
+              <span class="port-name">{{ port.name }}</span>
+              <span class="port-number">Port {{ port.port }}</span>
+            </div>
+            <span :class="['status-badge', port.status]">
+              ● {{ port.status === 'healthy' ? 'Healthy' : 'Unreachable' }}
+            </span>
           </div>
         </div>
       </div>
 
-      <!-- STORAGE CAPACITY -->
+      <!-- DOWNTIME INCIDENT TIMELINE (PAST 7 DAYS) -->
       <div class="section-card">
-        <h2>Server Storage</h2>
-        <div class="storage-info">
-          <div class="storage-values">
-            <span>Disk Space Used</span>
-            <strong>{{ storage.usedGb }} GB / {{ storage.totalGb }} GB</strong>
-          </div>
-          <div class="progress-bar-bg">
-            <div 
-              class="progress-bar-fill" 
-              :style="{ width: storagePercentage + '%' }"
-              :class="{ warning: storagePercentage > 80 }"
-            ></div>
-          </div>
-          <div class="percentage-label">{{ storagePercentage }}% capacity utilized</div>
+        <h2>Server Downtime Log (Past 7 Days)</h2>
+        <p class="section-desc">Recorded incidents where server health checks timed out or reported offline status.</p>
+
+        <div v-if="downtimeEvents.length === 0" class="no-downtime">
+          ✅ 100% Uptime — No downtime incidents recorded in the past 7 days.
         </div>
-      </div>
-    </div>
 
-    <!-- PORT HEALTH MONITOR -->
-    <div class="section-card">
-      <div class="card-header-action">
-        <h2>Port Health Monitor</h2>
-        <button class="btn-refresh" :disabled="checkingPorts" @click="fetchPortHealth">
-          {{ checkingPorts ? 'Checking...' : '🔄 Check Port Health' }}
-        </button>
-      </div>
-
-      <div class="ports-grid">
-        <div 
-          v-for="port in ports" 
-          :key="port.port" 
-          :class="['port-card', port.status]"
-        >
-          <div class="port-info">
-            <span class="port-name">{{ port.name }}</span>
-            <span class="port-number">Port {{ port.port }}</span>
-          </div>
-          <span :class="['status-badge', port.status]">
-            ● {{ port.status === 'healthy' ? 'Healthy' : 'Unreachable' }}
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <!-- DOWNTIME INCIDENT TIMELINE (PAST 7 DAYS) -->
-    <div class="section-card">
-      <h2>Server Downtime Log (Past 7 Days)</h2>
-      <p class="section-desc">Recorded incidents where server health checks timed out or reported offline status.</p>
-
-      <div v-if="downtimeEvents.length === 0" class="no-downtime">
-        ✅ 100% Uptime — No downtime incidents recorded in the past 7 days.
-      </div>
-
-      <div v-else class="timeline-list">
-        <div 
-          v-for="event in downtimeEvents" 
-          :key="event.id" 
-          class="timeline-item"
-        >
-          <div class="timeline-dot"></div>
-          <div class="timeline-content">
-            <div class="timeline-time">
-              <strong>{{ event.startTime }}</strong> to <strong>{{ event.endTime }}</strong>
-            </div>
-            <div class="timeline-details">
-              <span class="duration-badge">Duration: {{ event.duration }}</span>
-              <span class="reason-text">{{ event.reason }}</span>
+        <div v-else class="timeline-list">
+          <div
+            v-for="event in downtimeEvents"
+            :key="event.id"
+            class="timeline-item"
+          >
+            <div class="timeline-dot"></div>
+            <div class="timeline-content">
+              <div class="timeline-time">
+                <strong>{{ event.startTime }}</strong> to <strong>{{ event.endTime }}</strong>
+              </div>
+              <div class="timeline-details">
+                <span class="duration-badge">Duration: {{ event.duration }}</span>
+                <span class="reason-text">{{ event.reason }}</span>
+              </div>
             </div>
           </div>
         </div>
       </div>
-    </div>
+    </template>
+
+    <!-- ============================ HASH MANAGEMENT ============================ -->
+    <template v-if="activeTab === 'hashes'">
+      <!-- CREATE + REGENERATE -->
+      <div class="section-card">
+        <h2>Generate Hashes for New Delegates</h2>
+        <p class="section-desc">
+          Register delegates for a school. Each row becomes an account and receives its own login hash.
+        </p>
+
+        <label class="field-label" for="school-name">School name</label>
+        <input
+          id="school-name"
+          v-model="schoolName"
+          class="text-input"
+          type="text"
+          placeholder="e.g. Lincoln High School"
+        />
+
+        <div class="form-rows">
+          <div v-for="(row, index) in newDelegates" :key="index" class="form-row">
+            <input v-model="row.committee" class="text-input" type="text" placeholder="Committee" />
+            <input v-model="row.committeeType" class="text-input" type="text" placeholder="Committee type" />
+            <input v-model="row.country" class="text-input" type="text" placeholder="Country" />
+            <button class="btn-icon" title="Remove row" @click="removeDelegateRow(index)">✕</button>
+          </div>
+        </div>
+
+        <div class="row-actions">
+          <button class="btn-secondary" @click="addDelegateRow">+ Add delegate</button>
+          <button class="btn-refresh" :disabled="generatingHashes" @click="generateHashes">
+            {{ generatingHashes ? 'Generating...' : 'Generate Hashes' }}
+          </button>
+        </div>
+
+        <div v-if="generatedHashes.length" class="hash-result">
+          <h3>New Hashes</h3>
+          <div v-for="entry in generatedHashes" :key="entry.name" class="hash-row">
+            <span class="hash-name">{{ entry.name }}</span>
+            <span class="hash-value">{{ entry.hash }}</span>
+            <button class="btn-copy" @click="copyHash(entry.hash)">Copy</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="metrics-grid">
+        <!-- REGENERATE ONE DELEGATE -->
+        <div class="section-card">
+          <h2>Regenerate a Delegate Hash</h2>
+          <p class="section-desc">
+            Issues a replacement hash and invalidates the delegate's previous one.
+          </p>
+          <label class="field-label" for="regen-committee">Committee</label>
+          <input id="regen-committee" v-model="regenDelegate.committee" class="text-input" type="text" placeholder="e.g. DISEC" />
+          <label class="field-label" for="regen-country">Country</label>
+          <input id="regen-country" v-model="regenDelegate.country" class="text-input" type="text" placeholder="e.g. France" />
+          <div class="row-actions">
+            <button class="btn-refresh" :disabled="regeneratingDelegate" @click="regenerateDelegateHash">
+              {{ regeneratingDelegate ? 'Regenerating...' : 'Regenerate Hash' }}
+            </button>
+          </div>
+
+          <div v-if="regeneratedDelegateHash" class="hash-result">
+            <div class="hash-row">
+              <span class="hash-name">{{ regeneratedDelegateHash.name }}</span>
+              <span class="hash-value">{{ regeneratedDelegateHash.hash }}</span>
+              <button class="btn-copy" @click="copyHash(regeneratedDelegateHash.hash)">Copy</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- REGENERATE A WHOLE SCHOOL -->
+        <div class="section-card">
+          <h2>Regenerate School Hashes</h2>
+          <p class="section-desc">
+            Issues new hashes for every delegate belonging to one school.
+          </p>
+          <label class="field-label" for="regen-school">School name</label>
+          <input id="regen-school" v-model="regenSchool" class="text-input" type="text" placeholder="e.g. Lincoln High School" />
+          <div class="row-actions">
+            <button class="btn-refresh" :disabled="regeneratingSchool" @click="regenerateSchoolHashes">
+              {{ regeneratingSchool ? 'Regenerating...' : 'Regenerate School Hashes' }}
+            </button>
+          </div>
+
+          <div v-if="regeneratedSchoolHashes.length" class="hash-result">
+            <div v-for="entry in regeneratedSchoolHashes" :key="entry.name" class="hash-row">
+              <span class="hash-name">{{ entry.name }}</span>
+              <span class="hash-value">{{ entry.hash }}</span>
+              <button class="btn-copy" @click="copyHash(entry.hash)">Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- LOOK UP -->
+      <div class="section-card">
+        <div class="card-header-action">
+          <h2>Look Up Hashes</h2>
+          <button class="btn-refresh" :disabled="lookingUpHashes" @click="lookupHashesForSchool">
+            {{ lookingUpHashes ? 'Loading...' : '🔄 Load Hashes' }}
+          </button>
+        </div>
+        <p class="section-desc">
+          Leave the school blank to list every hash, or enter a school name to narrow the list.
+        </p>
+        <input v-model="lookupSchool" class="text-input" type="text" placeholder="Filter by school (optional)" />
+
+        <div v-if="lookupHashes.length" class="hash-result">
+          <div v-for="entry in lookupHashes" :key="entry.name" class="hash-row">
+            <span class="hash-name">{{ entry.name }}</span>
+            <span class="hash-value">{{ entry.hash }}</span>
+            <button class="btn-copy" @click="copyHash(entry.hash)">Copy</button>
+          </div>
+        </div>
+        <div v-else class="empty-state">
+          {{ lookingUpHashes ? 'Loading hashes…' : 'No hashes loaded yet.' }}
+        </div>
+      </div>
+
+      <!-- DROP DELEGATES -->
+      <div class="section-card">
+        <h2>Drop Delegates & Delete Hashes</h2>
+        <p class="section-desc">
+          Removes the listed delegates and revokes their hashes. This cannot be undone.
+        </p>
+
+        <div class="form-rows">
+          <div v-for="(row, index) in dropDelegates" :key="index" class="form-row">
+            <input v-model="row.committee" class="text-input" type="text" placeholder="Committee" />
+            <input v-model="row.committeeType" class="text-input" type="text" placeholder="Committee type" />
+            <input v-model="row.country" class="text-input" type="text" placeholder="Country" />
+            <button class="btn-icon" title="Remove row" @click="removeDropRow(index)">✕</button>
+          </div>
+        </div>
+
+        <div class="row-actions">
+          <button class="btn-secondary" @click="addDropRow">+ Add delegate</button>
+          <button class="btn-danger" :disabled="droppingDelegates" @click="dropSelectedDelegates">
+            {{ droppingDelegates ? 'Dropping...' : '🗑️ Drop Delegates' }}
+          </button>
+        </div>
+
+        <div v-if="droppedDelegates.length" class="hash-result">
+          <h3>Deleted Hashes</h3>
+          <div v-for="entry in droppedDelegates" :key="entry.name" class="hash-row">
+            <span class="hash-name">{{ entry.name }}</span>
+            <span class="hash-value">{{ entry.hash }}</span>
+          </div>
+        </div>
+      </div>
+    </template>
+
+    <!-- ============================ AWARDS OVERVIEW ============================ -->
+    <template v-if="activeTab === 'awards'">
+      <div class="section-card">
+        <div class="card-header-action">
+          <h2>Conference Awards Overview</h2>
+          <button class="btn-refresh" :disabled="loadingAwards" @click="loadAwards">
+            {{ loadingAwards ? 'Loading...' : '🔄 Reload' }}
+          </button>
+        </div>
+        <p class="section-desc">
+          Read-only report of every committee's award assignments.
+        </p>
+
+        <div v-if="awardsCommittees.length" class="committee-awards-list">
+          <div v-for="committee in awardsCommittees" :key="committee.committee" class="awards-card">
+            <h3>{{ committee.committee }}</h3>
+            <div v-for="entry in committee.awards" :key="entry.country" class="award-row">
+              <span class="award-country">{{ entry.country }}</span>
+              <span class="award-name">{{ entry.award }}</span>
+            </div>
+            <div v-if="!committee.awards.length" class="empty-state">No awards assigned.</div>
+          </div>
+        </div>
+        <div v-else class="empty-state">No award data available.</div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -123,29 +327,70 @@ import { ref, computed, onMounted } from 'vue'
 import apiClient from '@/api/client'
 import { useToastStore } from '@/stores/toast'
 
-// Reactive State
+const toastStore = useToastStore()
+
+// Active tab: 'diagnostics' | 'hashes' | 'awards'
+const activeTab = ref('diagnostics')
+
+// ---------- Diagnostics state ----------
 const totalDelegates = ref(0)
 const committeeCounts = ref([])
 const storage = ref({ usedGb: 0, totalGb: 0 })
 const ports = ref([])
 const downtimeEvents = ref([])
 const checkingPorts = ref(false)
-const toastStore = useToastStore() // Assuming you have a global toast store for notifications
 
-// Computed
+// ---------- Hash management state ----------
+const schoolName = ref('')
+const newDelegates = ref([{ committee: '', committeeType: '', country: '' }])
+const generatingHashes = ref(false)
+const generatedHashes = ref([])
+
+const regenDelegate = ref({ committee: '', country: '' })
+const regeneratingDelegate = ref(false)
+const regeneratedDelegateHash = ref(null)
+
+const regenSchool = ref('')
+const regeneratingSchool = ref(false)
+const regeneratedSchoolHashes = ref([])
+
+const lookupSchool = ref('')
+const lookingUpHashes = ref(false)
+const lookupHashes = ref([])
+
+const dropDelegates = ref([{ committee: '', committeeType: '', country: '' }])
+const droppingDelegates = ref(false)
+const droppedDelegates = ref([])
+
+// ---------- Awards state ----------
+const awardsCommittees = ref([])
+const loadingAwards = ref(false)
+
+// ---------- Computed ----------
 const storagePercentage = computed(() => {
   if (!storage.value.totalGb) return 0
   return Number(((storage.value.usedGb / storage.value.totalGb) * 100).toFixed(1))
 })
 
-// 1. Refactored File Download Helper (Fetches secure files/logs via Axios)
+// ---------- Tab switching (lazy-loads the data each tab needs) ----------
+const switchTab = (tab) => {
+  activeTab.value = tab
+  if (tab === 'hashes' && lookupHashes.value.length === 0) {
+    lookupHashesForSchool()
+  }
+  if (tab === 'awards' && awardsCommittees.value.length === 0) {
+    loadAwards()
+  }
+}
+
+// ---------- Diagnostics helpers ----------
+// Fetches secure files/logs as a blob and hands them to the browser as a download.
 const downloadFile = async (endpoint, fileName) => {
   try {
     const response = await apiClient.get(endpoint, {
       responseType: 'blob' // Essential for binary/text file downloads
     })
 
-    // Create a temporary browser download link
     const blob = new Blob([response.data])
     const url = window.URL.createObjectURL(blob)
     const anchor = document.createElement('a')
@@ -160,7 +405,6 @@ const downloadFile = async (endpoint, fileName) => {
   }
 }
 
-// 2. Refactored Port Health Fetch (Real network ping endpoint)
 const fetchPortHealth = async () => {
   checkingPorts.value = true
 
@@ -174,19 +418,176 @@ const fetchPortHealth = async () => {
   }
 }
 
-// Fetch Initial Dashboard Data
+// ---------- Hash management actions ----------
+const addDelegateRow = () => {
+  newDelegates.value.push({ committee: '', committeeType: '', country: '' })
+}
+
+const removeDelegateRow = (index) => {
+  if (newDelegates.value.length === 1) {
+    newDelegates.value[0] = { committee: '', committeeType: '', country: '' }
+    return
+  }
+  newDelegates.value.splice(index, 1)
+}
+
+const generateHashes = async () => {
+  const school = schoolName.value.trim()
+  if (!school) {
+    toastStore.showToast('Enter a school name before generating hashes.', 'error')
+    return
+  }
+
+  // Key each delegate as "<school> - #<n>"; the value is [committee, type, country].
+  const finalAssignments = {}
+  newDelegates.value.forEach((row, index) => {
+    if (!row.committee.trim() && !row.committeeType.trim() && !row.country.trim()) return
+    finalAssignments[`${school} - #${index + 1}`] = [
+      row.committee.trim(),
+      row.committeeType.trim(),
+      row.country.trim()
+    ]
+  })
+
+  if (Object.keys(finalAssignments).length === 0) {
+    toastStore.showToast('Add at least one delegate row.', 'error')
+    return
+  }
+
+  generatingHashes.value = true
+  try {
+    const response = await apiClient.post('/admin/hashes', { finalAssignments })
+    generatedHashes.value = response.data.hashes
+    toastStore.showToast('Hashes generated.', 'success')
+  } catch (error) {
+    // Errors automatically pop up via global toast interceptor
+  } finally {
+    generatingHashes.value = false
+  }
+}
+
+const regenerateDelegateHash = async () => {
+  if (!regenDelegate.value.committee.trim() || !regenDelegate.value.country.trim()) {
+    toastStore.showToast('Enter both a committee and a country.', 'error')
+    return
+  }
+
+  regeneratingDelegate.value = true
+  try {
+    const response = await apiClient.post('/admin/hashes/regenerate/delegate', {
+      committee: regenDelegate.value.committee.trim(),
+      country: regenDelegate.value.country.trim()
+    })
+    regeneratedDelegateHash.value = response.data
+    toastStore.showToast('Delegate hash regenerated.', 'success')
+  } catch (error) {
+    // Errors automatically pop up via global toast interceptor
+  } finally {
+    regeneratingDelegate.value = false
+  }
+}
+
+const regenerateSchoolHashes = async () => {
+  const school = regenSchool.value.trim()
+  if (!school) {
+    toastStore.showToast('Enter a school name.', 'error')
+    return
+  }
+
+  regeneratingSchool.value = true
+  try {
+    const response = await apiClient.post('/admin/hashes/regenerate/school', { school })
+    regeneratedSchoolHashes.value = response.data.hashes
+    toastStore.showToast('School hashes regenerated.', 'success')
+  } catch (error) {
+    // Errors automatically pop up via global toast interceptor
+  } finally {
+    regeneratingSchool.value = false
+  }
+}
+
+const lookupHashesForSchool = async () => {
+  lookingUpHashes.value = true
+  try {
+    const response = await apiClient.get('/admin/hashes', {
+      params: { schoolName: lookupSchool.value.trim() || undefined }
+    })
+    lookupHashes.value = response.data.hashes
+  } catch (error) {
+    // Errors automatically pop up via global toast interceptor
+  } finally {
+    lookingUpHashes.value = false
+  }
+}
+
+const addDropRow = () => {
+  dropDelegates.value.push({ committee: '', committeeType: '', country: '' })
+}
+
+const removeDropRow = (index) => {
+  if (dropDelegates.value.length === 1) {
+    dropDelegates.value[0] = { committee: '', committeeType: '', country: '' }
+    return
+  }
+  dropDelegates.value.splice(index, 1)
+}
+
+const dropSelectedDelegates = async () => {
+  const countryAndCommitteeList = dropDelegates.value
+    .filter((row) => row.committee.trim() || row.country.trim())
+    .map((row) => [row.country.trim(), row.committee.trim(), row.committeeType.trim()])
+
+  if (countryAndCommitteeList.length === 0) {
+    toastStore.showToast('Add at least one delegate row to drop.', 'error')
+    return
+  }
+
+  droppingDelegates.value = true
+  try {
+    const response = await apiClient.delete('/admin/hashes', {
+      data: { countryAndCommitteeList }
+    })
+    droppedDelegates.value = response.data.dropped
+    toastStore.showToast('Delegates dropped and hashes deleted.', 'success')
+  } catch (error) {
+    // Errors automatically pop up via global toast interceptor
+  } finally {
+    droppingDelegates.value = false
+  }
+}
+
+const copyHash = async (hash) => {
+  try {
+    await navigator.clipboard.writeText(hash)
+    toastStore.showToast('Hash copied to clipboard.', 'success')
+  } catch (error) {
+    toastStore.showToast('Could not copy the hash.', 'error')
+  }
+}
+
+// ---------- Awards actions ----------
+const loadAwards = async () => {
+  loadingAwards.value = true
+  try {
+    const response = await apiClient.get('/admin/awards')
+    awardsCommittees.value = response.data.committees
+  } catch (error) {
+    // Errors automatically pop up via global toast interceptor
+  } finally {
+    loadingAwards.value = false
+  }
+}
+
+// ---------- Initial load ----------
 onMounted(async () => {
   try {
-    // 2. Fetch system overview data from your API
     const response = await apiClient.get('/admin/dashboard-stats')
-    
-    // 3. Assign the backend data directly to your reactive refs
+
     totalDelegates.value = response.data.totalDelegates
     committeeCounts.value = response.data.committeeCounts
     storage.value = response.data.storage
     downtimeEvents.value = response.data.downtimeEvents
 
-    // Existing port fetch
     await fetchPortHealth()
   } catch (error) {
     // Backend errors will automatically pop up via your global toast store!
@@ -212,6 +613,36 @@ onMounted(async () => {
   color: #ffffff;
 }
 
+/* VIEW TOGGLE */
+.toggle-container {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.toggle-btn {
+  background-color: #1a1d21;
+  color: #aaaaaa;
+  border: 1px solid #3f444e;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+  color: #ffffff;
+  border-color: #6366f1;
+}
+
+.toggle-btn.active {
+  background-color: #6366f1;
+  border-color: #6366f1;
+  color: #ffffff;
+}
+
 /* SECTION CARDS */
 .section-card {
   background-color: #2a2e35;
@@ -226,6 +657,12 @@ onMounted(async () => {
 .section-card h2 {
   margin: 0;
   font-size: 1.1rem;
+  color: #ffffff;
+}
+
+.section-card h3 {
+  margin: 0;
+  font-size: 0.95rem;
   color: #ffffff;
 }
 
@@ -286,6 +723,68 @@ onMounted(async () => {
 .btn-refresh:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+
+.btn-secondary {
+  background-color: #1a1d21;
+  color: #ffffff;
+  border: 1px solid #3f444e;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-secondary:hover {
+  background-color: #3f444e;
+}
+
+.btn-danger {
+  background-color: #7f1d1d;
+  color: #fca5a5;
+  border: 1px solid #ef4444;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-danger:hover {
+  background-color: #ef4444;
+  color: #ffffff;
+}
+
+.btn-danger:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-icon {
+  background-color: #1a1d21;
+  color: #ef4444;
+  border: 1px solid #3f444e;
+  border-radius: 4px;
+  width: 34px;
+  cursor: pointer;
+}
+
+.btn-icon:hover {
+  border-color: #ef4444;
+}
+
+.btn-copy {
+  background-color: #1a1d21;
+  color: #22d3ee;
+  border: 1px solid #3f444e;
+  border-radius: 4px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-copy:hover {
+  border-color: #22d3ee;
 }
 
 /* METRICS GRID */
@@ -483,11 +982,136 @@ onMounted(async () => {
   color: #aaaaaa;
 }
 
+/* FORMS */
+.field-label {
+  font-size: 0.8rem;
+  color: #aaaaaa;
+  margin-bottom: -8px;
+}
+
+.text-input {
+  width: 100%;
+  box-sizing: border-box;
+  background-color: #1a1d21;
+  border: 1px solid #3f444e;
+  border-radius: 4px;
+  padding: 9px 12px;
+  color: #ffffff;
+  font-size: 0.85rem;
+  font-family: inherit;
+}
+
+.text-input:focus {
+  outline: none;
+  border-color: #6366f1;
+}
+
+.form-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.row-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+/* HASH RESULTS */
+.hash-result {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background-color: #1a1d21;
+  border: 1px solid #3f444e;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.hash-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 0.85rem;
+}
+
+.hash-name {
+  flex: 1;
+  color: #e2e8f0;
+}
+
+.hash-value {
+  font-family: 'Courier New', monospace;
+  color: #22d3ee;
+  background-color: #12151a;
+  padding: 3px 8px;
+  border-radius: 4px;
+  letter-spacing: 0.5px;
+}
+
+.empty-state {
+  font-size: 0.85rem;
+  color: #888888;
+  padding: 8px 0;
+}
+
+/* AWARDS OVERVIEW */
+.committee-awards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.awards-card {
+  background-color: #1a1d21;
+  border: 1px solid #3f444e;
+  border-radius: 6px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.award-row {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.85rem;
+  padding: 6px 10px;
+  background-color: #2a2e35;
+  border-radius: 4px;
+}
+
+.award-country {
+  color: #e2e8f0;
+}
+
+.award-name {
+  color: #fbcfe8;
+  font-weight: bold;
+}
+
 @media (max-width: 900px) {
   .action-buttons-grid,
   .metrics-grid,
   .ports-grid {
     grid-template-columns: 1fr;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .row-actions {
+    justify-content: flex-start;
   }
 }
 </style>
