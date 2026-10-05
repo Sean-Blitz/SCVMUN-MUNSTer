@@ -274,7 +274,7 @@ onMounted(async () => {
   max-width: 1400px;
   margin: 0 auto;
   padding: 20px;
-  color: #ffffff;
+  color: #00007e93;
   font-family: Arial, sans-serif;
 }
 
@@ -288,9 +288,9 @@ onMounted(async () => {
 .toggle-btn {
   width: 220px;
   height: 40px;
-  background-color: #2a2e35;
-  color: #aaaaaa;
-  border: 1px solid #3f444e;
+  background-color: #ffffff;
+  color: #5b6b7d;
+  border: 1px solid #e8c604;
   border-radius: 4px;
   font-weight: bold;
   cursor: pointer;
@@ -298,14 +298,14 @@ onMounted(async () => {
 }
 
 .toggle-btn.active {
-  background-color: #6366f1;
-  color: #ffffff;
-  border-color: #6366f1;
+  background-color: #009ddbda;
+  color: #00007e;
+  border-color: #009ddb;
 }
 
 .toggle-btn:hover:not(.active) {
-  background-color: #3f444e;
-  color: #ffffff;
+  background-color: #e8c604;
+  color: #00007e;
 }
 
 /* COMPACT DELEGATE GRID (4 COLUMNS) */
@@ -316,8 +316,8 @@ onMounted(async () => {
 }
 
 .delegate-card {
-  background-color: #2a2e35;
-  border: 1px solid #3f444e;
+  background-color: #ffffff;
+  border: 1px solid #e8c604;
   border-radius: 6px;
   padding: 12px;
   display: flex;
@@ -336,16 +336,16 @@ onMounted(async () => {
 .country-name {
   font-weight: bold;
   font-size: 0.95rem;
-  color: #ffffff;
+  color: #00007e93;
 }
 
 .committee-tag {
   font-size: 0.75rem;
-  color: #22d3ee;
-  background-color: #1a1d21;
+  color: #00007e;
+  background-color: #f5fafd;
   padding: 2px 6px;
   border-radius: 3px;
-  border: 1px solid #3f444e;
+  border: 1px solid #e8c604;
 }
 
 /* STATUS DISPLAY */
@@ -365,12 +365,12 @@ onMounted(async () => {
 }
 
 .status-submitted {
-  color: #f59e0b;
+  color: #e8c604;
   font-weight: bold;
 }
 
 .status-graded {
-  color: #22c55e;
+  color: #16a34a;
 }
 
 .graded-header {
@@ -381,9 +381,9 @@ onMounted(async () => {
 }
 
 .score-badge {
-  background-color: #14532d;
-  color: #86efac;
-  border: 1px solid #22c55e;
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #16a34a;
   padding: 1px 5px;
   border-radius: 3px;
   font-size: 0.75rem;
@@ -391,7 +391,7 @@ onMounted(async () => {
 
 .sub-date {
   font-size: 0.75rem;
-  color: #888888;
+  color: #6b7c8d;
   font-weight: normal;
 }
 
@@ -412,23 +412,24 @@ onMounted(async () => {
 
 .btn-view {
   flex: 3;
-  background-color: #6366f1;
-  color: #ffffff;
+  background-color: #009ddbda;
+  color: #00007e;
 }
 
 .btn-view:hover:not(:disabled) {
-  background-color: #4f46e5;
+  background-color: #00007e;
+  color: #ffffff;
 }
 
 .btn-download {
   flex: 1;
-  background-color: #1a1d21;
-  color: #ffffff;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  color: #00007e;
+  border: 1px solid #e8c604;
 }
 
 .btn-download:hover:not(:disabled) {
-  background-color: #3f444e;
+  background-color: #e8c604;
 }
 
 .btn-action:disabled {
@@ -443,7 +444,7 @@ onMounted(async () => {
   left: 0;
   width: 100vw;
   height: 100vh;
-  background-color: #1a1d21;
+  background-color: #f5fafd;
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -451,8 +452,8 @@ onMounted(async () => {
 
 /* TOP GRADING CONTROL BAR */
 .top-grading-bar {
-  background-color: #2a2e35;
-  border-bottom: 2px solid #3f444e;
+  background-color: #ffffff;
+  border-bottom: 2px solid #e8c604;
   padding: 12px 20px;
   display: flex;
   flex-direction: column;
@@ -468,17 +469,17 @@ onMounted(async () => {
 .delegate-summary h2 {
   margin: 0;
   font-size: 1.2rem;
-  color: #ffffff;
+  color: #00007e;
 }
 
 .committee-label {
   font-size: 0.8rem;
-  color: #22d3ee;
+  color: #00007e;
 }
 
 .score-summary-box {
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  border: 1px solid #e8c604;
   padding: 6px 16px;
   border-radius: 4px;
   display: flex;
@@ -488,13 +489,13 @@ onMounted(async () => {
 
 .summary-label {
   font-size: 0.85rem;
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 .summary-score {
   font-size: 1.1rem;
   font-weight: bold;
-  color: #22c55e;
+  color: #16a34a;
 }
 
 .bar-actions {
@@ -503,8 +504,8 @@ onMounted(async () => {
 }
 
 .btn-save {
-  background-color: #22c55e;
-  color: #111111;
+  background-color: #16a34a;
+  color: #00007e;
   border: none;
   padding: 8px 16px;
   border-radius: 4px;
@@ -513,14 +514,14 @@ onMounted(async () => {
 }
 
 .btn-save:hover {
-  background-color: #16a34a;
-  color: #ffffff;
+  background-color: #e8c604;
+  color: #00007e;
 }
 
 .btn-close {
-  background-color: #1a1d21;
-  color: #ffffff;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  color: #00007e;
+  border: 1px solid #e8c604;
   padding: 8px 14px;
   border-radius: 4px;
   cursor: pointer;
@@ -529,6 +530,7 @@ onMounted(async () => {
 
 .btn-close:hover {
   background-color: #ef4444;
+  color: #ffffff;
   border-color: #ef4444;
 }
 
@@ -553,14 +555,14 @@ onMounted(async () => {
 
 .rubric-field label {
   font-size: 0.75rem;
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 .rubric-field input {
   width: 80px;
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
-  color: #ffffff;
+  background-color: #ffffff;
+  border: 1px solid #e8c604;
+  color: #00007e93;
   padding: 6px;
   border-radius: 4px;
   font-weight: bold;
@@ -575,14 +577,14 @@ onMounted(async () => {
 
 .comments-field label {
   font-size: 0.75rem;
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 .comments-field textarea {
   height: 34px;
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
-  color: #ffffff;
+  background-color: #ffffff;
+  border: 1px solid #e8c604;
+  color: #00007e93;
   padding: 6px 10px;
   border-radius: 4px;
   resize: none;
@@ -594,7 +596,8 @@ onMounted(async () => {
 .pdf-viewer-container {
   flex: 1;
   width: 100%;
-  background-color: #111111;
+  background-color: #00007e;
+  color: #ffffff;
 }
 
 .pdf-iframe {
@@ -608,7 +611,7 @@ onMounted(async () => {
   justify-content: center;
   align-items: center;
   height: 100%;
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 /* RESPONSIVE LAYOUT BREAKPOINTS */

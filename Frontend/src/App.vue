@@ -22,7 +22,7 @@ const toastStore = useToastStore()
 <style>
 body {
   margin: 0;
-  background-color: #1a1d21;
+  background-color: #ffffff;
 }
 
 .toast-container {
@@ -45,15 +45,15 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(0, 0, 126, 0.15);
 }
 
 .toast-banner.error {
-  background-color: #ef4444;
+  background-color: #dc2626;
 }
 
 .toast-banner.success {
-  background-color: #10b981;
+  background-color: #15803d;
 }
 
 .toast-banner button {

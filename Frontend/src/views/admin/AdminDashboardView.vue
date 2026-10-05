@@ -603,14 +603,14 @@ onMounted(async () => {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
-  color: #ffffff;
+  color: #00007e93;
   font-family: Arial, sans-serif;
 }
 
 .page-header h1 {
   margin: 0;
   font-size: 1.5rem;
-  color: #ffffff;
+  color: #00007e;
 }
 
 /* VIEW TOGGLE */
@@ -621,9 +621,9 @@ onMounted(async () => {
 }
 
 .toggle-btn {
-  background-color: #1a1d21;
-  color: #aaaaaa;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  color: #5b6b7d;
+  border: 1px solid #e8c604;
   padding: 8px 16px;
   border-radius: 6px;
   font-weight: bold;
@@ -633,20 +633,20 @@ onMounted(async () => {
 }
 
 .toggle-btn:hover {
-  color: #ffffff;
-  border-color: #6366f1;
+  color: #00007e;
+  border-color: #009ddb;
 }
 
 .toggle-btn.active {
-  background-color: #6366f1;
-  border-color: #6366f1;
-  color: #ffffff;
+  background-color: #009ddbda;
+  border-color: #009ddb;
+  color: #00007e;
 }
 
 /* SECTION CARDS */
 .section-card {
-  background-color: #2a2e35;
-  border: 1px solid #3f444e;
+  background-color: #ffffff;
+  border: 1px solid #e8c604;
   border-radius: 8px;
   padding: 20px;
   display: flex;
@@ -657,19 +657,19 @@ onMounted(async () => {
 .section-card h2 {
   margin: 0;
   font-size: 1.1rem;
-  color: #ffffff;
+  color: #00007e;
 }
 
 .section-card h3 {
   margin: 0;
   font-size: 0.95rem;
-  color: #ffffff;
+  color: #00007e;
 }
 
 .section-desc {
   margin: 0;
   font-size: 0.85rem;
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 .card-header-action {
@@ -686,9 +686,9 @@ onMounted(async () => {
 }
 
 .btn-action {
-  background-color: #1a1d21;
-  color: #ffffff;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  color: #00007e;
+  border: 1px solid #e8c604;
   padding: 12px;
   border-radius: 6px;
   font-weight: bold;
@@ -698,21 +698,21 @@ onMounted(async () => {
 }
 
 .btn-action:hover {
-  background-color: #3f444e;
+  background-color: #e8c604;
 }
 
 .btn-export {
-  border-color: #22c55e;
-  color: #86efac;
+  border-color: #16a34a;
+  color: #166534;
 }
 
 .btn-export:hover {
-  background-color: #14532d;
+  background-color: #dcfce7;
 }
 
 .btn-refresh {
-  background-color: #6366f1;
-  color: #ffffff;
+  background-color: #009ddbda;
+  color: #00007e;
   border: none;
   padding: 8px 14px;
   border-radius: 4px;
@@ -726,9 +726,9 @@ onMounted(async () => {
 }
 
 .btn-secondary {
-  background-color: #1a1d21;
-  color: #ffffff;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  color: #00007e;
+  border: 1px solid #e8c604;
   padding: 8px 14px;
   border-radius: 4px;
   font-weight: bold;
@@ -736,12 +736,12 @@ onMounted(async () => {
 }
 
 .btn-secondary:hover {
-  background-color: #3f444e;
+  background-color: #e8c604;
 }
 
 .btn-danger {
-  background-color: #7f1d1d;
-  color: #fca5a5;
+  background-color: #fee2e2;
+  color: #991b1b;
   border: 1px solid #ef4444;
   padding: 8px 14px;
   border-radius: 4px;
@@ -750,7 +750,7 @@ onMounted(async () => {
 }
 
 .btn-danger:hover {
-  background-color: #ef4444;
+  background-color: #dc2626;
   color: #ffffff;
 }
 
@@ -760,9 +760,9 @@ onMounted(async () => {
 }
 
 .btn-icon {
-  background-color: #1a1d21;
+  background-color: #f5fafd;
   color: #ef4444;
-  border: 1px solid #3f444e;
+  border: 1px solid #e8c604;
   border-radius: 4px;
   width: 34px;
   cursor: pointer;
@@ -773,9 +773,9 @@ onMounted(async () => {
 }
 
 .btn-copy {
-  background-color: #1a1d21;
-  color: #22d3ee;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  color: #00007e;
+  border: 1px solid #e8c604;
   border-radius: 4px;
   padding: 4px 10px;
   font-size: 0.75rem;
@@ -784,7 +784,7 @@ onMounted(async () => {
 }
 
 .btn-copy:hover {
-  border-color: #22d3ee;
+  border-color: #009ddb;
 }
 
 /* METRICS GRID */
@@ -798,14 +798,14 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #1a1d21;
+  background-color: #f5fafd;
   padding: 12px 16px;
   border-radius: 6px;
   font-size: 1rem;
 }
 
 .total-badge strong {
-  color: #22d3ee;
+  color: #00007e;
   font-size: 1.3rem;
 }
 
@@ -820,12 +820,12 @@ onMounted(async () => {
   justify-content: space-between;
   font-size: 0.85rem;
   padding: 6px 10px;
-  background-color: #1a1d21;
+  background-color: #f5fafd;
   border-radius: 4px;
 }
 
 .committee-name {
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 .committee-count {
@@ -846,26 +846,26 @@ onMounted(async () => {
 }
 
 .progress-bar-bg {
-  background-color: #1a1d21;
+  background-color: #f5fafd;
   height: 16px;
   border-radius: 8px;
   overflow: hidden;
-  border: 1px solid #3f444e;
+  border: 1px solid #e8c604;
 }
 
 .progress-bar-fill {
   height: 100%;
-  background-color: #22c55e;
+  background-color: #16a34a;
   transition: width 0.4s ease;
 }
 
 .progress-bar-fill.warning {
-  background-color: #f59e0b;
+  background-color: #e8c604;
 }
 
 .percentage-label {
   font-size: 0.8rem;
-  color: #aaaaaa;
+  color: #5b6b7d;
   text-align: right;
 }
 
@@ -877,8 +877,8 @@ onMounted(async () => {
 }
 
 .port-card {
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  border: 1px solid #e8c604;
   border-radius: 6px;
   padding: 12px;
   display: flex;
@@ -902,7 +902,7 @@ onMounted(async () => {
 
 .port-number {
   font-size: 0.75rem;
-  color: #888888;
+  color: #6b7c8d;
 }
 
 .status-badge {
@@ -913,19 +913,19 @@ onMounted(async () => {
 }
 
 .status-badge.healthy {
-  color: #86efac;
-  background-color: #14532d;
+  color: #166534;
+  background-color: #dcfce7;
 }
 
 .status-badge.unreachable {
-  color: #fca5a5;
-  background-color: #7f1d1d;
+  color: #991b1b;
+  background-color: #fee2e2;
 }
 
 /* DOWNTIME TIMELINE */
 .no-downtime {
-  background-color: #14532d;
-  color: #86efac;
+  background-color: #dcfce7;
+  color: #166534;
   padding: 12px;
   border-radius: 6px;
   font-size: 0.9rem;
@@ -942,7 +942,7 @@ onMounted(async () => {
   display: flex;
   gap: 12px;
   align-items: flex-start;
-  background-color: #1a1d21;
+  background-color: #f5fafd;
   padding: 12px;
   border-radius: 6px;
   border-left: 4px solid #ef4444;
@@ -952,6 +952,7 @@ onMounted(async () => {
   width: 10px;
   height: 10px;
   background-color: #ef4444;
+  color: #ffffff;
   border-radius: 50%;
   margin-top: 4px;
 }
@@ -970,8 +971,8 @@ onMounted(async () => {
 }
 
 .duration-badge {
-  background-color: #7f1d1d;
-  color: #fca5a5;
+  background-color: #fee2e2;
+  color: #991b1b;
   padding: 2px 6px;
   border-radius: 3px;
   font-size: 0.75rem;
@@ -979,31 +980,31 @@ onMounted(async () => {
 }
 
 .reason-text {
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 /* FORMS */
 .field-label {
   font-size: 0.8rem;
-  color: #aaaaaa;
+  color: #5b6b7d;
   margin-bottom: -8px;
 }
 
 .text-input {
   width: 100%;
   box-sizing: border-box;
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #ffffff;
+  border: 1px solid #e8c604;
   border-radius: 4px;
   padding: 9px 12px;
-  color: #ffffff;
+  color: #00007e93;
   font-size: 0.85rem;
   font-family: inherit;
 }
 
 .text-input:focus {
   outline: none;
-  border-color: #6366f1;
+  border-color: #009ddb;
 }
 
 .form-rows {
@@ -1031,8 +1032,8 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  border: 1px solid #e8c604;
   border-radius: 6px;
   padding: 12px;
 }
@@ -1046,13 +1047,13 @@ onMounted(async () => {
 
 .hash-name {
   flex: 1;
-  color: #e2e8f0;
+  color: #00007e93;
 }
 
 .hash-value {
   font-family: 'Courier New', monospace;
-  color: #22d3ee;
-  background-color: #12151a;
+  color: #00007e;
+  background-color: #f5fafd;
   padding: 3px 8px;
   border-radius: 4px;
   letter-spacing: 0.5px;
@@ -1060,7 +1061,7 @@ onMounted(async () => {
 
 .empty-state {
   font-size: 0.85rem;
-  color: #888888;
+  color: #6b7c8d;
   padding: 8px 0;
 }
 
@@ -1072,8 +1073,8 @@ onMounted(async () => {
 }
 
 .awards-card {
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  border: 1px solid #e8c604;
   border-radius: 6px;
   padding: 14px;
   display: flex;
@@ -1086,16 +1087,16 @@ onMounted(async () => {
   justify-content: space-between;
   font-size: 0.85rem;
   padding: 6px 10px;
-  background-color: #2a2e35;
+  background-color: #ffffff;
   border-radius: 4px;
 }
 
 .award-country {
-  color: #e2e8f0;
+  color: #00007e93;
 }
 
 .award-name {
-  color: #fbcfe8;
+  color: #00007e;
   font-weight: bold;
 }
 

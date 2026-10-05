@@ -56,16 +56,16 @@ const handleLogout = () => {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #1a1d21;
-  color: #ffffff;
+  background-color: #ffffff;
+  color: #00007e93;
   font-family: Arial, sans-serif;
 }
 
 /* TOP NAVBAR */
 .global-navbar {
   height: 60px;
-  background-color: #2a2e35;
-  border-bottom: 1px solid #3f444e;
+  background-color: #ffffff;
+  border-bottom: 1px solid #e8c604;
   padding: 0 24px;
   display: flex;
   justify-content: space-between;
@@ -85,7 +85,7 @@ const handleLogout = () => {
   align-items: center;
   gap: 12px;
   text-decoration: none;
-  color: #ffffff;
+  color: #00007e93;
 }
 
 .app-logo {
@@ -115,7 +115,7 @@ const handleLogout = () => {
 
 .user-name {
   font-size: 0.9rem;
-  color: #e2e8f0;
+  color: #00007e93;
   font-weight: 500;
 }
 
@@ -128,25 +128,25 @@ const handleLogout = () => {
 }
 
 .role-badge.chair {
-  background-color: #312e81;
-  color: #a5b4fc;
-  border: 1px solid #6366f1;
+  background-color: #009ddbda;
+  color: #00007e;
+  border: 1px solid #009ddb;
 }
 
 .role-badge.admin {
-  background-color: #831843;
-  color: #fbcfe8;
-  border: 1px solid #ec4899;
+  background-color: #00007e;
+  color: #ffffff;
+  border: 1px solid #e8c604;
 }
 
 .role-badge.delegate {
-  background-color: #064e3b;
-  color: #a7f3d0;
-  border: 1px solid #10b981;
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #16a34a;
 }
 
 .btn-logout {
-  background-color: #1a1d21;
+  background-color: #f5fafd;
   color: #ef4444;
   border: 1px solid #ef4444;
   padding: 6px 14px;
@@ -158,7 +158,7 @@ const handleLogout = () => {
 }
 
 .btn-logout:hover {
-  background-color: #ef4444;
+  background-color: #dc2626;
   color: #ffffff;
 }
 

@@ -292,15 +292,15 @@ onMounted(async () => {
   max-width: 1200px;
   margin: 0 auto;
   padding: 20px;
-  color: #ffffff;
+  color: #00007e93;
   font-family: Arial, sans-serif;
 }
 
 /* ANNOUNCEMENT BAR */
 .announcement-bar {
-  background-color: #2a2e35;
-  border: 1px solid #3f444e;
-  border-left: 4px solid #6366f1;
+  background-color: #ffffff;
+  border: 1px solid #e8c604;
+  border-left: 4px solid #009ddb;
   padding: 12px 20px;
   border-radius: 4px;
   display: flex;
@@ -310,11 +310,11 @@ onMounted(async () => {
 
 .announcement-label {
   font-weight: bold;
-  color: #6366f1;
+  color: #00007e;
 }
 
 .announcement-text {
-  color: #e0e0e0;
+  color: #00007e93;
 }
 
 /* PANELS */
@@ -325,8 +325,8 @@ onMounted(async () => {
 }
 
 .panel {
-  background-color: #2a2e35;
-  border: 1px solid #3f444e;
+  background-color: #ffffff;
+  border: 1px solid #e8c604;
   border-radius: 8px;
   padding: 20px;
   display: flex;
@@ -338,8 +338,8 @@ onMounted(async () => {
   font-weight: bold;
   margin-top: 0;
   margin-bottom: 15px;
-  color: #ffffff;
-  border-bottom: 1px solid #3f444e;
+  color: #00007e;
+  border-bottom: 1px solid #e8c604;
   padding-bottom: 8px;
 }
 
@@ -351,8 +351,8 @@ onMounted(async () => {
 }
 
 .link-box {
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  border: 1px solid #e8c604;
   border-radius: 4px;
   min-height: 38px;
   padding: 0 12px;
@@ -361,7 +361,7 @@ onMounted(async () => {
 }
 
 .link-box a {
-  color: #22d3ee;
+  color: #00007e;
   text-decoration: none;
   font-size: 0.9rem;
   word-break: break-all;
@@ -381,19 +381,19 @@ onMounted(async () => {
 .info-row {
   display: flex;
   justify-content: space-between;
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  border: 1px solid #e8c604;
   padding: 12px 15px;
   border-radius: 4px;
 }
 
 .info-label {
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 .info-value {
   font-weight: bold;
-  color: #ffffff;
+  color: #00007e93;
 }
 
 /* POSITION PAPER + FEEDBACK GRID */
@@ -410,8 +410,8 @@ onMounted(async () => {
 }
 
 .instructions-block {
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  border: 1px solid #e8c604;
   border-radius: 4px;
   padding: 15px 20px 15px 35px;
 }
@@ -419,7 +419,7 @@ onMounted(async () => {
 .instructions-list {
   margin: 0;
   padding: 0;
-  color: #cccccc;
+  color: #5b6b7d;
   line-height: 1.6;
   font-size: 0.95rem;
 }
@@ -432,7 +432,7 @@ onMounted(async () => {
 
 .status-label {
   font-size: 1rem;
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 .status-badge {
@@ -443,21 +443,21 @@ onMounted(async () => {
 }
 
 .status-unsubmitted {
-  background-color: #7f1d1d;
-  color: #fca5a5;
+  background-color: #fee2e2;
+  color: #991b1b;
   border: 1px solid #ef4444;
 }
 
 .status-submitted {
-  background-color: #78350f;
-  color: #fcd34d;
-  border: 1px solid #f59e0b;
+  background-color: #fdf6d3;
+  color: #7a5c00;
+  border: 1px solid #e8c604;
 }
 
 .status-graded {
-  background-color: #14532d;
-  color: #86efac;
-  border: 1px solid #22c55e;
+  background-color: #dcfce7;
+  color: #166534;
+  border: 1px solid #16a34a;
 }
 
 /* GRADE & FEEDBACK PANEL */
@@ -466,8 +466,8 @@ onMounted(async () => {
 }
 
 .grade-empty {
-  background-color: #1a1d21;
-  border: 1px dashed #3f444e;
+  background-color: #f5fafd;
+  border: 1px dashed #e8c604;
   border-radius: 4px;
   padding: 24px 20px;
   display: flex;
@@ -475,7 +475,7 @@ onMounted(async () => {
   align-items: center;
   gap: 10px;
   text-align: center;
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 .grade-empty p {
@@ -492,8 +492,8 @@ onMounted(async () => {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  border: 1px solid #e8c604;
   border-radius: 6px;
   padding: 14px 16px;
 }
@@ -506,14 +506,14 @@ onMounted(async () => {
 
 .grade-total-label {
   font-size: 0.75rem;
-  color: #aaaaaa;
+  color: #5b6b7d;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
 
 .grade-total-value {
   font-size: 1.6rem;
-  color: #22c55e;
+  color: #16a34a;
 }
 
 .rubric-breakdown {
@@ -526,7 +526,7 @@ onMounted(async () => {
   margin: 0;
   font-size: 0.75rem;
   font-weight: bold;
-  color: #aaaaaa;
+  color: #5b6b7d;
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
@@ -545,18 +545,18 @@ onMounted(async () => {
 }
 
 .criterion-label {
-  color: #e0e0e0;
+  color: #00007e93;
 }
 
 .criterion-score {
   font-weight: bold;
-  color: #ffffff;
+  color: #00007e93;
   white-space: nowrap;
 }
 
 .criterion-bar-bg {
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  border: 1px solid #e8c604;
   border-radius: 4px;
   height: 8px;
   overflow: hidden;
@@ -564,18 +564,18 @@ onMounted(async () => {
 
 .criterion-bar-fill {
   height: 100%;
-  background-color: #22c55e;
+  background-color: #16a34a;
   transition: width 0.4s ease;
 }
 
 .criterion-bar-fill.low {
-  background-color: #f59e0b;
+  background-color: #e8c604;
 }
 
 .grade-muted {
   margin: 0;
   font-size: 0.85rem;
-  color: #888888;
+  color: #6b7c8d;
   font-style: italic;
 }
 
@@ -587,11 +587,11 @@ onMounted(async () => {
 
 .feedback-text {
   margin: 0;
-  color: #ffffff;
+  color: #00007e93;
   line-height: 1.5;
   font-size: 0.95rem;
-  background-color: #1a1d21;
-  border: 1px solid #3f444e;
+  background-color: #f5fafd;
+  border: 1px solid #e8c604;
   border-radius: 4px;
   padding: 12px 14px;
   white-space: pre-wrap;
@@ -599,8 +599,8 @@ onMounted(async () => {
 
 /* FILE UPLOAD */
 .upload-box {
-  background-color: #1a1d21;
-  border: 1px dashed #3f444e;
+  background-color: #f5fafd;
+  border: 1px dashed #e8c604;
   border-radius: 4px;
   padding: 20px;
   display: flex;
@@ -610,17 +610,17 @@ onMounted(async () => {
 
 .upload-label {
   font-size: 0.9rem;
-  color: #aaaaaa;
+  color: #5b6b7d;
 }
 
 .file-input {
-  color: #ffffff;
+  color: #00007e93;
 }
 
 .btn-submit {
   align-self: flex-start;
-  background-color: #6366f1;
-  color: #ffffff;
+  background-color: #009ddbda;
+  color: #00007e;
   border: none;
   padding: 10px 20px;
   border-radius: 4px;
@@ -629,8 +629,8 @@ onMounted(async () => {
 }
 
 .btn-submit:disabled {
-  background-color: #3f444e;
-  color: #888888;
+  background-color: #f5fafd;
+  color: #9aa5b1;
   cursor: not-allowed;
 }
 

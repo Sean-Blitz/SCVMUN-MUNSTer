@@ -29,13 +29,13 @@ const goHome = () => {
   justify-content: center;
   align-items: center;
   min-height: 70vh;
-  color: #ffffff;
+  color: #00007e93;
   font-family: Arial, sans-serif;
 }
 
 .error-card {
-  background-color: #2a2e35;
-  border: 1px solid #3f444e;
+  background-color: #ffffff;
+  border: 1px solid #e8c604;
   border-radius: 8px;
   padding: 40px;
   text-align: center;
@@ -54,19 +54,19 @@ const goHome = () => {
 .error-card h1 {
   margin: 0 0 12px 0;
   font-size: 1.4rem;
-  color: #ffffff;
+  color: #00007e;
 }
 
 .error-card p {
-  color: #aaaaaa;
+  color: #5b6b7d;
   font-size: 0.9rem;
   line-height: 1.5;
   margin-bottom: 24px;
 }
 
 .btn-home {
-  background-color: #6366f1;
-  color: #ffffff;
+  background-color: #009ddbda;
+  color: #00007e;
   border: none;
   padding: 10px 20px;
   border-radius: 4px;
@@ -77,6 +77,7 @@ const goHome = () => {
 }
 
 .btn-home:hover {
-  background-color: #4f46e5;
+  background-color: #00007e;
+  color: #ffffff;
 }
 </style>
