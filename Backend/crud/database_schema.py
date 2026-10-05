@@ -5,7 +5,7 @@ from sqlalchemy import String, Integer, ForeignKey, create_engine, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
-from controls import paper_rubric_data, award_options, awards_rubric
+from core.controls import paper_rubric_data, award_options, awards_rubric
 
 class Base(DeclarativeBase):
     pass
@@ -33,7 +33,7 @@ class Account(Base):
     last_login: Mapped[Optional[datetime]] = mapped_column(nullable=True)
     created_at: Mapped[datetime] = mapped_column(server_default=func.now())
 
-class Session(Base):
+class AuthSession(Base):
     """An active login. One row per token, so one account can be signed in on many devices.
 
     `token_hash` holds a hash of the issued token rather than the token itself, so a
