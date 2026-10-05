@@ -21,10 +21,52 @@ awards_rubric: List[Dict[str, Any]] = []
 # Ex: [{"id": "string | number", "label": "string", "levels": [{ "score": 4, "label": "string", "description": "string" }]}]
 """Consider making the ones above dynamic by putting them into the database and exposing an endpoint to edit them."""
 
+class Account(Base):
+    """Identity and credentials for every role. One row per person who can log in.
+
+    The profile tables (Delegates, Chairs, School) hang off this table one-to-one:
+    each of them uses its account_id as its own primary key, so the database
+    guarantees exactly one profile row per account.
+
+    `identifier` is the opaque string typed at the login screen (the pre-issued
+    "hash" from the organizers). `password_hash` is NULL until the account is
+    claimed through /auth/register, which means "is this account registered?" is
+    simply `password_hash IS NOT NULL`.
+    """
+    __tablename__ = "accounts"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    identifier: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
+    password_hash: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    role: Mapped[str] = mapped_column(String(50), nullable=False)  # 'delegate', 'advisor', 'chair', 'admin'
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    last_login: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+
+class Session(Base):
+    """An active login. One row per token, so one account can be signed in on many devices.
+
+    `token_hash` holds a hash of the issued token rather than the token itself, so a
+    database leak does not hand over live sessions. It is looked up on every
+    authenticated request, hence the index. Deleting a row logs that device out;
+    `ondelete="CASCADE"` clears an account's sessions with the account.
+    """
+    __tablename__ = "sessions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), nullable=False)
+    token_hash: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    expires_at: Mapped[datetime] = mapped_column(nullable=False)
+
 class School(Base):
     __tablename__ = "schools"
 
-    school_name: Mapped[str] = mapped_column(String(100), primary_key=True)
+    # The advisor's account. This doubles as the school's primary key, which is what
+    # makes this table one-to-one with Account.
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+
+    school_name: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     school_address: Mapped[str] = mapped_column(String(200), nullable=False)
     city: Mapped[str] = mapped_column(String(100), nullable=False)
     state: Mapped[str] = mapped_column(String(100), nullable=False)
@@ -32,8 +74,6 @@ class School(Base):
     advisor_name: Mapped[str] = mapped_column(String(100), nullable=False)
     advisor_phone: Mapped[str] = mapped_column(String(20), nullable=False)
     advisor_email: Mapped[str] = mapped_column(String(100), nullable=False)
-    advisor_hash: Mapped[str] = mapped_column(String(100), nullable=False)
-    advisor_password_hash: Mapped[str] = mapped_column(String(100), nullable=False)
     head_delegate_name: Mapped[str] = mapped_column(String(100), nullable=False)
     head_delegate_email: Mapped[str] = mapped_column(String(100), nullable=False)
 
@@ -56,28 +96,23 @@ class Committees(Base):
 class Chairs(Base):
     __tablename__ = "chairs"
 
+    # The chair's account. Doubles as this table's primary key (one-to-one with Account).
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     committee_name: Mapped[str] = mapped_column(String(100), ForeignKey("committees.committee_name"), nullable=False)
     email: Mapped[str] = mapped_column(String(100), nullable=False)
-    hash: Mapped[str] = mapped_column(String(100), nullable=False, primary_key=True)
-    password_hash: Mapped[str] = mapped_column(String(100), nullable=False)
-    
-class Logins(Base):
-    __tablename__ = "logins"
-
-    id_hash: Mapped[str] = mapped_column(Integer, primary_key=True)
-    email: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
-    password_hash: Mapped[str] = mapped_column(String(100), nullable=False)
-    role: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., 'delegate', 'chair', 'admin'
-    last_login: Mapped[Optional[datetime]] = mapped_column(nullable=True)
 
 class Delegates(Base):
     __tablename__ = "delegates"
 
-    id_hash: Mapped[int] = mapped_column(Integer, primary_key=True)
+    # The delegate's account. Doubles as this table's primary key (one-to-one with Account).
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id", ondelete="CASCADE"), primary_key=True)
+
     country: Mapped[str] = mapped_column(String(100), nullable=False)
     committee: Mapped[str] = mapped_column(String(100), ForeignKey("committees.committee_name"), nullable=False)
-    school: Mapped[str] = mapped_column(String(100), ForeignKey("schools.school_name"), nullable=False)
+    school_id: Mapped[int] = mapped_column(ForeignKey("schools.account_id"), nullable=False)
+    # ↑ references the owning advisor's account, which is the schools table's primary key
 
     # Note: regarding papers, they should not be able to be re-submitted after the grade has been given.
     paper_status: Mapped[str] = mapped_column(String(100), nullable=False, default="unsubmitted") # i.e. 'unsubmitted', 'submitted', 'graded'
@@ -97,7 +132,7 @@ class Uploads(Base):
     __tablename__ = "position_papers"
 
     upload_id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    delegate_id: Mapped[int] = mapped_column(Integer, ForeignKey("delegates.id_hash"), nullable=False)
+    delegate_id: Mapped[int] = mapped_column(Integer, ForeignKey("delegates.account_id"), nullable=False)
     upload_time: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
     file_name: Mapped[str] = mapped_column(String(256), nullable=False)
     file_path: Mapped[str] = mapped_column(String(256), nullable=False)
