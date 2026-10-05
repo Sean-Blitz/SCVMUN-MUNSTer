@@ -1,0 +1,1 @@
+"""Seed data for the database. This is a one-time operation that should be run after the database schema is created and before the application is started for the first time."""
