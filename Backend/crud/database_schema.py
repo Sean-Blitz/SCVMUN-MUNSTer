@@ -1,10 +1,13 @@
+import os
+from dotenv import load_dotenv; load_dotenv()  # Load environment variables from .env file
 from typing import Optional, List, Dict, Any
 from sqlalchemy import String, Integer, ForeignKey, create_engine, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
 
-DATABASE_URL = "postgresql+psycopg2://username:password@localhost:5432/database_name"  # Replace with your actual database URL
+DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your actual database URL
+
 
 class Base(DeclarativeBase):
     pass
@@ -34,7 +37,7 @@ class School(Base):
     head_delegate_name: Mapped[str] = mapped_column(String(100), nullable=False)
     head_delegate_email: Mapped[str] = mapped_column(String(100), nullable=False)
 
-    invoiceURL: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
+    invoiceURL: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     payment_status: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., 'paid', 'partially paid', 'unpaid'
     check_list: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB, nullable=True)
 
@@ -47,18 +50,17 @@ class Committees(Base):
     chairs = relationship("Chairs", backref="committee", cascade="all, delete-orphan")
     delegates = relationship("Delegates", backref="committee", cascade="all, delete-orphan")
     timeline: Mapped[Optional[Dict[str, List[Dict[str, Any]]]]] = mapped_column(JSONB, nullable=True)  
-    # e.g., {"Pre-Conference": [{"event": "Opening Ceremony", "date": "ISO-8601"}, ...], "Conference": [{"event": "Committee Session 1", "date": "ISO-8601"}, ...]}
+    # e.g., {"preConference": [{"event": "Opening Ceremony", "date": "ISO-8601"}, ...], "duringConference": [{"event": "Committee Session 1", "date": "ISO-8601"}, ...]}
     # timeline must contain both keys even when empty.
 
 class Chairs(Base):
     __tablename__ = "chairs"
 
-    name: Mapped[str] = mapped_column(String(100), nullable=False, primary_key=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
     committee_name: Mapped[str] = mapped_column(String(100), ForeignKey("committees.committee_name"), nullable=False)
     email: Mapped[str] = mapped_column(String(100), nullable=False)
-    hash: Mapped[str] = mapped_column(String(100), nullable=False)
+    hash: Mapped[str] = mapped_column(String(100), nullable=False, primary_key=True)
     password_hash: Mapped[str] = mapped_column(String(100), nullable=False)
-    chair_hash: Mapped[str] = mapped_column(String(100), nullable=False)
     
 class Logins(Base):
     __tablename__ = "logins"
@@ -73,19 +75,18 @@ class Delegates(Base):
     __tablename__ = "delegates"
 
     id_hash: Mapped[int] = mapped_column(Integer, primary_key=True)
-    email: Mapped[str] = mapped_column(String(100), unique=True, nullable=False)
     country: Mapped[str] = mapped_column(String(100), nullable=False)
     committee: Mapped[str] = mapped_column(String(100), ForeignKey("committees.committee_name"), nullable=False)
     school: Mapped[str] = mapped_column(String(100), ForeignKey("schools.school_name"), nullable=False)
 
     # Note: regarding papers, they should not be able to be re-submitted after the grade has been given.
-    paper_status: Mapped[str] = mapped_column(String(100), nullable=False) # i.e. 'unsubmitted', 'submitted', 'graded'
+    paper_status: Mapped[str] = mapped_column(String(100), nullable=False, default="unsubmitted") # i.e. 'unsubmitted', 'submitted', 'graded'
     position_papers: Mapped[List["Uploads"]] = relationship(back_populates="delegate", cascade="all, delete-orphan")
     paper_grade: Mapped[Optional[str]] = mapped_column(String(100), nullable=True) # i.e. "18/20"
     paper_comments: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
     paper_rubric_grade: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
 
-    assigned_award: Mapped[str] = mapped_column(String(100), nullable=False)
+    assigned_award: Mapped[str] = mapped_column(String(100), nullable=False, default="None")
     # i.e. "Candidate | Verbal Commendation | Honorable Mention | Outstanding Delegate | Best Delegate | None"
     overall_rubric_scores: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     overall_total_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
@@ -98,8 +99,8 @@ class Uploads(Base):
     upload_id: Mapped[int] = mapped_column(Integer, primary_key=True)
     delegate_id: Mapped[int] = mapped_column(Integer, ForeignKey("delegates.id_hash"), nullable=False)
     upload_time: Mapped[datetime] = mapped_column(nullable=False, server_default=func.now())
-    file_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    file_path: Mapped[str] = mapped_column(String(100), nullable=False)
+    file_name: Mapped[str] = mapped_column(String(256), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(256), nullable=False)
     # The actual URL returned to the frontend will be constructed by here, done through signed URL.
 
     delegate: Mapped["Delegates"] = relationship("Delegates", back_populates="position_papers")
