@@ -5,21 +5,11 @@ from sqlalchemy import String, Integer, ForeignKey, create_engine, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
-
-DATABASE_URL = os.getenv("DATABASE_URL")  # Replace with your actual database URL
-
+from controls import paper_rubric_data, award_options, awards_rubric
 
 class Base(DeclarativeBase):
     pass
 
-engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20)
-
-paper_rubric_data: List[Dict[str, Any]] = [] # fill in manually
-# Ex: [{"id": "criterion1", "label": "Clarity of Argument", "score": 8, "maxScore": 10}, ...]
-award_options = ["Verbal Commendation", "Honorable Mention", "Outstanding Delegate", "Best Delegate"]
-awards_rubric: List[Dict[str, Any]] = []
-# Ex: [{"id": "string | number", "label": "string", "levels": [{ "score": 4, "label": "string", "description": "string" }]}]
-"""Consider making the ones above dynamic by putting them into the database and exposing an endpoint to edit them."""
 
 class Account(Base):
     """Identity and credentials for every role. One row per person who can log in.
