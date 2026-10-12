@@ -39,12 +39,12 @@ class AwardAssignmentRequest(BaseModel):
 
 class NewHashRequest(BaseModel):
     """
-    Delegates to create, keyed by a display name such as "Lincoln High - #1".
+    Delegates to create, keyed by a display name such as "1".
 
     Each value is positional, matching the CLI's `FinalAssignments`:
     [committee, committeeType, country].
     """
-
+    school_name: str
     finalAssignments: dict[str, list[str]]
 
 

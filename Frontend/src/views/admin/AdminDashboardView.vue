@@ -438,11 +438,13 @@ const generateHashes = async () => {
     return
   }
 
-  // Key each delegate as "<school> - #<n>"; the value is [committee, type, country].
+  // Key each delegate by its position ("1", "2"); the value is [committee, type, country].
+  // The school travels separately as `school_name`, and the backend labels each entry
+  // "<school> - #<n>" for display.
   const finalAssignments = {}
   newDelegates.value.forEach((row, index) => {
     if (!row.committee.trim() && !row.committeeType.trim() && !row.country.trim()) return
-    finalAssignments[`${school} - #${index + 1}`] = [
+    finalAssignments[`${index + 1}`] = [
       row.committee.trim(),
       row.committeeType.trim(),
       row.country.trim()
@@ -456,7 +458,10 @@ const generateHashes = async () => {
 
   generatingHashes.value = true
   try {
-    const response = await apiClient.post('/admin/hashes', { finalAssignments })
+    const response = await apiClient.post('/admin/hashes', {
+      school_name: school,
+      finalAssignments
+    })
     generatedHashes.value = response.data.hashes
     toastStore.showToast('Hashes generated.', 'success')
   } catch (error) {
