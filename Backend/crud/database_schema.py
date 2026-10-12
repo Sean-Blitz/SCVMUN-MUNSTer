@@ -10,7 +10,6 @@ from core.controls import paper_rubric_data, award_options, awards_rubric
 class Base(DeclarativeBase):
     pass
 
-
 class Account(Base):
     """Identity and credentials for every role. One row per person who can log in.
 
@@ -66,6 +65,7 @@ class School(Base):
     advisor_email: Mapped[str] = mapped_column(String(100), nullable=False)
     head_delegate_name: Mapped[str] = mapped_column(String(100), nullable=False)
     head_delegate_email: Mapped[str] = mapped_column(String(100), nullable=False)
+    head_delegate_phone: Mapped[str] = mapped_column(String(20), nullable=False)
 
     invoiceURL: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     payment_status: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., 'paid', 'partially paid', 'unpaid'
@@ -78,7 +78,7 @@ class Committees(Base):
 
     committee_name: Mapped[str] = mapped_column(String(100), primary_key=True)
     chairs = relationship("Chairs", backref="committee", cascade="all, delete-orphan")
-    delegates = relationship("Delegates", backref="committee", cascade="all, delete-orphan")
+    delegates = relationship("Delegates", backref="committee_record", cascade="all, delete-orphan")
     timeline: Mapped[Optional[Dict[str, List[Dict[str, Any]]]]] = mapped_column(JSONB, nullable=True)  
     # e.g., {"preConference": [{"event": "Opening Ceremony", "date": "ISO-8601"}, ...], "duringConference": [{"event": "Committee Session 1", "date": "ISO-8601"}, ...]}
     # timeline must contain both keys even when empty.
