@@ -461,16 +461,24 @@ Request:
 
 ```json
 {
+  "school_name": "Lincoln High School",
   "finalAssignments": {
-    "Lincoln High School - #1": ["DISEC", "General Assembly", "France"]
+    "1": ["DISEC", "General Assembly", "France"]
   }
 }
 ```
 
 Field notes:
-- Each key is a delegate's display name; its value is positional —
-  `[committee, committeeType, country]` (the CLI's `FinalAssignments` shape).
-- The response echoes those names, one entry per submitted delegate.
+- `school_name` identifies the school the new delegates belong to. It must match an
+  existing school; an unknown name returns `404` with a `{"message": ...}` body.
+- `finalAssignments` keys are the per-school labels the form uses as row positions
+  ("1", "2", …); the backend turns each into the `<school> - #<key>` display name.
+  Its value is positional — `[committee, committeeType, country]` (the CLI's
+  `FinalAssignments` shape). `committeeType` is accepted but not persisted: there is no
+  column for it.
+- A `(committee, country)` pair that already has an account is rejected with `409`
+  ("regenerate" is the intended way to reissue). Double-delegation partners share one
+  account, so they are submitted once and share one hash.
 
 Response `201`:
 
@@ -481,6 +489,11 @@ Response `201`:
   ]
 }
 ```
+
+Field notes:
+- One entry per submitted delegate, in submission order. `name` is the label the backend
+  built, and `hash` is the freshly minted login hash — the only time it is sent in
+  clear text apart from `GET /admin/hashes`.
 
 #### 8.4.2 `POST /admin/hashes/regenerate/delegate`
 
