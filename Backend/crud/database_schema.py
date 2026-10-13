@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv; load_dotenv()  # Load environment variables from .env file
 from typing import Optional, List, Dict, Any
-from sqlalchemy import String, Integer, ForeignKey, CheckConstraint, Index, create_engine, func
+from sqlalchemy import String, Integer, Boolean, ForeignKey, CheckConstraint, Index, create_engine, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
@@ -69,7 +69,6 @@ class School(Base):
 
     invoiceURL: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
     payment_status: Mapped[str] = mapped_column(String(50), nullable=False)  # e.g., 'paid', 'partially paid', 'unpaid'
-    check_list: Mapped[Optional[List[Dict[str, Any]]]] = mapped_column(JSONB, nullable=True)
 
     delegates = relationship("Delegates", backref="school", cascade="all, delete-orphan")
 
@@ -171,3 +170,42 @@ class Uploads(Base):
     # The actual URL returned to the frontend will be constructed by here, done through signed URL.
 
     delegate: Mapped["Delegates"] = relationship("Delegates", back_populates="position_papers")
+
+
+class ConferenceChecklist(Base):
+    """One line of the conference-wide action checklist.
+
+    Shared by every school, not stored per school: the steps ("submit position papers",
+    "pay the conference fee") are the same for everyone, and an admin edits them once.
+    `position` is explicit so the panel has a stable order.
+
+    Whether a line is *ticked* is not here - that is per school, in ChecklistProgress.
+    The pair is why the admin route reconciles lines by `id` rather than deleting and
+    re-inserting them: a line's id is what its schools' progress rows point at.
+    """
+    __tablename__ = "conference_checklist"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class ChecklistProgress(Base):
+    """Whether one school has ticked one checklist line.
+
+    Separate from ConferenceChecklist because the labels are shared but progress is not:
+    Lincoln paying its invoice must not tick Rival's box. A pair with no row reads as
+    "not done", so the table only ever holds ticks that were set (or explicitly cleared).
+    Both foreign keys cascade, so removing a school or a checklist line takes its progress
+    rows with it.
+    """
+    __tablename__ = "checklist_progress"
+
+    school_id: Mapped[int] = mapped_column(
+        ForeignKey("schools.account_id", ondelete="CASCADE"), primary_key=True
+    )
+    item_id: Mapped[int] = mapped_column(
+        ForeignKey("conference_checklist.id", ondelete="CASCADE"), primary_key=True
+    )
+    completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)

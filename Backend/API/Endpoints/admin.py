@@ -17,11 +17,22 @@ from sqlalchemy.orm import Session
 
 from API.dependencies import CurrentUser, get_current_user, require_roles
 from core.controls import BROADCAST_LIMITS
-from crud.database_schema import Account, AuthSession, Broadcast, Committees, Delegates, School
+from crud.database_schema import (
+    Account,
+    AuthSession,
+    Broadcast,
+    ChecklistProgress,
+    Committees,
+    ConferenceChecklist,
+    Delegates,
+    School,
+)
 from crud.db import get_db, utcnow
 from schemas.request_models import (
     BroadcastRequest,
     BroadcastUpdateRequest,
+    ChecklistProgressRequest,
+    ChecklistUpdateRequest,
     DelegateHashRequest,
     DropDelegatesRequest,
     NewHashRequest,
@@ -34,11 +45,17 @@ from schemas.response_models import (
     BroadcastEntry,
     BroadcastListResponse,
     CommitteeAwards,
+    ConferenceChecklistItem,
+    ConferenceChecklistResponse,
     DropDelegatesResponse,
     DroppedDelegate,
     HashEntry,
     HashListResponse,
     PortHealth,
+    SchoolChecklistItem,
+    SchoolChecklistResponse,
+    SchoolEntry,
+    SchoolListResponse,
 )
 
 router = APIRouter(
@@ -621,3 +638,231 @@ def delete_broadcast(
 
     db.delete(broadcast)
     db.commit()
+
+
+# --- Conference checklist (§8.7) ---
+# Two tables: conference_checklist holds the labels every school shares, and
+# checklist_progress holds each school's ticks. They are joined for the advisor panel and
+# for the per-school view below. Lines are reconciled by id - never deleted and
+# re-inserted wholesale - because a line's id is what progress rows point at, so a
+# rename must not silently wipe every school's tick.
+
+
+MAX_CHECKLIST_ITEMS = 20
+MAX_CHECKLIST_LABEL = 200
+
+
+def _get_school_or_404(db: Session, school_id: int) -> School:
+    school = db.get(School, school_id)
+    if school is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No school with id {school_id}.")
+    return school
+
+
+def _ordered_items(db: Session) -> list[ConferenceChecklist]:
+    return list(
+        db.scalars(
+            select(ConferenceChecklist).order_by(
+                ConferenceChecklist.position, ConferenceChecklist.id
+            )
+        ).all()
+    )
+
+
+def _school_checklist(db: Session, school: School) -> SchoolChecklistResponse:
+    """One school's checklist: every shared label, plus that school's tick if it has one."""
+    rows = db.execute(
+        select(ConferenceChecklist, ChecklistProgress.completed)
+        .outerjoin(
+            ChecklistProgress,
+            (ChecklistProgress.item_id == ConferenceChecklist.id)
+            & (ChecklistProgress.school_id == school.account_id),
+        )
+        .order_by(ConferenceChecklist.position, ConferenceChecklist.id)
+    ).all()
+
+    return SchoolChecklistResponse(
+        school_id=school.account_id,
+        school_name=school.school_name,
+        items=[
+            SchoolChecklistItem(id=item.id, label=item.label, completed=bool(completed))
+            for item, completed in rows
+        ],
+    )
+
+
+@router.get("/schools", response_model=SchoolListResponse)
+def list_schools(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SchoolListResponse:
+    """Every school, for the progress picker (and for a script that needs the ids)."""
+    schools = db.scalars(select(School).order_by(School.school_name)).all()
+    return SchoolListResponse(
+        schools=[SchoolEntry(id=school.account_id, name=school.school_name) for school in schools]
+    )
+
+
+@router.get("/checklist", response_model=ConferenceChecklistResponse)
+def get_checklist(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> ConferenceChecklistResponse:
+    """The shared checklist labels, in display order. Ticks are per school (§8.7.4)."""
+    return ConferenceChecklistResponse(
+        items=[
+            ConferenceChecklistItem(id=item.id, label=item.label)
+            for item in _ordered_items(db)
+        ]
+    )
+
+
+@router.put("/checklist", response_model=ConferenceChecklistResponse)
+def replace_checklist(
+    payload: ChecklistUpdateRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> ConferenceChecklistResponse:
+    """
+    Reconcile the shared checklist with the submitted lines, in display order.
+
+    Lines that arrive with an id are updated in place, so their schools' ticks survive;
+    lines with no id are created; lines that are absent are deleted, taking their progress
+    with them. Labels must be unique (case-insensitively) so a script can address a line by
+    name as well as by id.
+    """
+    if len(payload.items) > MAX_CHECKLIST_ITEMS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"A checklist holds at most {MAX_CHECKLIST_ITEMS} items.",
+        )
+
+    existing = {item.id: item for item in _ordered_items(db)}
+
+    seen_ids: set[int] = set()
+    seen_labels: set[str] = set()
+    prepared: list[tuple[ConferenceChecklist | None, str]] = []
+
+    for position, entry in enumerate(payload.items, start=1):
+        label = entry.label.strip()
+        if not label:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, f"Item {position} needs a label."
+            )
+        if len(label) > MAX_CHECKLIST_LABEL:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Item {position} is longer than {MAX_CHECKLIST_LABEL} characters.",
+            )
+
+        folded = label.casefold()
+        if folded in seen_labels:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, f"Item {position} repeats the label '{label}'."
+            )
+        seen_labels.add(folded)
+
+        row: ConferenceChecklist | None = None
+        if entry.id is not None:
+            row = existing.get(entry.id)
+            if row is None:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND, f"No checklist item with id {entry.id}."
+                )
+            if entry.id in seen_ids:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST, f"Item id {entry.id} was sent twice."
+                )
+            seen_ids.add(entry.id)
+
+        prepared.append((row, label))
+
+    # Update and create in place, then delete whatever the payload left out.
+    for position, (row, label) in enumerate(prepared):
+        if row is None:
+            db.add(ConferenceChecklist(label=label, position=position))
+        else:
+            row.label = label
+            row.position = position
+
+    for item_id, row in existing.items():
+        if item_id not in seen_ids:
+            db.delete(row)
+
+    db.commit()
+
+    return get_checklist(user, db)
+
+
+@router.get("/schools/{school_id}/checklist", response_model=SchoolChecklistResponse)
+def get_school_checklist(
+    school_id: int,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SchoolChecklistResponse:
+    """The shared labels with this school's ticks - what its advisor sees, plus the ids."""
+    return _school_checklist(db, _get_school_or_404(db, school_id))
+
+
+@router.patch("/schools/{school_id}/checklist", response_model=SchoolChecklistResponse)
+def update_school_checklist(
+    school_id: int,
+    payload: ChecklistProgressRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SchoolChecklistResponse:
+    """
+    Tick or untick lines for one school, addressing each by id or by label.
+
+    A partial update: lines that are not listed keep their current state, which is what
+    makes this convenient to call from a script ("mark 'Pay the conference fee' done").
+    The admin UI sends every line, which amounts to a full save. Returns the school's
+    checklist as it stands afterwards.
+    """
+    school = _get_school_or_404(db, school_id)
+    items = {item.id: item for item in _ordered_items(db)}
+    by_label = {item.label.casefold(): item for item in items.values()}
+
+    resolved: list[tuple[ConferenceChecklist, bool]] = []
+    for position, entry in enumerate(payload.items, start=1):
+        if (entry.id is None) == (entry.label is None):
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Item {position} must give exactly one of id or label.",
+            )
+
+        if entry.id is not None:
+            item = items.get(entry.id)
+            if item is None:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND, f"No checklist item with id {entry.id}."
+                )
+        else:
+            item = by_label.get((entry.label or "").strip().casefold())
+            if item is None:
+                raise HTTPException(
+                    status.HTTP_404_NOT_FOUND,
+                    f"No checklist item labelled '{entry.label}'.",
+                )
+
+        resolved.append((item, bool(entry.completed)))
+
+    # Upsert: the pair (school, item) is the primary key, so a second save updates the row.
+    for item, completed in resolved:
+        row = db.get(ChecklistProgress, (school.account_id, item.id))
+        if row is None:
+            db.add(
+                ChecklistProgress(
+                    school_id=school.account_id,
+                    item_id=item.id,
+                    completed=completed,
+                    updated_at=utcnow(),
+                )
+            )
+        else:
+            row.completed = completed
+            row.updated_at = utcnow()
+
+    db.commit()
+
+    return _school_checklist(db, school)

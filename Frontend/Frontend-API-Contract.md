@@ -225,6 +225,9 @@ Field notes:
   (default) each have a distinct badge style.
 - `billing.invoiceUrl` renders as a link when present, otherwise "No invoice available".
 - `checklist[].completed` toggles the check indicator on each row.
+- `checklist` labels are conference-wide, but `completed` is **this school's own tick**
+  (`checklist_progress`, §8.7) — another school ticking a line does not affect this one.
+  Before an admin fills the labels in it returns `[]`, which renders the panel empty.
 
 ---
 
@@ -570,7 +573,7 @@ Field notes:
 ### 8.6 Announcements & conference links
 
 The lines delegates see on their dashboard (§2.1). An admin edits them from the
-**Announcements & Links** tab. `kind` selects the strip: `announcement` feeds the bar at
+**Delegate Content** tab. `kind` selects the strip: `announcement` feeds the bar at
 the top of the delegate page, `link` feeds the five slots in the "Conference & General
 Info" panel.
 
@@ -662,6 +665,114 @@ id does not exist.
 
 Response `204` with no body. Permanent; `404` if the id does not exist.
 
+### 8.7 Conference checklist
+
+The **Conference Action Checklist** panel on the advisor dashboard (§4.1) is split across two
+tables, and the split is the whole point:
+
+| table | holds | scope |
+| --- | --- | --- |
+| `conference_checklist` | `id`, `label`, `position` | every school shares these lines |
+| `checklist_progress` | `school_id`, `item_id`, `completed` | one row per school that has ticked a line; a pair with no row means "not done" |
+
+So the labels are edited once, while each school's ticks are its own — Lincoln paying its
+invoice does not tick Rival's box. Both are edited from the **Delegate Content** tab.
+
+Because `checklist_progress.item_id` points at `conference_checklist.id`, the admin route
+**reconciles lines by id**: a line sent with an id is updated in place (so its schools' ticks
+survive a rename), a line with no id is created, and a line that is absent from the request
+is deleted along with every school's progress for it. Labels must be unique,
+case-insensitively, so a line can also be addressed by name.
+
+Limits: at most **20** lines, each label 200 characters or fewer after trimming, no blank
+labels and no duplicates (`400` otherwise).
+
+#### 8.7.1 `GET /admin/schools`
+
+Response `200`: `{ "schools": [ { "id": 7, "name": "Lincoln High School" } ] }` — `id` is
+`schools.account_id`. Used by the progress picker, and by a script that needs the ids.
+
+#### 8.7.2 `GET /admin/checklist`
+
+The shared lines, in display order.
+
+```json
+{ "items": [ { "id": 3, "label": "Submit position papers" } ] }
+```
+
+#### 8.7.3 `PUT /admin/checklist`
+
+Request — the whole set of lines, in the order they should appear:
+
+```json
+{
+  "items": [
+    { "id": 3, "label": "Submit every position paper" },
+    { "label": "Book the bus" }
+  ]
+}
+```
+
+Field notes:
+- `id` omitted creates a new line; `id` present renames/reorders the existing one and keeps
+  its ticks. Line `1` above is deleted, and with it every school's tick for it.
+- Response `200`: the saved lines, as in §8.7.2; `{"items": []}` clears the checklist for
+  everyone. `400` for a blank, over-long or duplicate label, a repeated id, or more than 20
+  lines; `404` for an unknown id.
+
+#### 8.7.4 `GET /admin/schools/{id}/checklist`
+
+One school's checklist: every shared line, plus that school's tick.
+
+```json
+{
+  "school_id": 7,
+  "school_name": "Lincoln High School",
+  "items": [ { "id": 3, "label": "Submit position papers", "completed": true } ]
+}
+```
+
+Field notes:
+- `school_name` is echoed so a script can confirm it addressed the school it meant to.
+- `404` if the school does not exist.
+
+#### 8.7.5 `PATCH /admin/schools/{id}/checklist`
+
+Tick or untick lines for one school.
+
+```json
+{
+  "items": [
+    { "id": 3, "completed": true },
+    { "label": "Pay the conference fee", "completed": false }
+  ]
+}
+```
+
+Field notes:
+- **Partial**: lines not listed keep their current state, so a script can set one line
+  without knowing the rest. The admin UI sends every line, which amounts to a full save.
+- Each entry gives **exactly one** of `id` or `label` (the label is matched
+  case-insensitively after trimming); `completed` is required. `400` if both or neither is
+  given, `404` for an unknown line or school.
+- Response `200`: the school's checklist afterwards, as in §8.7.4.
+- Idempotent, so it is safe to replay. A script driving it:
+
+```python
+import requests
+
+BASE = "https://your-host/api"
+headers = {"Authorization": f"Bearer {token}"}
+
+# tick a line by name, leaving every other line as it is
+requests.patch(
+    f"{BASE}/admin/schools/7/checklist",
+    headers=headers,
+    json={"items": [{"label": "Pay the conference fee", "completed": True}]},
+    timeout=10,
+).raise_for_status()
+```
+
 ---
 
 ## Quick Reference
@@ -701,6 +812,11 @@ Response `204` with no body. Permanent; `404` if the id does not exist.
 | 31 | Admin | PATCH | `/admin/broadcasts/{id}` | broadcast entry |
 | 32 | Admin | DELETE | `/admin/broadcasts/{id}` | (204, no body) |
 | 33 | Admin | GET | `/admin/committees` | `[string]` |
+| 34 | Admin | GET | `/admin/schools` | `{schools[]}` |
+| 35 | Admin | GET | `/admin/checklist` | `{items[]}` |
+| 36 | Admin | PUT | `/admin/checklist` | `{items[]}` |
+| 37 | Admin | GET | `/admin/schools/{id}/checklist` | `{school_id, school_name, items[]}` |
+| 38 | Admin | PATCH | `/admin/schools/{id}/checklist` | same as `GET` |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.

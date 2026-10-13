@@ -28,7 +28,7 @@
         :class="['toggle-btn', { active: activeTab === 'content' }]"
         @click="switchTab('content')"
       >
-        Announcements &amp; Links
+        Delegate Content
       </button>
     </div>
 
@@ -518,6 +518,108 @@
           </div>
         </div>
       </div>
+
+      <!-- CONFERENCE CHECKLIST: SHARED LABELS -->
+      <div class="section-card">
+        <h2>Conference Action Checklist</h2>
+        <p class="section-desc">
+          The checklist lines shown on <strong>every</strong> advisor's dashboard — the labels
+          are shared, the ticks are per school (below). Add, rename or remove lines; Save
+          replaces the whole list. Removing a line also removes every school's tick for it.
+        </p>
+
+        <p v-if="loadingChecklist" class="section-desc">Loading checklist…</p>
+
+        <template v-else>
+          <div v-if="!checklistItems.length" class="empty-state">
+            No lines yet — add the first one below.
+          </div>
+
+          <div v-for="(item, index) in checklistItems" :key="index" class="checklist-row">
+            <input
+              v-model="item.label"
+              class="text-input"
+              type="text"
+              placeholder="e.g. Submit position papers"
+              @input="checklistDirty = true"
+            />
+            <button class="btn-icon" title="Remove line" @click="removeChecklistItem(index)">✕</button>
+          </div>
+
+          <div class="row-actions">
+            <button
+              class="btn-secondary"
+              :disabled="checklistItems.length >= maxChecklistItems"
+              @click="addChecklistItem"
+            >
+              + Add line
+            </button>
+            <button
+              class="btn-refresh"
+              :disabled="savingChecklist || !checklistDirty"
+              @click="saveChecklist"
+            >
+              {{ savingChecklist ? 'Saving...' : 'Save checklist' }}
+            </button>
+            <span v-if="checklistDirty" class="capacity-warning">Unsaved changes</span>
+            <span class="capacity-note">{{ checklistItems.length }}/{{ maxChecklistItems }} lines</span>
+          </div>
+        </template>
+      </div>
+
+      <!-- CHECKLIST PROGRESS: PER SCHOOL -->
+      <div class="section-card">
+        <h2>Checklist Progress</h2>
+        <p class="section-desc">
+          Which lines a school has ticked. Pick a school and tick its boxes — a tick here
+          shows only on that school's advisor dashboard.
+        </p>
+
+        <label class="field-label" for="progress-school">School</label>
+        <select
+          id="progress-school"
+          v-model="progressSchoolId"
+          class="text-input"
+          @change="onProgressSchoolChange"
+        >
+          <option :value="null">Select a school…</option>
+          <option v-for="school in schools" :key="school.id" :value="school.id">
+            {{ school.name }}
+          </option>
+        </select>
+
+        <template v-if="progressSchoolId !== null">
+          <p v-if="loadingProgress" class="section-desc">Loading progress…</p>
+
+          <template v-else>
+            <p v-if="!progressItems.length" class="empty-state">
+              No checklist lines to tick yet — add some above and save first.
+            </p>
+
+            <div v-for="item in progressItems" :key="item.id" class="checklist-row">
+              <input
+                v-model="item.completed"
+                type="checkbox"
+                :title="item.completed ? 'Done' : 'Outstanding'"
+                @change="progressDirty = true"
+              />
+              <span class="progress-label">{{ item.label }}</span>
+            </div>
+
+            <div class="row-actions">
+              <button
+                class="btn-refresh"
+                :disabled="savingProgress || !progressDirty"
+                @click="saveProgress"
+              >
+                {{ savingProgress ? 'Saving...' : 'Save progress' }}
+              </button>
+              <span v-if="progressDirty" class="capacity-warning">Unsaved changes</span>
+              <span class="capacity-note">{{ progressDone }}/{{ progressItems.length }} ticked</span>
+            </div>
+          </template>
+        </template>
+      </div>
     </template>
   </div>
 </template>
@@ -590,11 +692,31 @@ const emptyBroadcast = () => ({ body: '', url: '', committee_name: null, starts_
 const newBroadcast = ref(emptyBroadcast())
 const editDraft = ref(emptyBroadcast())
 
+// ---------- Conference checklist state (shared labels) ----------
+const checklistItems = ref([])
+const loadingChecklist = ref(false)
+const savingChecklist = ref(false)
+const checklistDirty = ref(false)
+const maxChecklistItems = 20 // mirrors MAX_CHECKLIST_ITEMS in admin.py
+
+// ---------- Checklist progress state (per school) ----------
+const schools = ref([])
+const progressSchoolId = ref(null)
+const savedProgressSchoolId = ref(null) // the school the tick draft belongs to
+const progressItems = ref([])
+const loadingProgress = ref(false)
+const savingProgress = ref(false)
+const progressDirty = ref(false)
+
 // ---------- Computed ----------
 const storagePercentage = computed(() => {
   if (!storage.value.totalGb) return 0
   return Number(((storage.value.usedGb / storage.value.totalGb) * 100).toFixed(1))
 })
+
+const progressDone = computed(
+  () => progressItems.value.filter((item) => item.completed).length
+)
 
 // ---------- Broadcast computed ----------
 const broadcastsOfKind = computed(() =>
@@ -676,6 +798,13 @@ const switchTab = (tab) => {
   }
   if (tab === 'content' && broadcasts.value.length === 0) {
     loadBroadcasts()
+  }
+  // Refreshed on entry, but never over unsaved edits.
+  if (tab === 'content' && !checklistDirty.value) {
+    loadChecklist()
+  }
+  if (tab === 'content' && schools.value.length === 0) {
+    loadSchools()
   }
 }
 
@@ -1063,6 +1192,136 @@ const deleteBroadcast = async (row) => {
     // Backend errors pop up via the interceptor
   } finally {
     savingBroadcast.value = false
+  }
+}
+
+// ---------- Conference checklist actions (shared labels) ----------
+const loadChecklist = async () => {
+  loadingChecklist.value = true
+  try {
+    const response = await apiClient.get('/admin/checklist')
+    // Keep the ids: they are what the schools' ticks point at, so they must be sent back.
+    checklistItems.value = (response.data.items || []).map((item) => ({
+      id: item.id,
+      label: item.label
+    }))
+    checklistDirty.value = false
+  } catch (error) {
+    // Backend errors pop up via the global toast interceptor
+  } finally {
+    loadingChecklist.value = false
+  }
+}
+
+const addChecklistItem = () => {
+  checklistItems.value.push({ id: null, label: '' }) // id null = a new line
+  checklistDirty.value = true
+}
+
+const removeChecklistItem = (index) => {
+  checklistItems.value.splice(index, 1)
+  checklistDirty.value = true
+}
+
+const saveChecklist = async () => {
+  if (checklistItems.value.some((item) => !item.label.trim())) {
+    toastStore.showToast('Every checklist line needs a label.', 'error')
+    return
+  }
+
+  savingChecklist.value = true
+  try {
+    const response = await apiClient.put('/admin/checklist', {
+      items: checklistItems.value.map((item) => ({
+        id: item.id,
+        label: item.label.trim()
+      }))
+    })
+    checklistItems.value = (response.data.items || []).map((item) => ({
+      id: item.id,
+      label: item.label
+    }))
+    checklistDirty.value = false
+    toastStore.showToast('Checklist saved.', 'success')
+
+    // Line ids may have been added or removed, so re-read the progress view rather than
+    // keep ticking against a stale list.
+    if (progressSchoolId.value !== null) {
+      await loadProgress()
+    }
+  } catch (error) {
+    // Backend errors pop up via the global toast interceptor
+  } finally {
+    savingChecklist.value = false
+  }
+}
+
+// ---------- Checklist progress actions (per school) ----------
+const loadSchools = async () => {
+  try {
+    const response = await apiClient.get('/admin/schools')
+    schools.value = response.data.schools || []
+  } catch (error) {
+    // Backend errors pop up via the global toast interceptor
+  }
+}
+
+const loadProgress = async () => {
+  if (progressSchoolId.value === null) {
+    progressItems.value = []
+    savedProgressSchoolId.value = null
+    progressDirty.value = false
+    return
+  }
+
+  loadingProgress.value = true
+  try {
+    const response = await apiClient.get(`/admin/schools/${progressSchoolId.value}/checklist`)
+    progressItems.value = (response.data.items || []).map((item) => ({
+      id: item.id,
+      label: item.label,
+      completed: item.completed
+    }))
+    savedProgressSchoolId.value = progressSchoolId.value
+    progressDirty.value = false
+  } catch (error) {
+    // Backend errors pop up via the global toast interceptor
+  } finally {
+    loadingProgress.value = false
+  }
+}
+
+// Switching schools throws the tick draft away, so ask first and put the picker back.
+const onProgressSchoolChange = async () => {
+  if (progressDirty.value && !window.confirm('Discard the unsaved progress changes?')) {
+    progressSchoolId.value = savedProgressSchoolId.value
+    return
+  }
+  await loadProgress()
+}
+
+const saveProgress = async () => {
+  if (progressSchoolId.value === null) return
+
+  savingProgress.value = true
+  try {
+    const response = await apiClient.patch(`/admin/schools/${progressSchoolId.value}/checklist`, {
+      items: progressItems.value.map((item) => ({
+        id: item.id,
+        completed: item.completed
+      }))
+    })
+    progressItems.value = (response.data.items || []).map((item) => ({
+      id: item.id,
+      label: item.label,
+      completed: item.completed
+    }))
+    progressDirty.value = false
+    toastStore.showToast('Progress saved.', 'success')
+  } catch (error) {
+    // Backend errors pop up via the global toast interceptor
+  } finally {
+    savingProgress.value = false
   }
 }
 
@@ -1715,6 +1974,30 @@ onMounted(async () => {
 .btn-danger:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+/* CONFERENCE CHECKLIST */
+.checklist-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.checklist-row .text-input {
+  flex: 1;
+}
+
+.progress-label {
+  flex: 1;
+  color: #00007e;
+}
+
+.checklist-row input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  accent-color: #009ddb;
+  cursor: pointer;
 }
 
 @media (max-width: 900px) {

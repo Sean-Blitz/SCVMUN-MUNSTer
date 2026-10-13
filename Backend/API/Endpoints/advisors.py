@@ -15,7 +15,14 @@ from sqlalchemy.orm import Session
 from API.dependencies import CurrentUser, get_current_user, require_roles
 import core.security
 import core.storage
-from crud.database_schema import Account, Delegates, School, Uploads
+from crud.database_schema import (
+    Account,
+    ChecklistProgress,
+    ConferenceChecklist,
+    Delegates,
+    School,
+    Uploads,
+)
 from crud.db import get_db
 from schemas.request_models import VerifyHashesRequest
 from schemas.response_models import (
@@ -191,24 +198,27 @@ def verify_hashes_and_reveal(
     return _delegates_for_school(db, school, reveal_hashes=True)
 
 
-def _checklist_items(school: School) -> list[ChecklistItem]:
-    """Map the school's stored `check_list` JSON onto the response shape.
+def _checklist_items(db: Session, school: School) -> list[ChecklistItem]:
+    """The shared checklist labels, each with *this* school's tick.
 
-    The column is free-form JSONB, so anything that is not a `{label, completed}` object
-    is skipped rather than turning the whole panel into a 500. A school with no list
-    stores NULL and gets an empty panel.
+    Labels are conference-wide (conference_checklist); ticks are not (checklist_progress),
+    so the outer join is what makes Lincoln's invoice tick invisible to Rival. A missing
+    progress row is simply "not done".
     """
-    items: list[ChecklistItem] = []
-    for entry in school.check_list or []:
-        if not isinstance(entry, dict) or not entry.get("label"):
-            continue
-        items.append(
-            ChecklistItem(
-                label=str(entry["label"]),
-                completed=bool(entry.get("completed", False)),
-            )
+    rows = db.execute(
+        select(ConferenceChecklist, ChecklistProgress.completed)
+        .outerjoin(
+            ChecklistProgress,
+            (ChecklistProgress.item_id == ConferenceChecklist.id)
+            & (ChecklistProgress.school_id == school.account_id),
         )
-    return items
+        .order_by(ConferenceChecklist.position, ConferenceChecklist.id)
+    ).all()
+
+    return [
+        ChecklistItem(label=item.label, completed=bool(completed))
+        for item, completed in rows
+    ]
 
 
 @router.get("/school", response_model=AdvisorSchoolResponse)
@@ -242,5 +252,5 @@ def get_school_overview(
             invoiceUrl=school.invoiceURL or "",
             paymentStatus=school.payment_status or "unpaid",
         ),
-        checklist=_checklist_items(school),
+        checklist=_checklist_items(db, school),
     )

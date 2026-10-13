@@ -99,6 +99,8 @@ class BillingInfo(BaseModel):
 
 
 class ChecklistItem(BaseModel):
+    """One line of the advisor's checklist: the shared label plus this school's tick."""
+
     label: str
     completed: bool = False
 
@@ -271,3 +273,45 @@ class BroadcastEntry(BaseModel):
 
 class BroadcastListResponse(BaseModel):
     broadcasts: list[BroadcastEntry] = []
+
+
+# --- Admin: conference checklist ---
+
+
+class ConferenceChecklistItem(BaseModel):
+    """A checklist line as the labels editor sees it: no tick, because that is per school."""
+
+    id: int
+    label: str
+
+
+class ConferenceChecklistResponse(BaseModel):
+    items: list[ConferenceChecklistItem] = []
+
+
+class SchoolChecklistItem(BaseModel):
+    """A checklist line joined with one school's tick."""
+
+    id: int
+    label: str
+    completed: bool = False
+
+
+class SchoolChecklistResponse(BaseModel):
+    """One school's checklist state. `school_name` is included so a script can confirm it
+    addressed the school it meant to."""
+
+    school_id: int
+    school_name: str
+    items: list[SchoolChecklistItem] = []
+
+
+class SchoolEntry(BaseModel):
+    """One school, for the progress picker."""
+
+    id: int  # schools.account_id, which is the advisor's account id
+    name: str
+
+
+class SchoolListResponse(BaseModel):
+    schools: list[SchoolEntry] = []

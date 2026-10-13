@@ -104,3 +104,44 @@ class BroadcastUpdateRequest(BaseModel):
     position: int | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
+
+
+# --- Admin: conference checklist ---
+
+
+class ChecklistItemRequest(BaseModel):
+    """
+    One checklist line for the labels editor.
+
+    `id` is omitted for a new line. Existing lines must send their id back, because that
+    id is what every school's progress row points at - the server updates lines in place
+    rather than replacing them, so ticking survives an edit.
+    """
+
+    id: int | None = None
+    label: str
+
+
+class ChecklistUpdateRequest(BaseModel):
+    """The whole conference-wide checklist, in display order: lines not listed are removed."""
+
+    items: list[ChecklistItemRequest]
+
+
+class ChecklistProgressUpdate(BaseModel):
+    """
+    One line to tick or untick for a school.
+
+    Identify the line by `id`, or by `label` when driving this from a script and reading
+    the labels from GET /admin/schools/{id}/checklist. Send exactly one of the two.
+    """
+
+    id: int | None = None
+    label: str | None = None
+    completed: bool
+
+
+class ChecklistProgressRequest(BaseModel):
+    """A partial update: lines not listed keep whatever state they already have."""
+
+    items: list[ChecklistProgressUpdate]
