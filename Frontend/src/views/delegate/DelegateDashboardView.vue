@@ -252,9 +252,9 @@ const submitPaper = async () => {
   formData.append('paper', selectedFile.value)
 
   try {
-    await apiClient.post('/delegate/upload-paper', formData, {
-      headers: { 'Content-Type': 'multipart/form-data' }
-    })
+    // No explicit Content-Type: the browser has to add the multipart boundary, and
+    // setting the header by hand would send "multipart/form-data" without one.
+    await apiClient.post('/delegate/upload-paper', formData)
 
     // Reflect the new status locally so the panel updates immediately
     dashboardData.value.positionPaper.status = 'submitted'

@@ -233,3 +233,5 @@ Frontend/.DS_Store
 Frontend/src/.DS_Store
 Frontend/src/views/.DS_Store
 Frontend/.DS_Store
+Backend/crud/pdf_uploads/*
+!Backend/crud/pdf_uploads/.gitkeep

@@ -5,15 +5,18 @@ Every route here is scoped to the calling delegate; the account comes from the t
 rather than from the request body, so a delegate cannot request another's assignment.
 """
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
+from fastapi.concurrency import run_in_threadpool
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from API.dependencies import CurrentUser, get_current_user, require_roles
+import core.storage
 from core.controls import paper_rubric_data
-from crud.database_schema import Broadcast, Delegates
+from crud.database_schema import Broadcast, Delegates, Uploads
 from crud.db import get_db, utcnow
 from schemas.response_models import (
     ConferenceLink,
@@ -130,12 +133,90 @@ def get_my_assignment(
 async def upload_position_paper(
     user: Annotated[CurrentUser, Depends(get_current_user)],
     paper: Annotated[UploadFile, File(description="Position paper PDF")],
+    db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """
     Accept the delegate's position paper as multipart/form-data under the field name
-    `paper`, then mark their submission as received.
+    `paper`, store the PDF on the server, and mark the submission as received.
 
-    TODO: validate the upload is a PDF, store it, and set the delegate's paper status
-    to 'submitted'. The frontend ignores this response body; errors surface as a toast.
+    Uploading again is allowed until a chair has graded the paper; each attempt is kept
+    as its own `position_papers` row (the schema's design), so the newest `upload_time`
+    and `upload_id` is the live paper. Once the paper is graded it can no longer be
+    replaced.
+
+    The PDF itself lives on disk under PAPER_UPLOAD_DIR (see core.storage); only the
+    relative path is recorded. Nothing is served straight from that directory - the
+    advisor and chair download routes are what check permissions and stream it.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    delegate = db.scalars(select(Delegates).where(Delegates.account_id == user.id)).first()
+    if delegate is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No delegate profile is attached to this account.",
+        )
+
+    if delegate.paper_status == "graded":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This paper has already been graded and cannot be replaced.",
+        )
+
+    # The extension and content type are the client's claims - cheap to check, trivial to
+    # fake - so the %PDF- signature below is the check that actually matters.
+    filename = Path((paper.filename or "").strip()).name
+    claims_pdf = filename.lower().endswith(".pdf") or paper.content_type == "application/pdf"
+    if not claims_pdf:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "Only a PDF position paper can be uploaded."
+        )
+
+    limit_mb = core.storage.MAX_PAPER_BYTES // (1024 * 1024)
+    if paper.size is not None and paper.size > core.storage.MAX_PAPER_BYTES:
+        raise HTTPException(
+            status.HTTP_413_CONTENT_TOO_LARGE,
+            f"The PDF is larger than {limit_mb} MB.",
+        )
+
+    data = await paper.read()
+    if len(data) > core.storage.MAX_PAPER_BYTES:
+        raise HTTPException(
+            status.HTTP_413_CONTENT_TOO_LARGE,
+            f"The PDF is larger than {limit_mb} MB.",
+        )
+    if not data.startswith(b"%PDF-"):
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST, "That file is not a PDF."
+        )
+
+    stored_name = core.storage.new_paper_name(delegate.account_id)
+    try:
+        # Off the event loop: writing and fsyncing several megabytes would stall it.
+        await run_in_threadpool(core.storage.save_paper, stored_name, data)
+    except OSError as exc:
+        raise HTTPException(
+            status.HTTP_500_INTERNAL_SERVER_ERROR,
+            "Could not store the upload. Check that the paper directory is writable.",
+        ) from exc
+
+    db.add(
+        Uploads(
+            delegate_id=delegate.account_id,
+            file_name=filename[:256] or "position-paper.pdf",
+            file_path=stored_name,  # relative to PAPER_UPLOAD_DIR, never absolute
+        )
+    )
+    delegate.paper_status = "submitted"
+
+    try:
+        db.commit()
+    except Exception:
+        # The row never landed, so the file on disk would be an orphan: remove it.
+        db.rollback()
+        core.storage.delete_paper(stored_name)
+        raise
+
+    return {
+        "message": "Position paper received.",
+        "file_name": filename,
+        "status": delegate.paper_status,
+    }
