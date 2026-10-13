@@ -110,8 +110,13 @@ Response `200`: identical to login (`{ user, token }`).
 ```
 
 Field notes:
-- `announcements[0]` is displayed when the array is non-empty.
-- `conferenceLinks` is padded/trimmed client-side to exactly 5 slots; surplus entries are ignored.
+- `announcements` is rendered as one line each in the bar at the top of the page, in the
+  order sent, and the bar is hidden when the list is empty. The backend caps this at 3
+  (2 general + 1 for the delegate's own committee), sending general lines first, so the
+  bar can never overflow.
+- `conferenceLinks` is padded/trimmed client-side to exactly 5 slots; surplus entries are
+  ignored. The backend caps the total at 5 (2 general + 3 for the delegate's committee),
+  so nothing is normally dropped.
 - `instructions` renders as an ordered list.
 - `delegate.committee` and `delegate.country` fall back to `"Unassigned"` when empty.
 - `score`, `feedback`, and `criteria` populate the **Grade & Chair Feedback** panel and are
@@ -562,6 +567,101 @@ Field notes:
   routes remain §7.4.
 - `committees[].committee` is the list key; `awards[].country` is the per-row key.
 
+### 8.6 Announcements & conference links
+
+The lines delegates see on their dashboard (§2.1). An admin edits them from the
+**Announcements & Links** tab. `kind` selects the strip: `announcement` feeds the bar at
+the top of the delegate page, `link` feeds the five slots in the "Conference & General
+Info" panel.
+
+`committee_name` is `null` for a line addressed to every delegate, or a committee name to
+reach only that committee. Timestamps are **naive UTC** (no timezone suffix); the admin UI
+converts to and from the browser's local time. `starts_at` null means live immediately,
+`ends_at` null means no planned end.
+
+**Capacity** is enforced per target, counting lines that have not ended yet — an expired
+line releases its place, a scheduled one already holds it, so the totals below are a hard
+ceiling on what any delegate sees at once:
+
+| kind | global (`committee_name: null`) | per committee | most a delegate can see |
+| --- | --- | --- | --- |
+| `announcement` | 2 | 1 | 3 |
+| `link` | 2 | 3 | 5 |
+
+Overflowing a target returns `409`; fix it by deleting a line or editing another one to end
+sooner. There is no soft-delete flag — `DELETE` is permanent.
+
+#### 8.6.1 `GET /admin/broadcasts`
+
+Query: `kind` (optional, `announcement` | `link`).
+
+Response `200`:
+
+```json
+{
+  "broadcasts": [
+    {
+      "id": 1,
+      "kind": "announcement",
+      "body": "Buses depart at 7:30am",
+      "url": null,
+      "committee_name": null,
+      "position": 0,
+      "starts_at": null,
+      "ends_at": "2026-10-05T18:00:00",
+      "created_at": "2026-10-03T21:16:00",
+      "updated_at": null
+    }
+  ]
+}
+```
+
+Field notes:
+- Editor view: ended rows are included, so they can still be edited or deleted.
+
+#### 8.6.2 `GET /admin/committees`
+
+Response `200`: `["DISEC", "WHO"]` — committee names, for the target picker.
+
+#### 8.6.3 `POST /admin/broadcasts`
+
+Request:
+
+```json
+{
+  "kind": "link",
+  "body": "Conference schedule",
+  "url": "https://example.com/schedule",
+  "committee_name": "DISEC",
+  "position": 0,
+  "starts_at": null,
+  "ends_at": null
+}
+```
+
+Response `201`: one broadcast entry, as in §8.6.1.
+
+Field notes:
+- `body` is the announcement text, or the link's label; it may not be blank.
+- `url` is required for a `link` and rejected on an `announcement`.
+- `committee_name` must be an existing committee (`404` otherwise).
+- `ends_at` must be after `starts_at` when both are given (`400`).
+- A create that would exceed the target's capacity returns `409`.
+
+#### 8.6.4 `PATCH /admin/broadcasts/{id}`
+
+Request: any subset of `body`, `url`, `committee_name`, `position`, `starts_at`, `ends_at`.
+Only the keys present are applied, so `"ends_at": null` clears the end date while omitting
+it leaves it alone. `kind` is fixed at creation.
+
+Response `200`: the updated broadcast entry. The capacity is re-checked against the new
+target and schedule, so moving a line to a busier committee can return `409`; `404` if the
+id does not exist.
+
+#### 8.6.5 `DELETE /admin/broadcasts/{id}`
+
+Response `204` with no body. Permanent; `404` if the id does not exist.
+
 ---
 
 ## Quick Reference
@@ -596,6 +696,11 @@ Field notes:
 | 26 | Admin | DELETE | `/admin/hashes` | `{dropped[]}` |
 | 27 | Admin | GET | `/admin/hashes?schoolName=` | `{hashes[]}` |
 | 28 | Admin | GET | `/admin/awards` | `{committees[]}` |
+| 29 | Admin | GET | `/admin/broadcasts?kind=` | `{broadcasts[]}` |
+| 30 | Admin | POST | `/admin/broadcasts` | broadcast entry |
+| 31 | Admin | PATCH | `/admin/broadcasts/{id}` | broadcast entry |
+| 32 | Admin | DELETE | `/admin/broadcasts/{id}` | (204, no body) |
+| 33 | Admin | GET | `/admin/committees` | `[string]` |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.

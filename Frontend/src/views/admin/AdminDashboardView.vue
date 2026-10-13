@@ -24,6 +24,12 @@
       >
         Awards Overview
       </button>
+      <button
+        :class="['toggle-btn', { active: activeTab === 'content' }]"
+        @click="switchTab('content')"
+      >
+        Announcements &amp; Links
+      </button>
     </div>
 
     <!-- ============================= DIAGNOSTICS ============================= -->
@@ -319,6 +325,200 @@
         <div v-else class="empty-state">No award data available.</div>
       </div>
     </template>
+
+    <!-- ==================== ANNOUNCEMENTS & CONFERENCE LINKS ==================== -->
+    <template v-if="activeTab === 'content'">
+      <!-- EDITOR -->
+      <div class="section-card">
+        <h2>Announcements &amp; Conference Links</h2>
+        <p class="section-desc">
+          What delegates see on their dashboard: announcements fill the bar at the top
+          (up to 3 lines), links fill the five slots in the "Conference &amp; General Info"
+          panel. A line addressed to a committee reaches only that committee's delegates,
+          and is shown after the general lines.
+        </p>
+
+        <div class="toggle-container">
+          <button
+            v-for="option in broadcastKinds"
+            :key="option.kind"
+            :class="['toggle-btn', { active: broadcastKind === option.kind }]"
+            @click="selectBroadcastKind(option.kind)"
+          >
+            {{ option.label }}
+          </button>
+        </div>
+
+        <p class="capacity-line">
+          <strong>Space left:</strong>
+          <span
+            v-for="row in broadcastCapacity"
+            :key="row.label"
+            :class="['capacity-chip', { full: row.full }]"
+          >
+            {{ row.label }}: {{ row.used }}/{{ row.limit }}
+          </span>
+          <span class="capacity-note">
+            counted per target, and a line that has not ended yet still holds its place
+          </span>
+        </p>
+
+        <div class="broadcast-form">
+          <label class="field-label" :for="`broadcast-body`">{{ broadcastBodyLabel }}</label>
+          <input
+            id="broadcast-body"
+            v-model="newBroadcast.body"
+            class="text-input"
+            type="text"
+            :placeholder="broadcastBodyPlaceholder"
+          />
+
+          <template v-if="broadcastKind === 'link'">
+            <label class="field-label" for="broadcast-url">Link URL</label>
+            <input
+              id="broadcast-url"
+              v-model="newBroadcast.url"
+              class="text-input"
+              type="text"
+              placeholder="https://..."
+            />
+          </template>
+
+          <label class="field-label" for="broadcast-target">Shown to</label>
+          <select id="broadcast-target" v-model="newBroadcast.committee_name" class="text-input">
+            <option :value="null">All delegates</option>
+            <option v-for="committee in committees" :key="committee" :value="committee">
+              {{ committee }}
+            </option>
+          </select>
+
+          <div class="schedule-row">
+            <div>
+              <label class="field-label" for="broadcast-starts">Starts (optional)</label>
+              <input
+                id="broadcast-starts"
+                v-model="newBroadcast.starts_at"
+                class="text-input"
+                type="datetime-local"
+              />
+            </div>
+            <div>
+              <label class="field-label" for="broadcast-ends">Ends (optional)</label>
+              <input
+                id="broadcast-ends"
+                v-model="newBroadcast.ends_at"
+                class="text-input"
+                type="datetime-local"
+              />
+            </div>
+          </div>
+          <p class="capacity-note">
+            Times are your local time. Leave both blank to publish now with no end.
+          </p>
+
+          <div class="row-actions">
+            <button
+              class="btn-refresh"
+              :disabled="savingBroadcast || targetFull"
+              @click="createBroadcast"
+            >
+              {{ savingBroadcast ? 'Saving...' : 'Publish' }}
+            </button>
+            <span v-if="targetFull" class="capacity-warning">
+              That target is full — delete one of its lines first.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- PUBLISHED LIST -->
+      <div class="section-card">
+        <div class="card-header-action">
+          <h2>{{ broadcastKind === 'link' ? 'Conference Links' : 'Announcements' }}</h2>
+          <button class="btn-refresh" :disabled="loadingBroadcasts" @click="loadBroadcasts">
+            {{ loadingBroadcasts ? 'Loading...' : '🔄 Reload' }}
+          </button>
+        </div>
+        <p class="section-desc">
+          Use ▲ ▼ to reorder within a target. General lines are always shown before
+          committee lines, whatever their position.
+        </p>
+
+        <div v-if="!broadcastsOfKind.length" class="empty-state">
+          Nothing published yet.
+        </div>
+
+        <div v-for="group in broadcastGroups" :key="group.label" class="broadcast-group">
+          <h3>{{ group.label }}</h3>
+
+          <div
+            v-for="row in group.rows"
+            :key="row.id"
+            :class="['broadcast-row', { editing: editingId === row.id }]"
+          >
+            <!-- EDIT MODE -->
+            <template v-if="editingId === row.id">
+              <input v-model="editDraft.body" class="text-input" type="text" />
+              <input
+                v-if="row.kind === 'link'"
+                v-model="editDraft.url"
+                class="text-input"
+                type="text"
+                placeholder="https://..."
+              />
+              <select v-model="editDraft.committee_name" class="text-input">
+                <option :value="null">All delegates</option>
+                <option v-for="committee in committees" :key="committee" :value="committee">
+                  {{ committee }}
+                </option>
+              </select>
+              <div class="schedule-row">
+                <input v-model="editDraft.starts_at" class="text-input" type="datetime-local" />
+                <input v-model="editDraft.ends_at" class="text-input" type="datetime-local" />
+              </div>
+              <div class="row-actions">
+                <button class="btn-refresh" :disabled="savingBroadcast" @click="saveBroadcast(row)">
+                  {{ savingBroadcast ? 'Saving...' : 'Save' }}
+                </button>
+                <button class="btn-secondary" @click="cancelEdit">Cancel</button>
+              </div>
+            </template>
+
+            <!-- READ MODE -->
+            <template v-else>
+              <div class="broadcast-main">
+                <span class="broadcast-body">{{ row.body }}</span>
+                <span v-if="row.url" class="broadcast-url">{{ row.url }}</span>
+                <span class="broadcast-schedule">{{ scheduleLabel(row) }}</span>
+              </div>
+              <span :class="['broadcast-state', stateClass(row)]">{{ stateLabel(row) }}</span>
+              <div class="broadcast-actions">
+                <button
+                  class="btn-icon"
+                  title="Move up"
+                  :disabled="!canMove(row, -1) || savingBroadcast"
+                  @click="moveBroadcast(row, -1)"
+                >
+                  ▲
+                </button>
+                <button
+                  class="btn-icon"
+                  title="Move down"
+                  :disabled="!canMove(row, 1) || savingBroadcast"
+                  @click="moveBroadcast(row, 1)"
+                >
+                  ▼
+                </button>
+                <button class="btn-secondary" @click="startEdit(row)">Edit</button>
+                <button class="btn-danger" :disabled="savingBroadcast" @click="deleteBroadcast(row)">
+                  Delete
+                </button>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -366,20 +566,116 @@ const droppedDelegates = ref([])
 const awardsCommittees = ref([])
 const loadingAwards = ref(false)
 
+// ---------- Announcements & conference links state ----------
+const broadcastKinds = [
+  { kind: 'announcement', label: 'Announcements' },
+  { kind: 'link', label: 'Conference Links' }
+]
+
+// Mirror of core.controls.BROADCAST_LIMITS in the backend, used to show capacity.
+// The backend is still the authority: it returns 409 if a create would overflow.
+const broadcastLimits = {
+  announcement: { global: 2, committee: 1 },
+  link: { global: 2, committee: 3 }
+}
+
+const broadcastKind = ref('announcement')
+const broadcasts = ref([])
+const committees = ref([])
+const loadingBroadcasts = ref(false)
+const savingBroadcast = ref(false)
+const editingId = ref(null)
+
+const emptyBroadcast = () => ({ body: '', url: '', committee_name: null, starts_at: '', ends_at: '' })
+const newBroadcast = ref(emptyBroadcast())
+const editDraft = ref(emptyBroadcast())
+
 // ---------- Computed ----------
 const storagePercentage = computed(() => {
   if (!storage.value.totalGb) return 0
   return Number(((storage.value.usedGb / storage.value.totalGb) * 100).toFixed(1))
 })
 
+// ---------- Broadcast computed ----------
+const broadcastsOfKind = computed(() =>
+  broadcasts.value.filter((row) => row.kind === broadcastKind.value)
+)
+
+const broadcastBodyLabel = computed(() =>
+  broadcastKind.value === 'link' ? 'Link label' : 'Announcement text'
+)
+
+const broadcastBodyPlaceholder = computed(() =>
+  broadcastKind.value === 'link'
+    ? 'e.g. Conference schedule'
+    : 'e.g. Buses depart the hotel at 7:30am'
+)
+
+// Rows that can still be shown: one that has already ended releases its place.
+const countsTowardCapacity = (row) => !row.ends_at || Date.parse(`${row.ends_at}Z`) > Date.now()
+
+const usedFor = (kind, committeeName) =>
+  broadcasts.value.filter(
+    (row) =>
+      row.kind === kind &&
+      (row.committee_name ?? null) === (committeeName ?? null) &&
+      countsTowardCapacity(row)
+  ).length
+
+// Capacity for the general target plus whichever target the form is pointing at.
+const broadcastCapacity = computed(() => {
+  const limits = broadcastLimits[broadcastKind.value]
+  const targets = [{ label: 'All delegates', key: null, limit: limits.global }]
+  const selected = newBroadcast.value.committee_name
+  if (selected) {
+    targets.push({ label: selected, key: selected, limit: limits.committee })
+  }
+  return targets.map((target) => {
+    const used = usedFor(broadcastKind.value, target.key)
+    return { label: target.label, used, limit: target.limit, full: used >= target.limit }
+  })
+})
+
+const targetFull = computed(() => {
+  const limits = broadcastLimits[broadcastKind.value]
+  const selected = newBroadcast.value.committee_name
+  const limit = selected ? limits.committee : limits.global
+  return usedFor(broadcastKind.value, selected) >= limit
+})
+
+// One group per target, so reordering only competes with lines the delegate sees together.
+const broadcastGroups = computed(() => {
+  const byPosition = (a, b) => a.position - b.position || a.id - b.id
+  const rows = broadcastsOfKind.value
+  const groups = []
+
+  const general = rows.filter((row) => !row.committee_name).sort(byPosition)
+  if (general.length) groups.push({ label: 'All delegates', rows: general })
+
+  committees.value.forEach((committee) => {
+    const targeted = rows.filter((row) => row.committee_name === committee).sort(byPosition)
+    if (targeted.length) groups.push({ label: committee, rows: targeted })
+  })
+
+  const known = new Set([null, ...committees.value])
+  const orphans = rows.filter((row) => !known.has(row.committee_name)).sort(byPosition)
+  if (orphans.length) groups.push({ label: 'Other committees', rows: orphans })
+
+  return groups
+})
+
 // ---------- Tab switching (lazy-loads the data each tab needs) ----------
 const switchTab = (tab) => {
   activeTab.value = tab
+  editingId.value = null
   if (tab === 'hashes' && lookupHashes.value.length === 0) {
     lookupHashesForSchool()
   }
   if (tab === 'awards' && awardsCommittees.value.length === 0) {
     loadAwards()
+  }
+  if (tab === 'content' && broadcasts.value.length === 0) {
+    loadBroadcasts()
   }
 }
 
@@ -580,6 +876,193 @@ const loadAwards = async () => {
     // Errors automatically pop up via global toast interceptor
   } finally {
     loadingAwards.value = false
+  }
+}
+
+// ---------- Broadcast helpers ----------
+// The API stores naive UTC; <input type="datetime-local"> speaks local wall-clock time,
+// so every value crosses that boundary through these two helpers.
+const toLocalInput = (iso) => {
+  if (!iso) return ''
+  const date = new Date(iso.endsWith('Z') ? iso : `${iso}Z`)
+  if (Number.isNaN(date.getTime())) return ''
+  const pad = (value) => String(value).padStart(2, '0')
+  return (
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}` +
+    `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+  )
+}
+
+const toUtcIso = (local) => {
+  if (!local) return null
+  const date = new Date(local)
+  if (Number.isNaN(date.getTime())) return null
+  return date.toISOString().slice(0, 19) // drop the trailing Z: the API wants naive UTC
+}
+
+const formatLocal = (iso) => {
+  if (!iso) return ''
+  const date = new Date(iso.endsWith('Z') ? iso : `${iso}Z`)
+  return Number.isNaN(date.getTime()) ? iso : date.toLocaleString()
+}
+
+const scheduleLabel = (row) =>
+  `${row.starts_at ? `from ${formatLocal(row.starts_at)}` : 'from now'} · ${
+    row.ends_at ? `until ${formatLocal(row.ends_at)}` : 'no end'
+  }`
+
+const stateLabel = (row) => {
+  const now = Date.now()
+  if (row.ends_at && Date.parse(`${row.ends_at}Z`) <= now) return 'Ended'
+  if (row.starts_at && Date.parse(`${row.starts_at}Z`) > now) return 'Scheduled'
+  return 'Live'
+}
+
+const stateClass = (row) => stateLabel(row).toLowerCase()
+
+const nextPosition = (kind, committeeName) => {
+  const group = broadcasts.value.filter(
+    (row) => row.kind === kind && (row.committee_name ?? null) === (committeeName ?? null)
+  )
+  return group.length ? Math.max(...group.map((row) => row.position)) + 1 : 0
+}
+
+const groupOf = (row) =>
+  broadcasts.value
+    .filter(
+      (other) =>
+        other.kind === row.kind && (other.committee_name ?? null) === (row.committee_name ?? null)
+    )
+    .sort((a, b) => a.position - b.position || a.id - b.id)
+
+const canMove = (row, delta) => {
+  const group = groupOf(row)
+  const index = group.findIndex((other) => other.id === row.id)
+  return index + delta >= 0 && index + delta < group.length
+}
+
+// ---------- Broadcast actions ----------
+const loadBroadcasts = async () => {
+  loadingBroadcasts.value = true
+  try {
+    const [listResponse, committeeResponse] = await Promise.all([
+      apiClient.get('/admin/broadcasts'),
+      apiClient.get('/admin/committees')
+    ])
+    broadcasts.value = listResponse.data.broadcasts || []
+    committees.value = committeeResponse.data || []
+  } catch (error) {
+    // Backend errors pop up via the global toast interceptor
+  } finally {
+    loadingBroadcasts.value = false
+  }
+}
+
+const selectBroadcastKind = (kind) => {
+  broadcastKind.value = kind
+  editingId.value = null
+  newBroadcast.value = emptyBroadcast()
+}
+
+const createBroadcast = async () => {
+  if (!newBroadcast.value.body.trim()) {
+    toastStore.showToast('Enter the text before publishing.', 'error')
+    return
+  }
+
+  savingBroadcast.value = true
+  try {
+    await apiClient.post('/admin/broadcasts', {
+      kind: broadcastKind.value,
+      body: newBroadcast.value.body,
+      url: broadcastKind.value === 'link' ? newBroadcast.value.url : null,
+      committee_name: newBroadcast.value.committee_name,
+      position: nextPosition(broadcastKind.value, newBroadcast.value.committee_name),
+      starts_at: toUtcIso(newBroadcast.value.starts_at),
+      ends_at: toUtcIso(newBroadcast.value.ends_at)
+    })
+    newBroadcast.value = emptyBroadcast()
+    toastStore.showToast('Published.', 'success')
+    await loadBroadcasts()
+  } catch (error) {
+    // 409 (target full) and validation errors pop up via the interceptor
+  } finally {
+    savingBroadcast.value = false
+  }
+}
+
+const startEdit = (row) => {
+  editingId.value = row.id
+  editDraft.value = {
+    body: row.body,
+    url: row.url || '',
+    committee_name: row.committee_name,
+    starts_at: toLocalInput(row.starts_at),
+    ends_at: toLocalInput(row.ends_at)
+  }
+}
+
+const cancelEdit = () => {
+  editingId.value = null
+  editDraft.value = emptyBroadcast()
+}
+
+const saveBroadcast = async (row) => {
+  savingBroadcast.value = true
+  try {
+    await apiClient.patch(`/admin/broadcasts/${row.id}`, {
+      body: editDraft.value.body,
+      url: row.kind === 'link' ? editDraft.value.url : null,
+      committee_name: editDraft.value.committee_name,
+      starts_at: toUtcIso(editDraft.value.starts_at),
+      ends_at: toUtcIso(editDraft.value.ends_at)
+    })
+    cancelEdit()
+    toastStore.showToast('Saved.', 'success')
+    await loadBroadcasts()
+  } catch (error) {
+    // Backend errors pop up via the interceptor
+  } finally {
+    savingBroadcast.value = false
+  }
+}
+
+const moveBroadcast = async (row, delta) => {
+  const group = groupOf(row)
+  const index = group.findIndex((other) => other.id === row.id)
+  const swapWith = index + delta
+  if (swapWith < 0 || swapWith >= group.length) return
+
+  ;[group[index], group[swapWith]] = [group[swapWith], group[index]]
+
+  savingBroadcast.value = true
+  try {
+    // Renumber the whole group so equal positions cannot leave the order ambiguous.
+    await Promise.all(
+      group.map((entry, position) =>
+        apiClient.patch(`/admin/broadcasts/${entry.id}`, { position })
+      )
+    )
+    await loadBroadcasts()
+  } catch (error) {
+    // Backend errors pop up via the interceptor
+  } finally {
+    savingBroadcast.value = false
+  }
+}
+
+const deleteBroadcast = async (row) => {
+  if (!window.confirm(`Delete "${row.body}"? This cannot be undone.`)) return
+
+  savingBroadcast.value = true
+  try {
+    await apiClient.delete(`/admin/broadcasts/${row.id}`)
+    toastStore.showToast('Deleted.', 'success')
+    await loadBroadcasts()
+  } catch (error) {
+    // Backend errors pop up via the interceptor
+  } finally {
+    savingBroadcast.value = false
   }
 }
 
@@ -1105,6 +1588,135 @@ onMounted(async () => {
   font-weight: bold;
 }
 
+/* ANNOUNCEMENTS & CONFERENCE LINKS */
+.broadcast-form {
+  display: flex;
+  flex-direction: column;
+}
+
+.schedule-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.capacity-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+
+.capacity-chip {
+  border: 1px solid #e8c604;
+  border-radius: 10px;
+  padding: 2px 8px;
+  font-size: 0.8rem;
+  color: #00007e;
+  background-color: #fffdf2;
+}
+
+.capacity-chip.full {
+  border-color: #b33;
+  color: #b33;
+  background-color: #fdecec;
+}
+
+.capacity-note {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+.capacity-warning {
+  color: #b33;
+  font-size: 0.8rem;
+}
+
+.broadcast-group {
+  margin-top: 14px;
+}
+
+.broadcast-group h3 {
+  color: #00007e;
+  font-size: 0.95rem;
+  margin: 0 0 8px;
+}
+
+.broadcast-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  border: 1px solid #e8c604;
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background-color: #ffffff;
+}
+
+.broadcast-row.editing {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.broadcast-main {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 240px;
+}
+
+.broadcast-body {
+  color: #00007e;
+  font-weight: bold;
+}
+
+.broadcast-url {
+  color: #009ddb;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+.broadcast-schedule {
+  color: #666;
+  font-size: 0.8rem;
+}
+
+.broadcast-state {
+  font-size: 0.75rem;
+  font-weight: bold;
+  padding: 3px 8px;
+  border-radius: 10px;
+  background-color: #eef6fb;
+  color: #00007e;
+}
+
+.broadcast-state.scheduled {
+  background-color: #fff7dd;
+  color: #8a6d00;
+}
+
+.broadcast-state.ended {
+  background-color: #fdecec;
+  color: #b33;
+}
+
+.broadcast-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.btn-icon:disabled,
+.btn-refresh:disabled,
+.btn-danger:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
 @media (max-width: 900px) {
   .action-buttons-grid,
   .metrics-grid,
@@ -1113,6 +1725,10 @@ onMounted(async () => {
   }
 
   .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .schedule-row {
     grid-template-columns: 1fr;
   }
 

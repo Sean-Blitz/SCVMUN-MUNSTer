@@ -7,7 +7,9 @@ at /docs, so a drift between backend and frontend shows up as a 500 here rather
 than as a silently blank panel in the UI.
 """
 
-from pydantic import BaseModel
+from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict
 
 # --- Auth ---
 
@@ -241,3 +243,31 @@ class CommitteeAwards(BaseModel):
 
 class AwardsOverviewResponse(BaseModel):
     committees: list[CommitteeAwards] = []
+
+
+# --- Admin: announcements & conference links ---
+
+
+class BroadcastEntry(BaseModel):
+    """One announcement or conference link, as the admin editor sees it.
+
+    `committee_name` is null when the line is addressed to every delegate. `starts_at`
+    null means it is live already; `ends_at` null means it has no planned end.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    kind: str  # 'announcement' | 'link'
+    body: str
+    url: str | None = None
+    committee_name: str | None = None
+    position: int
+    starts_at: datetime | None = None
+    ends_at: datetime | None = None
+    created_at: datetime
+    updated_at: datetime | None = None
+
+
+class BroadcastListResponse(BaseModel):
+    broadcasts: list[BroadcastEntry] = []

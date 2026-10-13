@@ -1,4 +1,6 @@
 import os
+from datetime import datetime, timezone
+
 from dotenv import load_dotenv; load_dotenv()  # Load environment variables from .env
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -19,3 +21,14 @@ def get_db():
         yield db # yields a session to the caller (this is a generator function)
     finally:
         db.close() # guarantees that the session is closed after the caller is done with it, even if an error occurs with the caller's code.
+
+def utcnow() -> datetime:
+    """The project's "now" for every timestamp column.
+
+    The schema maps plain `Mapped[datetime]`, i.e. Postgres `timestamp without time
+    zone`, so all of them store naive UTC. Comparing an aware datetime
+    (`datetime.now(timezone.utc)`) against one of those values raises TypeError in
+    Python, and lets Postgres convert by the session's offset if the comparison happens
+    in SQL - so window and expiry checks go through this helper.
+    """
+    return datetime.now(timezone.utc).replace(tzinfo=None)

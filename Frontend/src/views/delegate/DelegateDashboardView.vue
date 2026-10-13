@@ -1,9 +1,19 @@
 <template>
   <div class="delegate-page">
-    <!-- ANNOUNCEMENT BAR -->
+    <!-- ANNOUNCEMENT BAR (the backend sends at most 3: 2 general + 1 for this committee) -->
     <div v-if="dashboardData.announcements.length" class="announcement-bar">
-      <span class="announcement-label">ANNOUNCEMENT:</span>
-      <span class="announcement-text">{{ dashboardData.announcements[0] }}</span>
+      <span class="announcement-label">
+        {{ dashboardData.announcements.length > 1 ? 'ANNOUNCEMENTS:' : 'ANNOUNCEMENT:' }}
+      </span>
+      <div class="announcement-lines">
+        <span
+          v-for="(announcement, index) in dashboardData.announcements"
+          :key="index"
+          class="announcement-text"
+        >
+          {{ announcement }}
+        </span>
+      </div>
     </div>
 
     <!-- MAIN TOP GRID (GENERAL INFO & DELEGATE INFO) -->
@@ -305,7 +315,13 @@ onMounted(async () => {
   border-radius: 4px;
   display: flex;
   gap: 10px;
-  align-items: center;
+  align-items: flex-start;
+}
+
+.announcement-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .announcement-label {
@@ -315,6 +331,7 @@ onMounted(async () => {
 
 .announcement-text {
   color: #00007e93;
+  line-height: 1.4;
 }
 
 /* PANELS */

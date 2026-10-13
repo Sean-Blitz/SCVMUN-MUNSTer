@@ -12,13 +12,16 @@ import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from API.dependencies import CurrentUser, get_current_user, require_roles
-from crud.database_schema import Account, AuthSession, Committees, Delegates, School
-from crud.db import get_db
+from core.controls import BROADCAST_LIMITS
+from crud.database_schema import Account, AuthSession, Broadcast, Committees, Delegates, School
+from crud.db import get_db, utcnow
 from schemas.request_models import (
+    BroadcastRequest,
+    BroadcastUpdateRequest,
     DelegateHashRequest,
     DropDelegatesRequest,
     NewHashRequest,
@@ -28,6 +31,8 @@ from schemas.response_models import (
     AdminDashboardStatsResponse,
     AwardEntry,
     AwardsOverviewResponse,
+    BroadcastEntry,
+    BroadcastListResponse,
     CommitteeAwards,
     DropDelegatesResponse,
     DroppedDelegate,
@@ -410,3 +415,209 @@ def get_awards_overview(
             )
         ]
     )
+
+
+# --- Announcements & conference links (§8.6) ---
+# The lines the delegate dashboard renders. The caps in core.controls.BROADCAST_LIMITS
+# are enforced here rather than in the schema because they depend on the schedule: a row
+# that has not ended yet can still appear, so it holds a slot, and an expired one frees
+# it. Counting that way makes the cap an upper bound on what any delegate can ever see
+# at one instant, which is the whole point of the 2 + 1 / 2 + 3 split.
+
+
+def _validate_broadcast(
+    db: Session, kind: str, body: str, url: str | None, committee_name: str | None
+) -> tuple[str, str | None, str | None]:
+    """Normalise and check the fields shared by both kinds. Returns the cleaned values."""
+    if kind not in BROADCAST_LIMITS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"kind must be one of: {', '.join(sorted(BROADCAST_LIMITS))}.",
+        )
+
+    body = (body or "").strip()
+    if not body:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "body cannot be empty.")
+
+    url = (url or "").strip() or None
+    if kind == "link" and url is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "A conference link needs a url.")
+    if kind == "announcement" and url is not None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "An announcement cannot carry a url.")
+
+    if committee_name is not None:
+        committee_name = committee_name.strip() or None
+        if committee_name is not None and db.get(Committees, committee_name) is None:
+            raise HTTPException(
+                status.HTTP_404_NOT_FOUND, f"Unknown committee '{committee_name}'."
+            )
+
+    return body, url, committee_name
+
+
+def _validate_window(starts_at, ends_at) -> None:
+    """Reject an inverted schedule before the schema's CHECK constraint sees it."""
+    if starts_at is not None and ends_at is not None and ends_at <= starts_at:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "ends_at must be after starts_at.")
+
+
+def _slots_used(db: Session, kind: str, committee_name: str | None, exclude_id: int | None = None) -> int:
+    """How many rows of this kind + target can still be shown (i.e. have not ended)."""
+    target = (
+        Broadcast.committee_name.is_(None)
+        if committee_name is None
+        else Broadcast.committee_name == committee_name
+    )
+    stmt = (
+        select(func.count())
+        .select_from(Broadcast)
+        .where(
+            Broadcast.kind == kind,
+            target,
+            or_(Broadcast.ends_at.is_(None), Broadcast.ends_at > utcnow()),
+        )
+    )
+    if exclude_id is not None:
+        stmt = stmt.where(Broadcast.id != exclude_id)
+    return db.scalar(stmt) or 0
+
+
+def _enforce_cap(
+    db: Session, kind: str, committee_name: str | None, exclude_id: int | None = None
+) -> None:
+    """Refuse a create/edit that would put more lines in front of a delegate than fit."""
+    cap = BROADCAST_LIMITS[kind]["global" if committee_name is None else "committee"]
+    if _slots_used(db, kind, committee_name, exclude_id) >= cap:
+        audience = "for every delegate" if committee_name is None else f"for {committee_name}"
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"At most {cap} live {kind}s are allowed {audience}. Delete one first.",
+        )
+
+
+@router.get("/broadcasts", response_model=BroadcastListResponse)
+def list_broadcasts(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    kind: Annotated[str | None, Query(description="'announcement' or 'link'")] = None,
+    db: Session = Depends(get_db),
+) -> BroadcastListResponse:
+    """List every broadcast, expired ones included: this is the editor's view."""
+    if kind is not None and kind not in BROADCAST_LIMITS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"kind must be one of: {', '.join(sorted(BROADCAST_LIMITS))}.",
+        )
+
+    stmt = select(Broadcast).order_by(
+        Broadcast.kind, Broadcast.committee_name, Broadcast.position, Broadcast.id
+    )
+    if kind is not None:
+        stmt = stmt.where(Broadcast.kind == kind)
+
+    return BroadcastListResponse(
+        broadcasts=[BroadcastEntry.model_validate(row) for row in db.scalars(stmt).all()]
+    )
+
+
+@router.get("/committees", response_model=list[str])
+def list_committees(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> list[str]:
+    """Committee names, for the broadcast target picker (and any future picker)."""
+    return list(
+        db.scalars(select(Committees.committee_name).order_by(Committees.committee_name)).all()
+    )
+
+
+@router.post("/broadcasts", response_model=BroadcastEntry, status_code=status.HTTP_201_CREATED)
+def create_broadcast(
+    payload: BroadcastRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> BroadcastEntry:
+    """Publish one announcement or conference link, if its target still has room."""
+    body, url, committee_name = _validate_broadcast(
+        db, payload.kind, payload.body, payload.url, payload.committee_name
+    )
+    _validate_window(payload.starts_at, payload.ends_at)
+
+    # A row with no end date, or one in the future, can still appear, so it counts.
+    if payload.ends_at is None or payload.ends_at > utcnow():
+        _enforce_cap(db, payload.kind, committee_name)
+
+    broadcast = Broadcast(
+        kind=payload.kind,
+        body=body,
+        url=url,
+        committee_name=committee_name,
+        position=payload.position,
+        starts_at=payload.starts_at,
+        ends_at=payload.ends_at,
+    )
+    db.add(broadcast)
+    db.commit()
+    db.refresh(broadcast)  # created_at is a server default, so it only exists post-insert
+
+    return BroadcastEntry.model_validate(broadcast)
+
+
+@router.patch("/broadcasts/{broadcast_id}", response_model=BroadcastEntry)
+def update_broadcast(
+    broadcast_id: int,
+    payload: BroadcastUpdateRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> BroadcastEntry:
+    """
+    Edit one broadcast. `kind` is fixed at creation.
+
+    Only the fields present in the JSON are applied, so `"ends_at": null` clears the end
+    date while omitting it leaves it alone.
+    """
+    broadcast = db.get(Broadcast, broadcast_id)
+    if broadcast is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No broadcast with id {broadcast_id}.")
+
+    changes = payload.model_dump(exclude_unset=True)
+    body, url, committee_name = _validate_broadcast(
+        db,
+        broadcast.kind,
+        changes.get("body", broadcast.body),
+        changes.get("url", broadcast.url),
+        changes.get("committee_name", broadcast.committee_name),
+    )
+    starts_at = changes.get("starts_at", broadcast.starts_at)
+    ends_at = changes.get("ends_at", broadcast.ends_at)
+    _validate_window(starts_at, ends_at)
+
+    # Re-check the cap against the *new* target and schedule: an edit can move a line to
+    # a busier committee, or revive an expired one that was not holding a slot.
+    if ends_at is None or ends_at > utcnow():
+        _enforce_cap(db, broadcast.kind, committee_name, exclude_id=broadcast.id)
+
+    broadcast.body = body
+    broadcast.url = url
+    broadcast.committee_name = committee_name
+    broadcast.starts_at = starts_at
+    broadcast.ends_at = ends_at
+    broadcast.position = changes.get("position", broadcast.position)
+    broadcast.updated_at = utcnow()
+    db.commit()
+
+    return BroadcastEntry.model_validate(broadcast)
+
+
+@router.delete("/broadcasts/{broadcast_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_broadcast(
+    broadcast_id: int,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> None:
+    """Remove one broadcast outright: announcements keep no history."""
+    broadcast = db.get(Broadcast, broadcast_id)
+    if broadcast is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No broadcast with id {broadcast_id}.")
+
+    db.delete(broadcast)
+    db.commit()

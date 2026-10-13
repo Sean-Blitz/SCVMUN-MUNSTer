@@ -2,7 +2,7 @@
 These are the only routes with no role gate: they are how a client obtains a token.
 """
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from schemas.request_models import LoginRequest
 from schemas.response_models import LoginResponse, User
-from crud.db import get_db
+from crud.db import get_db, utcnow
 from crud.database_schema import Account, AuthSession
 import core.security
 
@@ -19,16 +19,6 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 # How long a freshly issued token stays valid. `sessions.expires_at` is NOT NULL,
 # so every session row must be given one.
 SESSION_TTL = timedelta(days=3)
-
-def _utcnow() -> datetime:
-    """Current UTC time as a naive datetime.
-
-    The schema's timestamp columns are plain `Mapped[datetime]`, i.e. Postgres
-    `timestamp without time zone`, so the whole app stores naive UTC. Keeping this
-    in one helper stops aware and naive datetimes from being compared by accident
-    (Python raises TypeError on `aware > naive`).
-    """
-    return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
 def _start_session(db: Session, user: Account) -> str:
@@ -44,10 +34,10 @@ def _start_session(db: Session, user: Account) -> str:
         AuthSession(
             account_id=user.id,
             token_hash=core.security.hash_token(token),
-            expires_at=_utcnow() + SESSION_TTL,
+            expires_at=utcnow() + SESSION_TTL,
         )
     )
-    user.last_login = _utcnow()
+    user.last_login = utcnow()
     db.commit()
 
     return token

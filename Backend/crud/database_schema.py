@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv; load_dotenv()  # Load environment variables from .env file
 from typing import Optional, List, Dict, Any
-from sqlalchemy import String, Integer, ForeignKey, create_engine, func
+from sqlalchemy import String, Integer, ForeignKey, CheckConstraint, Index, create_engine, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
@@ -82,6 +82,48 @@ class Committees(Base):
     timeline: Mapped[Optional[Dict[str, List[Dict[str, Any]]]]] = mapped_column(JSONB, nullable=True)  
     # e.g., {"preConference": [{"event": "Opening Ceremony", "date": "ISO-8601"}, ...], "duringConference": [{"event": "Committee Session 1", "date": "ISO-8601"}, ...]}
     # timeline must contain both keys even when empty.
+
+class Broadcast(Base):
+    """An admin-authored line shown to delegates: an announcement, or a conference link.
+
+    `kind` decides which strip a row belongs to. A NULL `committee_name` means the row
+    goes to every delegate; otherwise it goes only to delegates in that committee.
+
+    The caps that keep a delegate's bar and link strip from overflowing
+    (2 global + 1 committee announcement, 2 global + 3 committee links) live in the
+    admin endpoints, not here: "how many are allowed" counts only the rows whose
+    schedule window covers the moment of the request, which a CHECK constraint cannot
+    express. The schema's job is one row per published line.
+
+    `starts_at` NULL means "live immediately"; `ends_at` NULL means "no planned end".
+    Deleting a row removes it outright: announcements carry no history and no
+    soft-delete flag.
+    """
+    __tablename__ = "broadcasts"
+    __table_args__ = (
+        # Every read is "this kind + this committee (or global) + in window", so one
+        # composite index serves both the delegate query and the admin list; a
+        # kind-only lookup uses its prefix.
+        Index("ix_broadcasts_kind_committee", "kind", "committee_name"),
+        CheckConstraint("kind IN ('announcement', 'link')", name="ck_broadcasts_kind"),
+        CheckConstraint(
+            "ends_at IS NULL OR starts_at IS NULL OR ends_at > starts_at",
+            name="ck_broadcasts_window",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    kind: Mapped[str] = mapped_column(String(20), nullable=False)  # 'announcement' | 'link'
+    body: Mapped[str] = mapped_column(String(300), nullable=False)  # announcement text, or the link's label
+    url: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)  # links only
+    committee_name: Mapped[Optional[str]] = mapped_column(
+        ForeignKey("committees.committee_name", ondelete="CASCADE"), nullable=True
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # display order within the strip
+    starts_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    ends_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    created_at: Mapped[datetime] = mapped_column(server_default=func.now())
+    updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
 
 class Chairs(Base):
     __tablename__ = "chairs"
