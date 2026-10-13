@@ -28,8 +28,13 @@ MAX_PAPER_BYTES = int(os.getenv("PAPER_MAX_MB", "10")) * 1024 * 1024
 
 
 def upload_dir() -> Path:
-    """The storage root, created if it is not there yet."""
-    root = Path(os.getenv("PAPER_UPLOAD_DIR") or DEFAULT_UPLOAD_DIR)
+    """The configured storage root. Not created - reads use this, writes use ensure_upload_dir."""
+    return Path(os.getenv("PAPER_UPLOAD_DIR") or DEFAULT_UPLOAD_DIR)
+
+
+def ensure_upload_dir() -> Path:
+    """The storage root, created if it is not there yet. Writing needs this."""
+    root = upload_dir()
     root.mkdir(parents=True, exist_ok=True)
     return root
 
@@ -62,6 +67,7 @@ def save_paper(relative_path: str, data: bytes) -> None:
     The file is created 0600 (owner only): position papers are not public, and this way
     the contents stay private even if the directory's own mode is widened later.
     """
+    ensure_upload_dir()
     target = paper_path(relative_path)
     part = target.with_suffix(target.suffix + ".part")
     try:
