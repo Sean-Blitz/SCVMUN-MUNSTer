@@ -30,6 +30,12 @@
       >
         Delegate Content
       </button>
+      <button
+        :class="['toggle-btn', { active: activeTab === 'timeline' }]"
+        @click="switchTab('timeline')"
+      >
+        Timeline
+      </button>
     </div>
 
     <!-- ============================= DIAGNOSTICS ============================= -->
@@ -621,6 +627,71 @@
         </template>
       </div>
     </template>
+
+    <!-- ============================== TIMELINE ============================== -->
+    <template v-if="activeTab === 'timeline'">
+      <div class="section-card">
+        <div class="card-header-action">
+          <h2>Conference Timeline</h2>
+          <button class="btn-refresh" :disabled="loadingTimeline" @click="loadTimeline">
+            {{ loadingTimeline ? 'Loading...' : '🔄 Reload' }}
+          </button>
+        </div>
+        <p class="section-desc">
+          The schedule every chair sees on their committee overview. Events are
+          <strong>points in time</strong> — a chair's dashboard marks each one completed, in
+          progress or upcoming by comparing it with the clock, so there is nothing to tick.
+          Order does not matter here: the list is sorted by time when it is saved.
+        </p>
+
+        <div v-if="!timelineEvents.length" class="empty-state">
+          No events yet — add the first one below.
+        </div>
+
+        <div v-for="(event, index) in timelineEvents" :key="index" class="timeline-editor-row">
+          <select v-model="event.phase" class="text-input" @change="timelineDirty = true">
+            <option v-for="phase in timelinePhases" :key="phase.value" :value="phase.value">
+              {{ phase.label }}
+            </option>
+          </select>
+          <input
+            v-model="event.label"
+            class="text-input"
+            type="text"
+            placeholder="e.g. Opening Ceremony"
+            @input="timelineDirty = true"
+          />
+          <input
+            v-model="event.starts_at"
+            class="text-input"
+            type="datetime-local"
+            @input="timelineDirty = true"
+          />
+          <button class="btn-icon" title="Remove event" @click="removeTimelineEvent(index)">✕</button>
+        </div>
+
+        <div class="row-actions">
+          <button
+            class="btn-secondary"
+            :disabled="timelineEvents.length >= maxTimelineEvents"
+            @click="addTimelineEvent"
+          >
+            + Add event
+          </button>
+          <button
+            class="btn-refresh"
+            :disabled="savingTimeline || !timelineDirty"
+            @click="saveTimeline"
+          >
+            {{ savingTimeline ? 'Saving...' : 'Save timeline' }}
+          </button>
+          <span v-if="timelineDirty" class="capacity-warning">Unsaved changes</span>
+          <span class="capacity-note">
+            {{ timelineEvents.length }}/{{ maxTimelineEvents }} events · times are your local time
+          </span>
+        </div>
+      </div>
+    </template>
   </div>
 </template>
 
@@ -707,6 +778,17 @@ const progressItems = ref([])
 const loadingProgress = ref(false)
 const savingProgress = ref(false)
 const progressDirty = ref(false)
+
+// ---------- Timeline state ----------
+const timelinePhases = [
+  { value: 'preConference', label: 'Pre-conference' },
+  { value: 'duringConference', label: 'During conference' }
+]
+const timelineEvents = ref([])
+const loadingTimeline = ref(false)
+const savingTimeline = ref(false)
+const timelineDirty = ref(false)
+const maxTimelineEvents = 30 // mirrors MAX_TIMELINE_EVENTS in admin.py
 
 // ---------- Computed ----------
 const storagePercentage = computed(() => {
@@ -805,6 +887,10 @@ const switchTab = (tab) => {
   }
   if (tab === 'content' && schools.value.length === 0) {
     loadSchools()
+  }
+  // Refreshed on entry, but never over unsaved edits.
+  if (tab === 'timeline' && !timelineDirty.value) {
+    loadTimeline()
   }
 }
 
@@ -1322,6 +1408,76 @@ const saveProgress = async () => {
     // Backend errors pop up via the global toast interceptor
   } finally {
     savingProgress.value = false
+  }
+}
+
+// ---------- Timeline actions ----------
+const loadTimeline = async () => {
+  loadingTimeline.value = true
+  try {
+    const response = await apiClient.get('/admin/timeline')
+    // Stored as naive UTC, edited as local wall-clock time.
+    timelineEvents.value = (response.data.events || []).map((event) => ({
+      id: event.id,
+      phase: event.phase,
+      label: event.label,
+      starts_at: toLocalInput(event.starts_at)
+    }))
+    timelineDirty.value = false
+  } catch (error) {
+    // Backend errors pop up via the global toast interceptor
+  } finally {
+    loadingTimeline.value = false
+  }
+}
+
+const addTimelineEvent = () => {
+  timelineEvents.value.push({
+    id: null,
+    phase: 'preConference',
+    label: '',
+    starts_at: ''
+  })
+  timelineDirty.value = true
+}
+
+const removeTimelineEvent = (index) => {
+  timelineEvents.value.splice(index, 1)
+  timelineDirty.value = true
+}
+
+const saveTimeline = async () => {
+  if (timelineEvents.value.some((event) => !event.label.trim())) {
+    toastStore.showToast('Every timeline event needs a label.', 'error')
+    return
+  }
+  if (timelineEvents.value.some((event) => !event.starts_at)) {
+    toastStore.showToast('Every timeline event needs a date and time.', 'error')
+    return
+  }
+
+  savingTimeline.value = true
+  try {
+    const response = await apiClient.put('/admin/timeline', {
+      events: timelineEvents.value.map((event) => ({
+        phase: event.phase,
+        label: event.label.trim(),
+        starts_at: toUtcIso(event.starts_at)
+      }))
+    })
+    // The server returns them sorted by time, which is the order the editor shows.
+    timelineEvents.value = (response.data.events || []).map((event) => ({
+      id: event.id,
+      phase: event.phase,
+      label: event.label,
+      starts_at: toLocalInput(event.starts_at)
+    }))
+    timelineDirty.value = false
+    toastStore.showToast('Timeline saved.', 'success')
+  } catch (error) {
+    // Backend errors pop up via the global toast interceptor
+  } finally {
+    savingTimeline.value = false
   }
 }
 
@@ -1993,6 +2149,15 @@ onMounted(async () => {
   color: #00007e;
 }
 
+/* TIMELINE EDITOR */
+.timeline-editor-row {
+  display: grid;
+  grid-template-columns: 180px 1fr 220px auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
 .checklist-row input[type='checkbox'] {
   width: 16px;
   height: 16px;
@@ -2012,6 +2177,10 @@ onMounted(async () => {
   }
 
   .schedule-row {
+    grid-template-columns: 1fr;
+  }
+
+  .timeline-editor-row {
     grid-template-columns: 1fr;
   }
 

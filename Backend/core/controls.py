@@ -18,3 +18,7 @@ BROADCAST_LIMITS: Dict[str, Dict[str, int]] = {
     "announcement": {"global": 2, "committee": 1},
     "link": {"global": 2, "committee": 3},
 }
+# The two halves of the conference timeline the chair dashboard renders, in the order it
+# expects them. Kept here because both the admin editor (which validates `phase`) and the
+# chair overview (which must always return both keys, even when empty) need the same list.
+TIMELINE_PHASES = ("preConference", "duringConference")

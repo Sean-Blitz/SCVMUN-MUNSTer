@@ -315,3 +315,19 @@ class SchoolEntry(BaseModel):
 
 class SchoolListResponse(BaseModel):
     schools: list[SchoolEntry] = []
+
+
+# --- Admin: conference timeline ---
+
+
+class TimelineEntry(BaseModel):
+    """One timeline event as the admin editor sees it."""
+
+    id: int
+    phase: str  # 'preConference' | 'duringConference'
+    label: str
+    starts_at: datetime  # naive UTC, as stored
+
+
+class TimelineListResponse(BaseModel):
+    events: list[TimelineEntry] = []

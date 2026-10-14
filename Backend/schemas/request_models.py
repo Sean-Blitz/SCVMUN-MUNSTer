@@ -145,3 +145,25 @@ class ChecklistProgressRequest(BaseModel):
     """A partial update: lines not listed keep whatever state they already have."""
 
     items: list[ChecklistProgressUpdate]
+
+
+# --- Admin: conference timeline ---
+
+
+class TimelineEventRequest(BaseModel):
+    """One dated point on the conference schedule.
+
+    `starts_at` is naive UTC (no timezone suffix), like every other timestamp the API
+    accepts; an aware value is rejected rather than silently shifted.
+    """
+
+    phase: str  # 'preConference' | 'duringConference'
+    label: str
+    starts_at: datetime
+
+
+class TimelineUpdateRequest(BaseModel):
+    """The whole timeline: the editor replaces it in one request, in any order (the
+    server sorts by time)."""
+
+    events: list[TimelineEventRequest]

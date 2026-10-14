@@ -9,9 +9,16 @@ chairs_committee.py / chairs_papers.py / chairs_awards.py.
 
 from typing import Annotated
 
+from datetime import timezone
+
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from sqlalchemy import func, select
+from sqlalchemy.orm import Session
 
 from API.dependencies import CurrentUser, get_current_user, require_roles
+from core.controls import TIMELINE_PHASES
+from crud.database_schema import Account, Chairs, Delegates, TimelineEvent
+from crud.db import get_db
 from schemas.request_models import AwardAssignmentRequest, GradeSubmissionRequest
 from schemas.response_models import (
     AwardDelegate,
@@ -19,6 +26,8 @@ from schemas.response_models import (
     CommitteeOverviewResponse,
     GradingDelegate,
     GradingRubricCriterion,
+    Timeline,
+    TimelineEvent as TimelineEventModel,
 )
 
 # Chair views are also reachable by admins, matching the Vue router's meta.roles.
@@ -32,18 +41,92 @@ router = APIRouter(
 # --- Committee overview (§5) ---
 
 
+def _iso_utc(moment) -> str:
+    """Render a naive-UTC column value as an ISO-8601 string that says so.
+
+    The database stores naive UTC, but `new Date("2026-10-04T09:00:00")` in a browser
+    reads that as *local* time - which would shift every timeline event by the viewer's
+    offset and make the completed/active/upcoming derivation wrong. Attaching +00:00
+    keeps the instant unambiguous for the client.
+    """
+    return moment.replace(tzinfo=timezone.utc).isoformat()
+
+
 @router.get("/committee/overview", response_model=CommitteeOverviewResponse)
 def get_committee_overview(
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> CommitteeOverviewResponse:
     """
-    Return the chair's committee metrics and conference timeline.
+    Return the chair's committee metrics and the conference timeline.
 
-    TODO: `timeline` must always carry both `preConference` and `duringConference`,
-    even when empty. Timestamps must be ISO-8601 so the frontend can derive each
-    event's completed/active/upcoming state.
+    Counts are scoped to the chair's own committee; the timeline is conference-wide
+    (timeline_events), because every committee runs on the same schedule. Each event is
+    a point in time rather than a flag - the frontend compares it with the clock, which
+    is why the lists come back in ascending time order and why each timestamp carries an
+    explicit UTC offset.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    chair = db.scalars(select(Chairs).where(Chairs.account_id == user.id)).first()
+    if chair is None:
+        # Admins may reach the chair views; without a chair profile there is no
+        # committee to scope the numbers to.
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No chair profile is attached to this account.",
+        )
+
+    committee = chair.committee_name
+
+    total_delegates = db.scalar(
+        select(func.count()).select_from(Delegates).where(Delegates.committee == committee)
+    )
+    delegates_registered = db.scalar(
+        select(func.count())
+        .select_from(Delegates)
+        .join(Account, Account.id == Delegates.account_id)
+        .where(Delegates.committee == committee, Account.password_hash.is_not(None))
+    )
+    papers_graded = db.scalar(
+        select(func.count())
+        .select_from(Delegates)
+        .where(Delegates.committee == committee, Delegates.paper_status == "graded")
+    )
+    # "Submitted" means anything a chair can mark, graded papers included: the dashboard
+    # renders this as `papersGraded / totalPapersSubmitted`.
+    papers_submitted = db.scalar(
+        select(func.count())
+        .select_from(Delegates)
+        .where(
+            Delegates.committee == committee,
+            Delegates.paper_status.in_(("submitted", "graded")),
+        )
+    )
+
+    events = db.scalars(
+        select(TimelineEvent).order_by(TimelineEvent.starts_at, TimelineEvent.id)
+    ).all()
+
+    # Both keys are always present, even when empty - the template iterates them directly.
+    timeline = Timeline(
+        **{
+            phase: [
+                TimelineEventModel(label=event.label, timestamp=_iso_utc(event.starts_at))
+                for event in events
+                if event.phase == phase
+            ]
+            for phase in TIMELINE_PHASES
+        }
+    )
+
+    return CommitteeOverviewResponse(
+        chairName=chair.name,
+        committeeName=committee,
+        delegatesRegistered=delegates_registered or 0,
+        totalDelegates=total_delegates or 0,
+        papersGraded=papers_graded or 0,
+        totalPapersSubmitted=papers_submitted or 0,
+        timeline=timeline,
+    )
 
 
 # --- Paper grading (§6) ---

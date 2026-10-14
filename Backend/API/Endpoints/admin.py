@@ -16,7 +16,7 @@ from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
 
 from API.dependencies import CurrentUser, get_current_user, require_roles
-from core.controls import BROADCAST_LIMITS
+from core.controls import BROADCAST_LIMITS, TIMELINE_PHASES
 from crud.database_schema import (
     Account,
     AuthSession,
@@ -26,6 +26,7 @@ from crud.database_schema import (
     ConferenceChecklist,
     Delegates,
     School,
+    TimelineEvent,
 )
 from crud.db import get_db, utcnow
 from schemas.request_models import (
@@ -37,6 +38,7 @@ from schemas.request_models import (
     DropDelegatesRequest,
     NewHashRequest,
     SchoolHashRequest,
+    TimelineUpdateRequest,
 )
 from schemas.response_models import (
     AdminDashboardStatsResponse,
@@ -56,6 +58,8 @@ from schemas.response_models import (
     SchoolChecklistResponse,
     SchoolEntry,
     SchoolListResponse,
+    TimelineEntry,
+    TimelineListResponse,
 )
 
 router = APIRouter(
@@ -866,3 +870,92 @@ def update_school_checklist(
     db.commit()
 
     return _school_checklist(db, school)
+
+
+# --- Conference timeline (§8.8) ---
+# One schedule shared by every committee, stored in timeline_events. There is no
+# completion flag: the chair dashboard compares each event's time with the clock, which
+# is why the API only ever stores and returns times, and why the list is always sorted
+# ascending - the view uses the next event's time as the end of the current window.
+
+
+MAX_TIMELINE_EVENTS = 30
+MAX_TIMELINE_LABEL = 200
+
+
+def _timeline_response(db: Session) -> TimelineListResponse:
+    """Every timeline event, earliest first."""
+    rows = db.scalars(
+        select(TimelineEvent).order_by(TimelineEvent.starts_at, TimelineEvent.id)
+    ).all()
+    return TimelineListResponse(
+        events=[
+            TimelineEntry(
+                id=row.id, phase=row.phase, label=row.label, starts_at=row.starts_at
+            )
+            for row in rows
+        ]
+    )
+
+
+@router.get("/timeline", response_model=TimelineListResponse)
+def get_timeline(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> TimelineListResponse:
+    """The conference schedule, earliest first. Empty until an admin fills it in."""
+    return _timeline_response(db)
+
+
+@router.put("/timeline", response_model=TimelineListResponse)
+def replace_timeline(
+    payload: TimelineUpdateRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> TimelineListResponse:
+    """
+    Replace the conference schedule with the submitted events.
+
+    Nothing else references an event, so this is a plain delete-then-insert in one
+    transaction; the events come back sorted by time, not in the order they were sent.
+    """
+    if len(payload.events) > MAX_TIMELINE_EVENTS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"The timeline holds at most {MAX_TIMELINE_EVENTS} events.",
+        )
+
+    events: list[TimelineEvent] = []
+    for position, entry in enumerate(payload.events, start=1):
+        label = entry.label.strip()
+        if not label:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST, f"Event {position} needs a label."
+            )
+        if len(label) > MAX_TIMELINE_LABEL:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Event {position} is longer than {MAX_TIMELINE_LABEL} characters.",
+            )
+        if entry.phase not in TIMELINE_PHASES:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Event {position}: phase must be one of {', '.join(TIMELINE_PHASES)}.",
+            )
+        if entry.starts_at.tzinfo is not None:
+            # The column is naive UTC; an aware value would land shifted by whatever the
+            # database session's offset happens to be.
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Event {position}: send starts_at as naive UTC, with no timezone suffix.",
+            )
+
+        events.append(
+            TimelineEvent(phase=entry.phase, label=label, starts_at=entry.starts_at)
+        )
+
+    db.execute(delete(TimelineEvent))
+    db.add_all(events)
+    db.commit()
+
+    return _timeline_response(db)

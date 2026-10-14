@@ -78,9 +78,6 @@ class Committees(Base):
     committee_name: Mapped[str] = mapped_column(String(100), primary_key=True)
     chairs = relationship("Chairs", backref="committee", cascade="all, delete-orphan")
     delegates = relationship("Delegates", backref="committee_record", cascade="all, delete-orphan")
-    timeline: Mapped[Optional[Dict[str, List[Dict[str, Any]]]]] = mapped_column(JSONB, nullable=True)  
-    # e.g., {"preConference": [{"event": "Opening Ceremony", "date": "ISO-8601"}, ...], "duringConference": [{"event": "Committee Session 1", "date": "ISO-8601"}, ...]}
-    # timeline must contain both keys even when empty.
 
 class Broadcast(Base):
     """An admin-authored line shown to delegates: an announcement, or a conference link.
@@ -209,3 +206,32 @@ class ChecklistProgress(Base):
     )
     completed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+
+
+class TimelineEvent(Base):
+    """One dated point on the conference schedule, shared by every committee.
+
+    Universal rather than per committee: every chair's overview shows the same run of
+    show. `phase` splits it into the run-up and the conference itself, which the chair
+    dashboard renders as two lists.
+
+    There is no completion flag and no per-chair tick - an event's state is derived from
+    the clock. That is also why ordering matters: the view treats each event's time as
+    the start of a window that runs until the next event, so rows are read in ascending
+    `starts_at` order and the last pre-conference event bridges into the first
+    during-conference one.
+
+    `starts_at` is naive UTC like every other timestamp column (see crud/db.utcnow); the
+    chair response marks it as UTC so a browser does not read it as local time.
+    """
+    __tablename__ = "timeline_events"
+    __table_args__ = (
+        CheckConstraint(
+            "phase IN ('preConference', 'duringConference')", name="ck_timeline_phase"
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    phase: Mapped[str] = mapped_column(String(20), nullable=False)
+    label: Mapped[str] = mapped_column(String(200), nullable=False)
+    starts_at: Mapped[datetime] = mapped_column(nullable=False)

@@ -258,6 +258,11 @@ Field notes:
 - `timeline` must always contain both keys, even when empty; the template iterates both directly.
 - `timestamp` must be a parseable date string. It is compared against the current time to derive
   each event's completed/active/upcoming status, and is formatted for display.
+- Each `timestamp` carries an explicit UTC offset (`2026-10-10T16:00:00+00:00`). The database
+  stores naive UTC, but `new Date("2026-10-10T16:00:00")` in a browser would read that as *local*
+  time and shift every event by the viewer's offset — so the offset is part of the contract, not
+  decoration. Both lists arrive sorted by time ascending, because the view uses the next event's
+  time as the end of the current window.
 - Counts render as `delegatesRegistered / totalDelegates` and `papersGraded / totalPapersSubmitted`.
 
 ---
@@ -773,6 +778,56 @@ requests.patch(
 ).raise_for_status()
 ```
 
+### 8.8 Conference timeline
+
+The schedule shown on every chair's committee overview (§5.1) is a single conference-wide list
+in `timeline_events`, edited from the admin **Timeline** tab. It is universal — every committee
+runs on the same schedule — and purely time-based: there is no completion flag and no per-chair
+tick, because the chair dashboard derives each event's completed / in progress / upcoming state
+by comparing its time with the clock.
+
+That is why ordering matters and why the payload carries no order: events come back sorted by
+`starts_at` ascending, and the view treats each event's time as the start of a window that ends
+at the next event (the last pre-conference event bridges into the first during-conference one).
+
+Limits: at most **30** events, each label 200 characters or fewer after trimming, no blank
+labels, and `starts_at` must be **naive UTC** — an aware value with a timezone suffix is
+rejected (`400`) rather than silently shifted by the database session's offset.
+
+#### 8.8.1 `GET /admin/timeline`
+
+```json
+{
+  "events": [
+    { "id": 3, "phase": "preConference", "label": "Opening Ceremony", "starts_at": "2026-10-09T18:00:00" }
+  ]
+}
+```
+
+Field notes:
+- `starts_at` is naive UTC here, matching every other admin payload, so it round-trips through
+  `PUT` unchanged. §5.1 is where it gains the explicit offset the browser needs.
+
+#### 8.8.2 `PUT /admin/timeline`
+
+Request — the whole schedule; nothing references an event, so it is replaced outright:
+
+```json
+{
+  "events": [
+    { "phase": "preConference", "label": "Registration", "starts_at": "2026-10-09T15:00:00" },
+    { "phase": "duringConference", "label": "Committee Session 1", "starts_at": "2026-10-10T09:00:00" }
+  ]
+}
+```
+
+Field notes:
+- `phase` is `preConference` or `duringConference`; `id` is not accepted (events have no
+  identity to preserve).
+- Submission order is irrelevant — the response is sorted by time.
+- Response `200`: the saved events, as in §8.8.1. `{"events": []}` clears the schedule, which
+  every chair then sees as two empty lists.
+
 ---
 
 ## Quick Reference
@@ -817,6 +872,8 @@ requests.patch(
 | 36 | Admin | PUT | `/admin/checklist` | `{items[]}` |
 | 37 | Admin | GET | `/admin/schools/{id}/checklist` | `{school_id, school_name, items[]}` |
 | 38 | Admin | PATCH | `/admin/schools/{id}/checklist` | same as `GET` |
+| 39 | Admin | GET | `/admin/timeline` | `{events[]}` |
+| 40 | Admin | PUT | `/admin/timeline` | `{events[]}` |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.
