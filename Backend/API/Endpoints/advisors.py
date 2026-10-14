@@ -8,13 +8,12 @@ calling user rather than accepting a school identifier from the client.
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.responses import FileResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from API import papers
 from API.dependencies import CurrentUser, get_current_user, require_roles
 import core.security
-import core.storage
 from crud.database_schema import (
     Account,
     ChecklistProgress,
@@ -136,32 +135,12 @@ def download_delegate_paper(
             "No such delegate in your school.",
         )
 
-    # Uploads are append-only, so the newest row is the paper currently in force.
-    upload = db.scalars(
-        select(Uploads)
-        .where(Uploads.delegate_id == delegate.account_id)
-        .order_by(Uploads.upload_time.desc(), Uploads.upload_id.desc())
-        .limit(1)
-    ).first()
-    if upload is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "This delegate has not submitted a position paper yet.",
-        )
-
-    path = core.storage.paper_path(upload.file_path)
-    if not path.is_file():
-        # Row without a file: the volume was restored from an older backup, or the file
-        # was removed by hand. Say so rather than letting FileResponse raise.
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "The stored file is missing. Ask the delegate to upload it again.",
-        )
-
-    return FileResponse(
-        path,
-        media_type="application/pdf",
-        filename=upload.file_name or f"delegate_{delegate_id}_paper.pdf",
+    # Shared with the chair and delegate download routes: newest upload, or a 404 that
+    # says whether nothing was submitted or the stored file has gone.
+    return papers.paper_response(
+        db,
+        delegate.account_id,
+        download_name=f"delegate_{delegate_id}_paper.pdf",
     )
 
 

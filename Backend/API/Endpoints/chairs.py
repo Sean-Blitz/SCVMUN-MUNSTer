@@ -16,6 +16,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from API.dependencies import CurrentUser, get_current_user, require_roles
+from API import papers
 from core.controls import (
     TIMELINE_PHASES,
     award_options,
@@ -215,14 +216,37 @@ def grade_position_paper(
 def download_position_paper(
     delegate_id: int,
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> Response:
     """
     Return a delegate's position paper as a PDF blob.
 
-    TODO: confirm the delegate is in the chair's committee, then return a Response with
-    media_type="application/pdf".
+    Scoped to the chair's own committee, so an id from another committee answers 404
+    exactly as an unknown one does. The paper served is the newest upload, matching what
+    /chair/delegates reports as submitted, and the file is located from the database row
+    rather than from anything the client sends.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    chair = _get_chair(db, user.id)
+
+    delegate = db.scalars(
+        select(Delegates).where(
+            Delegates.account_id == delegate_id,
+            Delegates.committee == chair.committee_name,
+        )
+    ).first()
+    if delegate is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No such delegate in your committee.",
+        )
+
+    # The frontend saves the blob under its own name; this is the fallback for a direct
+    # API call.
+    return papers.paper_response(
+        db,
+        delegate.account_id,
+        download_name=f"{delegate.country}_Position_Paper.pdf",
+    )
 
 
 # --- Awards (§7) ---

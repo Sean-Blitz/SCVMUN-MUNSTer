@@ -136,6 +136,25 @@ Request: `multipart/form-data` with a single field named **`paper`** (PDF).
 
 Response: body is not read; only the status code matters.
 
+Field notes:
+- Re-uploading is allowed until a chair has graded the paper (`409` after that); each upload is
+  its own row, and the newest one is what everything downstream serves.
+- Rejections: `400` if the file is not a PDF (checked by the `%PDF-` signature, not just the
+  name), `413` if it exceeds `PAPER_MAX_MB`, `404` if the account has no delegate profile.
+
+### 2.3 `GET /delegate/my-paper`
+
+Response: **blob** — the caller's own position paper as a PDF, saved by the view as
+`<country>_Position_Paper.pdf`.
+
+Field notes:
+- Scoped by the token: there is no delegate id in the path, so a delegate can only ever fetch
+  their own paper.
+- The newest upload is served, matching the `positionPaper.status` reported by §2.1.
+- `404` with a message distinguishing "nothing submitted yet" from "the stored file is missing".
+  The view only shows the button once something has been submitted, but a file deleted from the
+  storage volume behind the API's back still lands here.
+
 ---
 
 ## 3. Advisor — `AdvisorDelegatesView.vue`
@@ -852,42 +871,43 @@ Field notes:
 | 2 | Auth | POST | `/auth/register` | `{user, token}` |
 | 3 | Delegate | GET | `/delegate/my-assignment` | dashboard object |
 | 4 | Delegate | POST | `/delegate/upload-paper` | (ignored) |
-| 5 | Advisor | GET | `/advisor/delegates` | `{delegates[], total}` |
-| 6 | Advisor | GET | `/advisor/delegates/{id}/paper` | blob PDF |
-| 7 | Advisor | POST | `/advisor/verify-hashes` | `{delegates[]}` |
-| 8 | Advisor | GET | `/advisor/school` | `{school, billing, checklist}` |
-| 9 | Chair | GET | `/chair/committee/overview` | overview object |
-| 10 | Chair | GET | `/chair/rubric` | `[{id, label, maxScore}]` |
-| 11 | Chair | GET | `/chair/delegates` | delegate array |
-| 12 | Chair | POST | `/chair/papers/{id}/grade` | (ignored) |
-| 13 | Chair | GET | `/chair/papers/{id}/download` | blob PDF |
-| 14 | Chair | GET | `/chair/awards/options` | `[string]` |
-| 15 | Chair | GET | `/chair/awards/rubric` | `[{id, label, levels[]}]` |
-| 16 | Chair | GET | `/chair/awards/delegates` | delegate array |
-| 17 | Chair | POST | `/chair/awards/{id}` | (ignored) |
-| 18 | Admin | GET | `/admin/dashboard-stats` | stats object |
-| 19 | Admin | GET | `/admin/ports/health` | port array |
-| 20 | Admin | GET | `/admin/logs/business.txt` | blob text |
-| 21 | Admin | GET | `/admin/logs/technology.txt` | blob text |
-| 22 | Admin | GET | `/admin/export/database.csv` | blob CSV |
-| 23 | Admin | POST | `/admin/hashes` | `{hashes[]}` |
-| 24 | Admin | POST | `/admin/hashes/regenerate/delegate` | `{name, hash}` |
-| 25 | Admin | POST | `/admin/hashes/regenerate/school` | `{hashes[]}` |
-| 26 | Admin | DELETE | `/admin/hashes` | `{dropped[]}` |
-| 27 | Admin | GET | `/admin/hashes?schoolName=` | `{hashes[]}` |
-| 28 | Admin | GET | `/admin/awards` | `{committees[]}` |
-| 29 | Admin | GET | `/admin/broadcasts?kind=` | `{broadcasts[]}` |
-| 30 | Admin | POST | `/admin/broadcasts` | broadcast entry |
-| 31 | Admin | PATCH | `/admin/broadcasts/{id}` | broadcast entry |
-| 32 | Admin | DELETE | `/admin/broadcasts/{id}` | (204, no body) |
-| 33 | Admin | GET | `/admin/committees` | `[string]` |
-| 34 | Admin | GET | `/admin/schools` | `{schools[]}` |
-| 35 | Admin | GET | `/admin/checklist` | `{items[]}` |
-| 36 | Admin | PUT | `/admin/checklist` | `{items[]}` |
-| 37 | Admin | GET | `/admin/schools/{id}/checklist` | `{school_id, school_name, items[]}` |
-| 38 | Admin | PATCH | `/admin/schools/{id}/checklist` | same as `GET` |
-| 39 | Admin | GET | `/admin/timeline` | `{events[]}` |
-| 40 | Admin | PUT | `/admin/timeline` | `{events[]}` |
+| 5 | Delegate | GET | `/delegate/my-paper` | blob PDF |
+| 6 | Advisor | GET | `/advisor/delegates` | `{delegates[], total}` |
+| 7 | Advisor | GET | `/advisor/delegates/{id}/paper` | blob PDF |
+| 8 | Advisor | POST | `/advisor/verify-hashes` | `{delegates[]}` |
+| 9 | Advisor | GET | `/advisor/school` | `{school, billing, checklist}` |
+| 10 | Chair | GET | `/chair/committee/overview` | overview object |
+| 11 | Chair | GET | `/chair/rubric` | `[{id, label, maxScore}]` |
+| 12 | Chair | GET | `/chair/delegates` | delegate array |
+| 13 | Chair | POST | `/chair/papers/{id}/grade` | (ignored) |
+| 14 | Chair | GET | `/chair/papers/{id}/download` | blob PDF |
+| 15 | Chair | GET | `/chair/awards/options` | `[string]` |
+| 16 | Chair | GET | `/chair/awards/rubric` | `[{id, label, levels[]}]` |
+| 17 | Chair | GET | `/chair/awards/delegates` | delegate array |
+| 18 | Chair | POST | `/chair/awards/{id}` | (ignored) |
+| 19 | Admin | GET | `/admin/dashboard-stats` | stats object |
+| 20 | Admin | GET | `/admin/ports/health` | port array |
+| 21 | Admin | GET | `/admin/logs/business.txt` | blob text |
+| 22 | Admin | GET | `/admin/logs/technology.txt` | blob text |
+| 23 | Admin | GET | `/admin/export/database.csv` | blob CSV |
+| 24 | Admin | POST | `/admin/hashes` | `{hashes[]}` |
+| 25 | Admin | POST | `/admin/hashes/regenerate/delegate` | `{name, hash}` |
+| 26 | Admin | POST | `/admin/hashes/regenerate/school` | `{hashes[]}` |
+| 27 | Admin | DELETE | `/admin/hashes` | `{dropped[]}` |
+| 28 | Admin | GET | `/admin/hashes?schoolName=` | `{hashes[]}` |
+| 29 | Admin | GET | `/admin/awards` | `{committees[]}` |
+| 30 | Admin | GET | `/admin/broadcasts?kind=` | `{broadcasts[]}` |
+| 31 | Admin | POST | `/admin/broadcasts` | broadcast entry |
+| 32 | Admin | PATCH | `/admin/broadcasts/{id}` | broadcast entry |
+| 33 | Admin | DELETE | `/admin/broadcasts/{id}` | (204, no body) |
+| 34 | Admin | GET | `/admin/committees` | `[string]` |
+| 35 | Admin | GET | `/admin/schools` | `{schools[]}` |
+| 36 | Admin | GET | `/admin/checklist` | `{items[]}` |
+| 37 | Admin | PUT | `/admin/checklist` | `{items[]}` |
+| 38 | Admin | GET | `/admin/schools/{id}/checklist` | `{school_id, school_name, items[]}` |
+| 39 | Admin | PATCH | `/admin/schools/{id}/checklist` | same as `GET` |
+| 40 | Admin | GET | `/admin/timeline` | `{events[]}` |
+| 41 | Admin | PUT | `/admin/timeline` | `{events[]}` |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.

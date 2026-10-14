@@ -81,6 +81,14 @@
           </span>
         </div>
 
+        <!-- OWN PAPER DOWNLOAD, once something has been submitted -->
+        <div v-if="positionPaper.status !== 'unsubmitted'" class="paper-download-block">
+          <button class="btn-download-paper" :disabled="downloadingPaper" @click="downloadMyPaper">
+            {{ downloadingPaper ? 'Preparing...' : '⬇ Download my position paper' }}
+          </button>
+          <span class="download-hint">The copy you submitted, as a PDF.</span>
+        </div>
+
         <!-- FILE UPLOAD BOX -->
         <form @submit.prevent="submitPaper" class="upload-box">
           <label for="pdf-upload" class="upload-label">Select PDF Document</label>
@@ -187,6 +195,7 @@ const dashboardData = ref({
 })
 
 const selectedFile = ref(null)
+const downloadingPaper = ref(false)
 
 // Shorthand for the position paper panel state
 const positionPaper = computed(() => dashboardData.value.positionPaper)
@@ -262,6 +271,32 @@ const submitPaper = async () => {
     toastStore.showToast('Paper submitted successfully!', 'success')
   } catch (error) {
     // Backend errors are surfaced globally by the client.js toast interceptor
+  }
+}
+
+// Download the delegate's own submitted paper. Fetched as a blob because a plain link
+// would not carry the Authorization header.
+const downloadMyPaper = async () => {
+  downloadingPaper.value = true
+  try {
+    const response = await apiClient.get('/delegate/my-paper', { responseType: 'blob' })
+
+    const blob = new Blob([response.data], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.setAttribute(
+      'download',
+      `${dashboardData.value.delegate.country || 'My'}_Position_Paper.pdf`
+    )
+    document.body.appendChild(link)
+    link.click()
+    link.remove()
+    window.URL.revokeObjectURL(url)
+  } catch (error) {
+    // A 404 (nothing submitted, or the stored file is gone) surfaces via the toast interceptor
+  } finally {
+    downloadingPaper.value = false
   }
 }
 
@@ -632,6 +667,38 @@ onMounted(async () => {
 
 .file-input {
   color: #00007e93;
+}
+
+.paper-download-block {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.btn-download-paper {
+  background-color: #ffffff;
+  color: #00007e;
+  border: 1px solid #009ddb;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-download-paper:hover:not(:disabled) {
+  background-color: #f5fafd;
+}
+
+.btn-download-paper:disabled {
+  color: #9aa5b1;
+  border-color: #d7dee5;
+  cursor: not-allowed;
+}
+
+.download-hint {
+  color: #5b6b7d;
+  font-size: 0.85rem;
 }
 
 .btn-submit {
