@@ -16,7 +16,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from API.dependencies import CurrentUser, get_current_user, require_roles
-from core.controls import TIMELINE_PHASES
+from core.controls import (
+    TIMELINE_PHASES,
+    award_options,
+    awards_rubric,
+    paper_rubric_data,
+)
 from crud.database_schema import Account, Chairs, Delegates, TimelineEvent
 from crud.db import get_db
 from schemas.request_models import AwardAssignmentRequest, GradeSubmissionRequest
@@ -26,6 +31,7 @@ from schemas.response_models import (
     CommitteeOverviewResponse,
     GradingDelegate,
     GradingRubricCriterion,
+    RubricLevel,
     Timeline,
     TimelineEvent as TimelineEventModel,
 )
@@ -135,11 +141,37 @@ def get_committee_overview(
 
 
 @router.get("/rubric", response_model=list[GradingRubricCriterion])
-def get_grading_rubric(
+def get_position_paper_grading_rubric(
     user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> list[GradingRubricCriterion]:
-    """Return the numeric grading rubric used by the position-paper grading view."""
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    """
+    Return the numeric grading rubric used by the position-paper grading view.
+
+    A static list from `core.controls.paper_rubric_data`, not a table: the criteria are
+    the same for every chair and every delegate, so there is nothing per-committee to
+    store and no database session is needed here at all. The endpoint exists so the
+    frontend has one place to read the labels and maxima from.
+
+    The same list is the source the delegate's graded breakdown is joined against
+    (/delegate/my-assignment), which is what keeps both views showing the same labels and
+    the same maximum marks.
+
+    An entry with no `id` is skipped: `id` is the key a mark is stored under, so such an
+    entry could never be graded - the delegate-side join skips it for the same reason.
+    """
+    rubric: list[GradingRubricCriterion] = []
+    for criterion in paper_rubric_data:
+        criterion_id = criterion.get("id")
+        if criterion_id is None:
+            continue
+        rubric.append(
+            GradingRubricCriterion(
+                id=criterion_id,
+                label=criterion.get("label") or str(criterion_id),
+                maxScore=float(criterion.get("maxScore", 0)),
+            )
+        )
+    return rubric
 
 
 @router.get("/delegates", response_model=list[GradingDelegate])
@@ -191,24 +223,81 @@ def download_position_paper(
 # /chair/rubric above.
 
 
+# "None" and "Candidate" are the template's own two options (no award / shortlist), so the
+# API must never send them back or the dropdown would list them twice. Compared
+# case-insensitively and filtered here rather than trusted, so that adding one of them to
+# core.controls cannot quietly break the view.
+RESERVED_AWARD_OPTIONS = {"none", "candidate"}
+
+
 @router.get("/awards/options", response_model=list[str])
 def list_award_options(
     user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> list[str]:
     """
-    Return the assignable award names.
+    Return the assignable award names, in the order core.controls lists them.
 
-    TODO: exclude "None" and "Candidate" — the frontend hardcodes those two options.
+    Static, like the grading rubric: the same awards are on offer in every committee.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    return [
+        name.strip()
+        for name in award_options
+        if name.strip() and name.strip().casefold() not in RESERVED_AWARD_OPTIONS
+    ]
 
 
 @router.get("/awards/rubric", response_model=list[AwardsRubricCriterion])
 def get_awards_rubric(
     user: Annotated[CurrentUser, Depends(get_current_user)],
 ) -> list[AwardsRubricCriterion]:
-    """Return the leveled rubric used by the awards view."""
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    """
+    Return the leveled rubric used by the awards view.
+
+    Static and shared, from core.controls.awards_rubric - one score per criterion is
+    stored per delegate, chosen from that criterion's levels. Levels keep the order they
+    are written in, which is the order the view renders as score cells.
+
+    Nothing here is derived: the view works out each criterion's maximum itself, as the
+    highest `level.score`. That is why a criterion with no usable levels is skipped
+    entirely - sending one would leave the client taking `Math.max()` of an empty list,
+    i.e. -Infinity as its maximum. A level with no label is skipped for the same reason a
+    label-less checklist line is: there would be nothing to render in the cell.
+    """
+    rubric: list[AwardsRubricCriterion] = []
+
+    for criterion in awards_rubric:
+        criterion_id = criterion.get("id")
+        if criterion_id is None:
+            # `id` keys the scores map, so a criterion without one could never be stored.
+            continue
+
+        levels: list[RubricLevel] = []
+        for level in criterion.get("levels") or []:
+            if not isinstance(level, dict):
+                continue
+            label = str(level.get("label") or "").strip()
+            if not label:
+                continue
+            levels.append(
+                RubricLevel(
+                    score=float(level.get("score", 0)),
+                    label=label,
+                    description=str(level.get("description") or ""),
+                )
+            )
+
+        if not levels:
+            continue
+
+        rubric.append(
+            AwardsRubricCriterion(
+                id=criterion_id,
+                label=str(criterion.get("label") or criterion_id),
+                levels=levels,
+            )
+        )
+
+    return rubric
 
 
 @router.get("/awards/delegates", response_model=list[AwardDelegate])
