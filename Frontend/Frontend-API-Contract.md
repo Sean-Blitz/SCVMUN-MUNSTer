@@ -311,22 +311,25 @@ Field notes:
     "country": "string",
     "committee": "string",
     "status": "unsubmitted | submitted | graded",
-    "submissionDate": "string",
+    "submissionDate": "2026-10-04T19:00:00+00:00",
     "totalScore": "string",
     "scores": { "<rubricId>": 8 },
-    "comments": "string",
-    "pdfUrl": "string"
+    "comments": "string"
   }
 ]
 ```
 
 Field notes:
-- Top-level array.
+- Top-level array; scoped to the chair's own committee, ordered by country.
 - `status` gates the View & Grade and PDF buttons (`"unsubmitted"` disables both).
-- `scores` keys correspond to rubric `id` values.
-- `submissionDate` and `totalScore` are display strings.
-- `pdfUrl` is bound directly to an `<iframe>` src, so it must be a URL loadable without the
-  Authorization header (e.g. a signed URL).
+- `scores` keys correspond to rubric `id` values; a stored mark that is not a number is dropped.
+- `totalScore` is a display string (e.g. `"18/20"`), empty until the paper is graded.
+- `submissionDate` is the newest upload's time as an ISO-8601 instant **with a UTC offset**, so
+  the view can localise it — the column is naive UTC, and `new Date("…")` without an offset would
+  read it as the viewer's local time. Empty for a delegate who has never uploaded.
+- **There is no `pdfUrl`.** An `<iframe src>` does not send the Authorization header, so the view
+  fetches §6.4 as a blob through the API client and previews the resulting object URL. Signing a
+  URL instead would have made each paper reachable by a link that outlives the session.
 
 ### 6.3 `POST /chair/papers/{delegateId}/grade`
 

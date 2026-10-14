@@ -23,7 +23,7 @@ from core.controls import (
     awards_rubric,
     paper_rubric_data,
 )
-from crud.database_schema import Account, Chairs, Delegates, TimelineEvent
+from crud.database_schema import Account, Chairs, Delegates, TimelineEvent, Uploads
 from crud.db import get_db
 from schemas.request_models import AwardAssignmentRequest, GradeSubmissionRequest
 from schemas.response_models import (
@@ -185,15 +185,65 @@ def get_position_paper_grading_rubric(
 @router.get("/delegates", response_model=list[GradingDelegate])
 def list_committee_delegates(
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> list[GradingDelegate]:
     """
     Return the committee roster with each delegate's paper status and grading state.
 
-    TODO: `pdfUrl` is bound straight to an <iframe> src by the frontend, which does not
-    send the Authorization header. Serve it as a signed/expiring URL, or agree a change
-    to the view so it fetches the PDF as a blob instead.
+    Two queries, not one per row: the roster, then every paper belonging to those
+    delegates newest-first, reduced to the current one per delegate. A committee can hold
+    80 delegates, and a query each would be 81 round trips for a page that shows a grid.
+
+    `submissionDate` is the newest upload's time as an ISO-8601 instant carrying a UTC
+    offset - the column is naive UTC, and the view localises it for display. It is empty
+    for a delegate who has never uploaded.
+
+    There is deliberately no `pdfUrl`: an iframe cannot send the Authorization header, so
+    the view fetches /chair/papers/{id}/download as a blob through the API client instead
+    and previews that.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    chair = _get_chair(db, user.id)
+
+    delegates = db.scalars(
+        select(Delegates)
+        .where(Delegates.committee == chair.committee_name)
+        .order_by(Delegates.country)
+    ).all()
+    if not delegates:
+        return []
+
+    uploads = db.scalars(
+        select(Uploads)
+        .where(Uploads.delegate_id.in_([delegate.account_id for delegate in delegates]))
+        .order_by(
+            Uploads.delegate_id,
+            Uploads.upload_time.desc(),
+            Uploads.upload_id.desc(),
+        )
+    ).all()
+
+    # Uploads are append-only, so the first row seen per delegate is the paper in force.
+    newest: dict[int, Uploads] = {}
+    for upload in uploads:
+        newest.setdefault(upload.delegate_id, upload)
+
+    return [
+        GradingDelegate(
+            id=delegate.account_id,
+            country=delegate.country,
+            committee=delegate.committee,
+            status=delegate.paper_status,
+            submissionDate=(
+                _iso_utc(newest[delegate.account_id].upload_time)
+                if delegate.account_id in newest
+                else ""
+            ),
+            totalScore=delegate.paper_grade or "",
+            scores=_stored_scores(delegate.paper_rubric_grade),
+            comments=delegate.paper_comments or "",
+        )
+        for delegate in delegates
+    ]
 
 
 @router.post("/papers/{delegate_id}/grade")

@@ -42,7 +42,7 @@
 
           <div v-else-if="delegate.status === 'submitted'" class="status-line status-submitted">
             <span>• Submitted</span>
-            <span class="sub-date">{{ delegate.submissionDate }}</span>
+            <span class="sub-date">{{ formatSubmissionDate(delegate.submissionDate) }}</span>
           </div>
 
           <div v-else-if="delegate.status === 'graded'" class="status-line status-graded">
@@ -50,7 +50,7 @@
               <span>• Graded</span>
               <span class="score-badge">{{ delegate.totalScore }}</span>
             </div>
-            <span class="sub-date">{{ delegate.submissionDate }}</span>
+            <span class="sub-date">{{ formatSubmissionDate(delegate.submissionDate) }}</span>
           </div>
         </div>
 
@@ -125,16 +125,17 @@
         </div>
       </header>
 
-      <!-- NATIVE PDF PREVIEW IFRAME -->
+      <!-- NATIVE PDF PREVIEW IFRAME (src is an in-memory blob URL; an iframe cannot
+           send the Authorization header, so the PDF is fetched through the API client) -->
       <div class="pdf-viewer-container">
         <iframe 
-          v-if="activeDelegate.pdfUrl" 
-          :src="activeDelegate.pdfUrl" 
+          v-if="previewUrl" 
+          :src="previewUrl" 
           class="pdf-iframe"
           title="Position Paper PDF Preview"
         ></iframe>
         <div v-else class="pdf-error-fallback">
-          Unable to preview document.
+          {{ loadingPreview ? 'Loading the position paper…' : 'Unable to preview document.' }}
         </div>
       </div>
     </div>
@@ -142,7 +143,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import apiClient from '@/api/client'
 import { useToastStore } from '@/stores/toast'
 const toastStore = useToastStore()
@@ -158,6 +159,30 @@ const delegates = ref([])
 const activeDelegate = ref(null)
 const gradingScores = ref({})
 const gradingComments = ref('')
+// Object URL for the PDF currently on screen; revoked whenever the modal closes, or the
+// browser would hold every previewed paper in memory for the life of the page.
+const previewUrl = ref('')
+const loadingPreview = ref(false)
+
+const releasePreview = () => {
+  if (previewUrl.value) {
+    window.URL.revokeObjectURL(previewUrl.value)
+    previewUrl.value = ''
+  }
+}
+
+// The API sends an instant with a UTC offset; show it in the chair's own timezone.
+const formatSubmissionDate = (timestamp) => {
+  if (!timestamp) return ''
+  const date = new Date(timestamp)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  })
+}
 
 // Navigation Handler
 const switchView = (path) => {
@@ -179,7 +204,7 @@ const maxPossibleScore = computed(() => {
 })
 
 // Open Grading Modal & Initialize Inputs
-const openGradingModal = (delegate) => {
+const openGradingModal = async (delegate) => {
   activeDelegate.value = delegate
   gradingComments.value = delegate.comments || ''
 
@@ -191,13 +216,34 @@ const openGradingModal = (delegate) => {
       : 0
   })
   gradingScores.value = initialScores
+
+  // Fetch the paper through the API client (which sends the bearer token) and hand the
+  // viewer a blob URL, since a plain iframe src would arrive unauthenticated.
+  releasePreview()
+  loadingPreview.value = true
+  try {
+    const response = await apiClient.get(`/chair/papers/${delegate.id}/download`, {
+      responseType: 'blob'
+    })
+    previewUrl.value = window.URL.createObjectURL(
+      new Blob([response.data], { type: 'application/pdf' })
+    )
+  } catch (error) {
+    // A 404 (paper never uploaded, or the stored file is gone) also lands here
+    toastStore.showToast('Could not load the position paper.', 'error')
+  } finally {
+    loadingPreview.value = false
+  }
 }
 
 const closeGradingModal = () => {
+  releasePreview()
   activeDelegate.value = null
   gradingScores.value = {}
   gradingComments.value = ''
 }
+
+onBeforeUnmount(releasePreview)
 
 // 1. Refactored Save/Submit Grade Handler
 const saveGrade = async () => {

@@ -141,15 +141,21 @@ class GradingRubricCriterion(BaseModel):
 
 
 class GradingDelegate(BaseModel):
+    """One row of the chair's grading roster.
+
+    There is no `pdfUrl` on purpose: an iframe cannot send the Authorization header, so
+    the view fetches /chair/papers/{id}/download as a blob through the API client and
+    previews the object URL it gets back.
+    """
+
     id: int
     country: str
     committee: str
     status: str  # 'unsubmitted' | 'submitted' | 'graded'
-    submissionDate: str = ""
-    totalScore: str = ""
+    submissionDate: str = ""  # ISO-8601 with a UTC offset; empty when nothing was uploaded
+    totalScore: str = ""  # display string, e.g. "18/20"
     scores: dict[str, float] = {}
     comments: str = ""
-    pdfUrl: str = ""
 
 
 class RubricLevel(BaseModel):
