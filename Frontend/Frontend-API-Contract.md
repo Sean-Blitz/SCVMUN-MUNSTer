@@ -345,7 +345,20 @@ Request:
 ```
 
 Field notes:
-- `totalScore` is a **string** in `"<earned>/<max>"` form.
+- `totalScore` is a **string** in `"<earned>/<max>"` form, but the server **recomputes** it as
+  `<sum of scores>/<sum of rubric maxima>` and stores that; the submitted value is ignored, so a
+  client cannot record a score line that disagrees with the rubric. The denominator is always the
+  whole rubric, so an unscored criterion counts as zero rather than shrinking the maximum.
+- `delegateId` in the body is ignored — the path segment is authoritative.
+- `scores` keys must be criteria from §6.1, and each mark must be between `0` and that
+  criterion's `maxScore` (`400` otherwise; the input's `max` attribute is only a hint).
+- `comments` are capped at 500 characters; a blank comment stores `null`, so §2.1's
+  "No comments were provided." fallback applies.
+- Grading sets `paper_status` to `"graded"`, which is what then makes §2.2 refuse a replacement
+  upload. Re-grading is allowed and overwrites the previous marks — a chair correcting a mistake.
+- Grading a delegate who has not submitted returns `409`; a delegate outside the chair's committee,
+  or a chair profile that does not exist, returns `404`. `400` also if the grading rubric has no
+  criteria configured, because grading against nothing would store a meaningless `"0/0"`.
 
 Response: body is not read.
 

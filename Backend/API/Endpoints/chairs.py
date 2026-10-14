@@ -74,6 +74,11 @@ def _iso_utc(moment) -> str:
     return moment.replace(tzinfo=timezone.utc).isoformat()
 
 
+def _format_number(value: float) -> str:
+    """Render a mark for the display string: 18.0 -> "18", 8.5 -> "8.5"."""
+    return f"{value:g}"
+
+
 @router.get("/committee/overview", response_model=CommitteeOverviewResponse)
 def get_committee_overview(
     user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -148,17 +153,17 @@ def get_committee_overview(
 # different endpoint with a different shape - do not merge them.
 
 
-@router.get("/rubric", response_model=list[GradingRubricCriterion])
-def get_position_paper_grading_rubric(
-    user: Annotated[CurrentUser, Depends(get_current_user)],
-) -> list[GradingRubricCriterion]:
+def _build_paper_rubric() -> list[GradingRubricCriterion]:
     """
-    Return the numeric grading rubric used by the position-paper grading view.
+    The position-paper grading rubric, built from `core.controls.paper_rubric_data`.
 
-    A static list from `core.controls.paper_rubric_data`, not a table: the criteria are
-    the same for every chair and every delegate, so there is nothing per-committee to
-    store and no database session is needed here at all. The endpoint exists so the
-    frontend has one place to read the labels and maxima from.
+    A static list, not a table: the criteria are the same for every chair and every
+    delegate, so there is nothing per-committee to store and no database session is needed
+    to read it.
+
+    A function rather than an inline body because grade_position_paper validates marks
+    against exactly the criteria this publishes: if the two drifted, a chair could be
+    blocked from saving a mark for a criterion the screen had just shown them.
 
     The same list is the source the delegate's graded breakdown is joined against
     (/delegate/my-assignment), which is what keeps both views showing the same labels and
@@ -180,6 +185,19 @@ def get_position_paper_grading_rubric(
             )
         )
     return rubric
+
+
+@router.get("/rubric", response_model=list[GradingRubricCriterion])
+def get_position_paper_grading_rubric(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> list[GradingRubricCriterion]:
+    """
+    Return the numeric grading rubric used by the position-paper grading view.
+
+    The endpoint exists so the frontend has one place to read the labels and maxima from;
+    the marks themselves are stored per delegate by POST /chair/papers/{id}/grade.
+    """
+    return _build_paper_rubric()
 
 
 @router.get("/delegates", response_model=list[GradingDelegate])
@@ -246,20 +264,101 @@ def list_committee_delegates(
     ]
 
 
+# The comments column is String(500); reject a longer comment here so it surfaces as a 400
+# instead of a database error.
+MAX_GRADE_COMMENTS = 500
+
+
 @router.post("/papers/{delegate_id}/grade")
 def grade_position_paper(
     delegate_id: int,
     payload: GradeSubmissionRequest,
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """
-    Store a delegate's rubric scores and chair comments.
+    Store a delegate's rubric scores and chair comments, and mark the paper graded.
 
-    TODO: note `payload.totalScore` arrives as a pre-formatted string ("18/20") rather
-    than a number. Recompute it server-side from `payload.scores` so a client cannot
-    submit a score that disagrees with the rubric.
+    Checks, because the score line a delegate sees is assembled here:
+
+    - the delegate must be in the chair's own committee, and must have submitted a paper -
+      grading one that was never uploaded would flip the dashboard to "graded" with nothing
+      to read;
+    - every mark has to name a criterion from the rubric the view was given, and sit
+      between 0 and that criterion's maximum (the input's `max` attribute is only a hint);
+    - comments are capped at the column's 500 characters.
+
+    The stored total is **recomputed** as `<sum of marks>/<sum of rubric maxima>` rather than
+    taken from `payload.totalScore`, so a client cannot submit a score line that disagrees
+    with the rubric. `delegate_id` comes from the path; the copy in the body is ignored.
+    Re-grading is allowed - a chair correcting a mistake overwrites the previous marks.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    chair = _get_chair(db, user.id)
+
+    delegate = db.scalars(
+        select(Delegates).where(
+            Delegates.account_id == delegate_id,
+            Delegates.committee == chair.committee_name,
+        )
+    ).first()
+    if delegate is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No such delegate in your committee.",
+        )
+
+    if delegate.paper_status == "unsubmitted":
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This delegate has not submitted a position paper yet.",
+        )
+
+    rubric = {str(criterion.id): criterion for criterion in _build_paper_rubric()}
+    if not rubric:
+        # Grading against no criteria would store a meaningless "0/0".
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "The grading rubric has no criteria configured yet.",
+        )
+
+    scores: dict[str, float] = {}
+    for criterion_id, submitted in payload.scores.items():
+        key = str(criterion_id)
+        criterion = rubric.get(key)
+        if criterion is None:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"scores contains criteria that are not in the rubric: {key}.",
+            )
+
+        mark = float(submitted)
+        # A hair of tolerance, so a mark that equals the maximum is never rejected by
+        # floating-point representation.
+        if mark < 0 or mark > criterion.maxScore + 1e-9:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"{criterion.label} must be between 0 and {_format_number(criterion.maxScore)}; "
+                f"got {_format_number(mark)}.",
+            )
+        scores[key] = mark
+
+    comments = payload.comments.strip()
+    if len(comments) > MAX_GRADE_COMMENTS:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Comments are limited to {MAX_GRADE_COMMENTS} characters.",
+        )
+
+    earned = sum(scores.values())
+    possible = sum(criterion.maxScore for criterion in rubric.values())
+
+    delegate.paper_rubric_grade = scores
+    delegate.paper_comments = comments or None
+    delegate.paper_grade = f"{_format_number(earned)}/{_format_number(possible)}"
+    delegate.paper_status = "graded"
+    db.commit()
+
+    return {"message": "Grade saved.", "totalScore": delegate.paper_grade}
 
 
 @router.get("/papers/{delegate_id}/download")

@@ -73,19 +73,24 @@ def _paper_criteria(delegate: Delegates) -> list[GradedCriterion]:
     maxima come from the rubric itself (core.controls). The delegate cannot call
     /chair/rubric - it is role-gated - so the labels have to be resolved here. A
     criterion the chair left unmarked is skipped rather than reported as a zero.
+
+    The lookup compares ids *as strings*: JSONB keys are always strings, so a rubric whose
+    ids are numbers (which GradingRubricCriterion allows) would otherwise never match its
+    own stored marks and silently vanish from the breakdown.
     """
-    scores = delegate.paper_rubric_grade or {}
+    scores = {str(key): value for key, value in (delegate.paper_rubric_grade or {}).items()}
 
     criteria: list[GradedCriterion] = []
     for criterion in paper_rubric_data:
         criterion_id = criterion.get("id")
-        if criterion_id not in scores:
+        key = str(criterion_id)
+        if criterion_id is None or key not in scores:
             continue
         criteria.append(
             GradedCriterion(
                 id=criterion_id,
                 label=criterion.get("label", str(criterion_id)),
-                score=float(scores[criterion_id]),
+                score=float(scores[key]),
                 maxScore=float(criterion.get("maxScore", 0)),
             )
         )
