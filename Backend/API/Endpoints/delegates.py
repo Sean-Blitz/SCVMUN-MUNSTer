@@ -10,9 +10,11 @@ from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
+from fastapi.responses import FileResponse
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
+from API import papers
 from API.dependencies import CurrentUser, get_current_user, require_roles
 import core.storage
 from core.controls import paper_rubric_data
@@ -126,6 +128,34 @@ def get_my_assignment(
             instructions=[],  # no source for these yet; the panel hides when empty
             criteria=_paper_criteria(delegate) if delegate.paper_status == "graded" else [],
         ),
+    )
+
+
+@router.get("/my-paper")
+def download_my_paper(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    """
+    Return the caller's own position paper as a PDF blob.
+
+    Scoped by the token rather than by a path parameter, so a delegate can only ever fetch
+    their own paper. The newest upload is served - the one /delegate/my-assignment reports
+    the status of - and the two 404s distinguish "nothing was uploaded" from "the stored
+    file has gone missing".
+    """
+    delegate = db.scalars(select(Delegates).where(Delegates.account_id == user.id)).first()
+    if delegate is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No delegate profile is attached to this account.",
+        )
+
+    # The view saves the blob under its own name; this is the fallback for a direct call.
+    return papers.paper_response(
+        db,
+        delegate.account_id,
+        download_name=f"{delegate.country}_Position_Paper.pdf",
     )
 
 
