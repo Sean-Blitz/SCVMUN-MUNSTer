@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv; load_dotenv()  # Load environment variables from .env file
 from typing import Optional, List, Dict, Any
-from sqlalchemy import String, Integer, Boolean, ForeignKey, CheckConstraint, Index, create_engine, func
+from sqlalchemy import String, Integer, Boolean, Float, ForeignKey, CheckConstraint, Index, create_engine, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
@@ -152,7 +152,10 @@ class Delegates(Base):
     assigned_award: Mapped[str] = mapped_column(String(100), nullable=False, default="None")
     # i.e. "Candidate | Verbal Commendation | Honorable Mention | Outstanding Delegate | Best Delegate | None"
     overall_rubric_scores: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSONB, nullable=True)
-    overall_total_score: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    # Float, not Integer: the total is the sum of the rubric level scores and the API
+    # treats it as a number (AwardDelegate.totalScore), so a fractional mark must not be
+    # silently rounded on the way in.
+    overall_total_score: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
 
 class Uploads(Base):

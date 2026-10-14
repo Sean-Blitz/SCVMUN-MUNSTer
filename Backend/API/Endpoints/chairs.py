@@ -7,7 +7,7 @@ delegate roster. If this file grows past comfortable, split it by resource:
 chairs_committee.py / chairs_papers.py / chairs_awards.py.
 """
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from datetime import timezone
 
@@ -47,6 +47,21 @@ router = APIRouter(
 # --- Committee overview (§5) ---
 
 
+def _get_chair(db: Session, account_id: int) -> Chairs:
+    """The chair's own profile, or a 404 naming what is missing.
+
+    Admins can reach these routes (the router allows the role) but have no Chairs row, and
+    without one there is no committee to scope a roster or an award to.
+    """
+    chair = db.scalars(select(Chairs).where(Chairs.account_id == account_id)).first()
+    if chair is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No chair profile is attached to this account.",
+        )
+    return chair
+
+
 def _iso_utc(moment) -> str:
     """Render a naive-UTC column value as an ISO-8601 string that says so.
 
@@ -72,15 +87,7 @@ def get_committee_overview(
     is why the lists come back in ascending time order and why each timestamp carries an
     explicit UTC offset.
     """
-    chair = db.scalars(select(Chairs).where(Chairs.account_id == user.id)).first()
-    if chair is None:
-        # Admins may reach the chair views; without a chair profile there is no
-        # committee to scope the numbers to.
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "No chair profile is attached to this account.",
-        )
-
+    chair = _get_chair(db, user.id)
     committee = chair.committee_name
 
     total_delegates = db.scalar(
@@ -230,6 +237,15 @@ def download_position_paper(
 RESERVED_AWARD_OPTIONS = {"none", "candidate"}
 
 
+def _assignable_awards() -> list[str]:
+    """The award names a chair may hand out, in the order core.controls lists them."""
+    return [
+        name.strip()
+        for name in award_options
+        if name.strip() and name.strip().casefold() not in RESERVED_AWARD_OPTIONS
+    ]
+
+
 @router.get("/awards/options", response_model=list[str])
 def list_award_options(
     user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -239,29 +255,16 @@ def list_award_options(
 
     Static, like the grading rubric: the same awards are on offer in every committee.
     """
-    return [
-        name.strip()
-        for name in award_options
-        if name.strip() and name.strip().casefold() not in RESERVED_AWARD_OPTIONS
-    ]
+    return _assignable_awards()
 
 
-@router.get("/awards/rubric", response_model=list[AwardsRubricCriterion])
-def get_awards_rubric(
-    user: Annotated[CurrentUser, Depends(get_current_user)],
-) -> list[AwardsRubricCriterion]:
+def _build_awards_rubric() -> list[AwardsRubricCriterion]:
     """
-    Return the leveled rubric used by the awards view.
+    The awards rubric, built from core.controls.awards_rubric.
 
-    Static and shared, from core.controls.awards_rubric - one score per criterion is
-    stored per delegate, chosen from that criterion's levels. Levels keep the order they
-    are written in, which is the order the view renders as score cells.
-
-    Nothing here is derived: the view works out each criterion's maximum itself, as the
-    highest `level.score`. That is why a criterion with no usable levels is skipped
-    entirely - sending one would leave the client taking `Math.max()` of an empty list,
-    i.e. -Infinity as its maximum. A level with no label is skipped for the same reason a
-    label-less checklist line is: there would be nothing to render in the cell.
+    Kept as a function rather than inlined in the endpoint because assign_award validates
+    incoming marks against exactly the criteria this publishes - if the two ever drifted,
+    a chair could be blocked from saving an award the screen had just asked them to score.
     """
     rubric: list[AwardsRubricCriterion] = []
 
@@ -300,16 +303,80 @@ def get_awards_rubric(
     return rubric
 
 
+@router.get("/awards/rubric", response_model=list[AwardsRubricCriterion])
+def get_awards_rubric(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+) -> list[AwardsRubricCriterion]:
+    """
+    Return the leveled rubric used by the awards view.
+
+    Static and shared, from core.controls.awards_rubric - one score per criterion is
+    stored per delegate, chosen from that criterion's levels. Levels keep the order they
+    are written in, which is the order the view renders as score cells.
+
+    Nothing here is derived: the view works out each criterion's maximum itself, as the
+    highest `level.score`. That is why a criterion with no usable levels is skipped
+    entirely - sending one would leave the client taking `Math.max()` of an empty list,
+    i.e. -Infinity as its maximum. A level with no label is skipped for the same reason a
+    label-less checklist line is: there would be nothing to render in the cell.
+    """
+    return _build_awards_rubric()
+
+
+def _stored_scores(raw: Any) -> dict[str, float]:
+    """Coerce a stored `overall_rubric_scores` map into {criterion id: mark}.
+
+    The column is JSONB, so it could hold anything if it were ever edited by hand; a value
+    that is not a number is dropped rather than failing the whole roster.
+    """
+    if not isinstance(raw, dict):
+        return {}
+
+    scores: dict[str, float] = {}
+    for criterion_id, mark in raw.items():
+        try:
+            scores[str(criterion_id)] = float(mark)
+        except (TypeError, ValueError):
+            continue
+    return scores
+
+
 @router.get("/awards/delegates", response_model=list[AwardDelegate])
 def list_award_delegates(
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> list[AwardDelegate]:
     """
     Return the committee roster with each delegate's current award assignments and scores.
 
-    `assignedAward` must be one of the names returned by /chair/awards/options, or "None".
+    `assignedAward` is one of the names returned by /chair/awards/options, or "None" /
+    "Candidate". `scores` is the stored {criterion id: mark} map, and `totalScore` is null
+    until a chair has saved something for that delegate - the view hides the "n pts" badge
+    in that case rather than showing a zero.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    chair = _get_chair(db, user.id)
+
+    delegates = db.scalars(
+        select(Delegates)
+        .where(Delegates.committee == chair.committee_name)
+        .order_by(Delegates.country)
+    ).all()
+
+    return [
+        AwardDelegate(
+            id=delegate.account_id,
+            country=delegate.country,
+            committee=delegate.committee,
+            assignedAward=delegate.assigned_award or "None",
+            scores=_stored_scores(delegate.overall_rubric_scores),
+            totalScore=(
+                float(delegate.overall_total_score)
+                if delegate.overall_total_score is not None
+                else None
+            ),
+        )
+        for delegate in delegates
+    ]
 
 
 @router.post("/awards/{delegate_id}")
@@ -317,11 +384,73 @@ def assign_award(
     delegate_id: int,
     payload: AwardAssignmentRequest,
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> dict[str, str]:
     """
     Assign an award and rubric scores to a delegate.
 
-    TODO: the frontend enforces that official awards require every rubric criterion to be
-    scored; re-check that server-side. `payload.totalScore` is a number here.
+    The delegate is looked up within the chair's own committee, so an id from another
+    committee answers 404 rather than being written to. `delegate_id` comes from the path;
+    the copy in the body is ignored.
+
+    The frontend already refuses to give an official award until every rubric criterion has
+    been scored; the same rule is enforced here, because a script would otherwise be able
+    to store an award that was never evaluated. Marks are also checked against the rubric
+    the view was given, so a stale criterion id cannot be parked in the database.
+
+    The stored total is **recomputed** as the sum of the marks rather than taken from
+    `payload.totalScore`: the total is a derived value (the view computes it the same way),
+    and a client that disagreed would put a wrong number in front of the chair.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    chair = _get_chair(db, user.id)
+
+    delegate = db.scalars(
+        select(Delegates).where(
+            Delegates.account_id == delegate_id,
+            Delegates.committee == chair.committee_name,
+        )
+    ).first()
+    if delegate is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No such delegate in your committee.",
+        )
+
+    award = payload.assignedAward.strip()
+    # "None" (no award) and "Candidate" (shortlist) are the template's own two options and
+    # are legitimately assignable, even though they are not in /chair/awards/options.
+    allowed = {"None", "Candidate", *_assignable_awards()}
+    if award not in allowed:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"assignedAward must be one of: {', '.join(sorted(allowed))}.",
+        )
+
+    scores = {str(criterion_id): float(mark) for criterion_id, mark in payload.scores.items()}
+
+    rubric = _build_awards_rubric()
+    labels = {str(criterion.id): criterion.label for criterion in rubric}
+
+    unknown = sorted(set(scores) - set(labels))
+    if unknown:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"scores contains criteria that are not in the rubric: {', '.join(unknown)}.",
+        )
+
+    if award not in ("None", "Candidate"):
+        missing = [labels[criterion_id] for criterion_id in labels if criterion_id not in scores]
+        if missing:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                f"Every rubric criterion must be scored before assigning {award}. "
+                f"Missing: {', '.join(missing)}.",
+            )
+
+    delegate.assigned_award = award
+    delegate.overall_rubric_scores = scores
+    # NULL rather than 0.0 when nothing was scored, so the badge stays hidden.
+    delegate.overall_total_score = sum(scores.values()) if scores else None
+    db.commit()
+
+    return {"message": "Award saved.", "assignedAward": award}

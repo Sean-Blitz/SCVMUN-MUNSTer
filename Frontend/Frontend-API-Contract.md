@@ -382,7 +382,11 @@ Field notes:
 Field notes:
 - `assignedAward` drives both the summary counters and the card colour class; it must match one
   of the listed values.
-- `totalScore` renders as `"<n> pts"` and is hidden when `null`.
+- `totalScore` renders as `"<n> pts"` and is hidden when `null`. It is `null` until a chair has
+  saved something for that delegate, and it is the sum of `scores` — stored as a float, so a
+  fractional level score (2.5) is not rounded.
+- `scores` is the stored `{criterionId: mark}` map; a stored entry that is not a number is
+  dropped rather than failing the roster.
 
 ### 7.4 `POST /chair/awards/{delegateId}`
 
@@ -398,9 +402,19 @@ Request:
 ```
 
 Field notes:
-- `totalScore` is a **number** here.
+- `totalScore` is a **number** here, but the server **recomputes** it as the sum of `scores` and
+  stores that — the total is derived, and a client that disagreed would put a wrong number in
+  front of the chair. `delegateId` in the body is likewise ignored; the path segment wins.
 - The frontend requires every rubric criterion to be scored before an official award
-  (anything other than `"None"` or `"Candidate"`) can be assigned.
+  (anything other than `"None"` or `"Candidate"`) can be assigned, and the API enforces the same
+  rule: an incomplete set returns `400` naming the missing criteria, so a script cannot store an
+  award that was never evaluated.
+- `scores` keys must be criteria from §7.2 — an unknown id returns `400` rather than being
+  parked in the database.
+- `assignedAward` must be one of §7.1's names plus `"None"` and `"Candidate"`; anything else
+  returns `400`.
+- Deleting a delegate from the chair's committee scope answers `404`. Saving `"None"` with no
+  marks clears the stored scores and resets `totalScore` to `null`.
 
 Response: body is not read.
 
