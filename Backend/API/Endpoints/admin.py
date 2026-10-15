@@ -11,10 +11,12 @@ apart from living under this router's `/admin` prefix.
 import csv
 import io
 import json
+import os
 import secrets
+import shutil
 import socket
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
@@ -25,6 +27,7 @@ from crud.db import get_db, utcnow
 
 from API.dependencies import CurrentUser, get_current_user, require_roles
 import core.audit
+import core.monitor
 from core.controls import BROADCAST_LIMITS, TIMELINE_PHASES
 
 from crud.database_schema import (Account,AuthSession,Base,Broadcast,
@@ -36,29 +39,109 @@ from schemas.request_models import (BroadcastRequest,BroadcastUpdateRequest,
 
 from schemas.response_models import (AdminDashboardStatsResponse,AwardEntry,
     AwardsOverviewResponse,BroadcastEntry,BroadcastListResponse,
-    CommitteeAwards,ConferenceChecklistItem,ConferenceChecklistResponse,
-    DropDelegatesResponse,DroppedDelegate,HashEntry,
+    CommitteeAwards,CommitteeCount,ConferenceChecklistItem,ConferenceChecklistResponse,
+    DowntimeEvent,DropDelegatesResponse,DroppedDelegate,HashEntry,
     HashListResponse,PortHealth,SchoolChecklistItem,
-    SchoolChecklistResponse,SchoolEntry,SchoolListResponse,TimelineEntry,
+    SchoolChecklistResponse,SchoolEntry,SchoolListResponse,StorageUsage,TimelineEntry,
     TimelineListResponse,)
 
 router = APIRouter(prefix="/admin",tags=["admin"],dependencies=[Depends(require_roles("admin"))])
 
 # --- Dashboard, diagnostics & exports (§8.1 – §8.3) ---
 
+# The volume whose capacity the dashboard reports: the whole filesystem the application
+# (container included) is running on. Point STORAGE_PATH at a data volume to report that
+# instead, if uploads live somewhere with its own budget.
+STORAGE_PATH = os.getenv("STORAGE_PATH", "/")
+
+DOWNTIME_WINDOW_DAYS = 7
+
+
+def _gib(value: int) -> float:
+    """Bytes as GiB to one decimal, matching what `df -h` reports."""
+    return round(value / (1024**3), 1)
+
+
+def _display_time(moment: datetime) -> str:
+    """A downtime timestamp for the dashboard, in UTC and saying so.
+
+    The file records UTC and the server has no idea which timezone the browser is in, so
+    an unqualified "05:26" would be quietly wrong for anyone outside it.
+    """
+    return f"{moment.astimezone(timezone.utc).strftime('%b')} {moment.astimezone(timezone.utc).day}, {moment.astimezone(timezone.utc).strftime('%H:%M')} UTC"
+
+
+def _display_duration(length: timedelta) -> str:
+    """A downtime duration, at most two units: "45s", "12m 30s", "3h 12m", "2d 4h"."""
+    seconds = int(length.total_seconds())
+    if seconds < 60:
+        return f"{seconds}s"
+
+    minutes, seconds = divmod(seconds, 60)
+    if minutes < 60:
+        return f"{minutes}m {seconds}s"
+
+    hours, minutes = divmod(minutes, 60)
+    if hours < 24:
+        return f"{hours}h {minutes}m"
+
+    days, hours = divmod(hours, 24)
+    return f"{days}d {hours}h"
+
 
 @router.get("/dashboard-stats", response_model=AdminDashboardStatsResponse)
 def get_dashboard_stats(
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> AdminDashboardStatsResponse:
     """
     Return delegate distribution, server storage usage, and the past week's downtime.
 
-    TODO: `startTime`, `endTime` and `duration` are pre-formatted display strings — the
-    frontend renders them verbatim. An empty `downtimeEvents` list is meaningful: it
-    renders the "100% Uptime" message.
+    Storage is the filesystem the app runs on (`STORAGE_PATH`), as used/total GiB.
+
+    `downtimeEvents` comes from the heartbeat monitor (core.monitor): outages are inferred
+    from gaps between beats, because nothing can report an outage while it is down. The
+    times and durations are pre-formatted display strings in UTC - the frontend renders
+    them verbatim - and an empty list is meaningful: it renders the "100% Uptime" message,
+    which is also what a fresh install with no heartbeat data shows.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    total_delegates = db.scalar(select(func.count()).select_from(Delegates)) or 0
+
+    counts = db.execute(
+        select(Delegates.committee, func.count())
+        .group_by(Delegates.committee)
+        .order_by(Delegates.committee)
+    ).all()
+
+    try:
+        usage = shutil.disk_usage(STORAGE_PATH)
+    except OSError:
+        # An unreadable path is a configuration mistake, not a reason to fail the whole
+        # dashboard: report an empty bar rather than a 500.
+        storage = StorageUsage(usedGb=0.0, totalGb=0.0)
+    else:
+        storage = StorageUsage(
+            usedGb=_gib(usage.used),
+            totalGb=_gib(usage.total),
+        )
+
+    return AdminDashboardStatsResponse(
+        totalDelegates=total_delegates,
+        committeeCounts=[
+            CommitteeCount(committee=committee, count=count) for committee, count in counts
+        ],
+        storage=storage,
+        downtimeEvents=[
+            DowntimeEvent(
+                id=outage.line,
+                startTime=_display_time(outage.start),
+                endTime=_display_time(outage.end),
+                duration=_display_duration(outage.duration),
+                reason=outage.reason,
+            )
+            for outage in core.monitor.recent_outages(DOWNTIME_WINDOW_DAYS)
+        ],
+    )
 
 
 # The services the port monitor probes, as (port, display name). A tuple rather than a

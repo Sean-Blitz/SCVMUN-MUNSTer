@@ -483,9 +483,37 @@ Response: body is not read.
 
 Field notes:
 - `committeeCounts[].committee` is the list key and the displayed committee name.
-- `storage.totalGb` of `0` renders the capacity bar at `0%`.
-- `startTime`, `endTime`, and `duration` are pre-formatted display strings.
-- An empty `downtimeEvents` array renders the "100% Uptime" message.
+- `storage` is the filesystem the API runs on (`STORAGE_PATH`, default `/`), as used/total
+  GiB rounded to one decimal — the same numbers `df -h` shows, so they can be compared with a
+  terminal. An unreadable path reports `0`/`0`, which renders the bar at `0%`, rather than
+  failing the whole dashboard.
+- `startTime`, `endTime`, and `duration` are pre-formatted display strings: `"Oct 13, 05:59 UTC"`
+  and `"12m 30s"` / `"1h 1m"` / `"2d 7h"`. UTC is stated explicitly because the server does not
+  know the browser's timezone and these are read by whoever is on call.
+- An empty `downtimeEvents` array renders the "100% Uptime" message. That is also what a fresh
+  install shows before the monitor has any data.
+
+**Where downtime comes from.** There is no uptime service to ask, so the API keeps its own
+evidence (see `core/monitor.py`): a heartbeat every 30 s, and an outage inferred when the next
+heartbeat arrives more than 60 s after the last one. Two files under `LOG_DIR`:
+
+| file | written | read by |
+| --- | --- | --- |
+| `heartbeat.log` | a timestamp every beat, trimmed to the last 5 lines | gap detection only |
+| `downtime.log` | one line per detected outage, appended, never trimmed | this endpoint's 7-day report |
+
+Design points worth knowing when reading the dashboard:
+- The threshold is **two intervals**, so a normal `systemctl restart` or one starved thread is
+  not recorded as downtime; anything a human would notice is.
+- The reason distinguishes the two cases: `"service restart"` when the gap was found by the
+  first beat after startup (the process was not running — crash, reboot, deploy), `"heartbeat
+  gap"` when it was found mid-run (the process was up but the thread stalled).
+- An outage is **inferred**: nothing can report an outage while it is down, so `endTime` is when
+  the API came back, not necessarily when the machine did.
+- A gap over 30 days is treated as a clock jump (NTP step, restored snapshot) and ignored rather
+  than recorded as a month-long outage.
+- History is kept in `downtime.log` rather than derived from `heartbeat.log`, because the
+  heartbeat file only holds a couple of minutes of beats.
 
 ### 8.2 `GET /admin/ports/health`
 

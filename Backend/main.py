@@ -9,6 +9,7 @@ Interactive docs (generated from the response models) are at /docs.
 """
 
 import os
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -17,12 +18,29 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from API.endpoints import api_router
+import core.monitor
 
 API_PREFIX = "/api"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Run the downtime monitor for exactly as long as the API is serving.
+
+    Started here rather than at import so tests do not spawn threads or write heartbeat
+    files, and stopped on shutdown so --reload does not leave one behind.
+    """
+    core.monitor.start()
+    try:
+        yield
+    finally:
+        core.monitor.stop()
+
 
 app = FastAPI(
     title="SCVMUN Platform API",
     description="Backend for the SCVMUN conference platform. See Frontend-API-Contract.md.",
+    lifespan=lifespan,
 )
 
 
