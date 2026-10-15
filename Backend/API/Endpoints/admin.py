@@ -26,40 +26,23 @@ from crud.db import get_db, utcnow
 from API.dependencies import CurrentUser, get_current_user, require_roles
 import core.audit
 from core.controls import BROADCAST_LIMITS, TIMELINE_PHASES
-from crud.database_schema import (Account,AuthSession,Broadcast,
+
+from crud.database_schema import (Account,AuthSession,Base,Broadcast,
     ChecklistProgress,Committees,ConferenceChecklist,Delegates,
     School,TimelineEvent)
 from schemas.request_models import (BroadcastRequest,BroadcastUpdateRequest,
     ChecklistProgressRequest,ChecklistUpdateRequest,DelegateHashRequest,DropDelegatesRequest,
     NewHashRequest,SchoolHashRequest,TimelineUpdateRequest)
 
-from schemas.response_models import (
-    AdminDashboardStatsResponse,
-    AwardEntry,
-    AwardsOverviewResponse,
-    BroadcastEntry,
-    BroadcastListResponse,
-    CommitteeAwards,
-    ConferenceChecklistItem,
-    ConferenceChecklistResponse,
-    DropDelegatesResponse,
-    DroppedDelegate,
-    HashEntry,
-    HashListResponse,
-    PortHealth,
-    SchoolChecklistItem,
-    SchoolChecklistResponse,
-    SchoolEntry,
-    SchoolListResponse,
-    TimelineEntry,
-    TimelineListResponse,
-)
+from schemas.response_models import (AdminDashboardStatsResponse,AwardEntry,
+    AwardsOverviewResponse,BroadcastEntry,BroadcastListResponse,
+    CommitteeAwards,ConferenceChecklistItem,ConferenceChecklistResponse,
+    DropDelegatesResponse,DroppedDelegate,HashEntry,
+    HashListResponse,PortHealth,SchoolChecklistItem,
+    SchoolChecklistResponse,SchoolEntry,SchoolListResponse,TimelineEntry,
+    TimelineListResponse,)
 
-router = APIRouter(
-    prefix="/admin",
-    tags=["admin"],
-    dependencies=[Depends(require_roles("admin"))],
-)
+router = APIRouter(prefix="/admin",tags=["admin"],dependencies=[Depends(require_roles("admin"))])
 
 # --- Dashboard, diagnostics & exports (§8.1 – §8.3) ---
 
@@ -78,6 +61,35 @@ def get_dashboard_stats(
     raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
 
 
+# The services the port monitor probes, as (port, display name). A tuple rather than a
+# dict so the display order is the order written here; ports must be unique because the
+# frontend keys the list by port. Loopback, because these are the ports this server has
+# open - 80/443 are nginx, 22 is sshd.
+MONITORED_PORTS: tuple[tuple[int, str], ...] = ((22, "SSH"), (80, "HTTP"), (443, "HTTPS"))
+
+PORT_PROBE_HOST = "127.0.0.1"
+
+# Kept short: a refused connection returns immediately, but a filtered one waits this long,
+# and the admin dashboard runs this check on every load.
+PORT_PROBE_TIMEOUT_SECONDS = 1.0
+
+
+def _probe_port(port: int) -> bool:
+    """True when something is accepting TCP connections on `port`.
+
+    A bare TCP handshake - no protocol is spoken - so it is the same test for SSH, HTTP
+    and HTTPS. A closed port answers with a refusal at once; a filtered one stalls until
+    the timeout, which is why the callers probe concurrently.
+    """
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(PORT_PROBE_TIMEOUT_SECONDS)
+        try:
+            return probe.connect_ex((PORT_PROBE_HOST, port)) == 0
+        except OSError:
+            # Bad address family or similar: report unreachable rather than a 500.
+            return False
+
+
 @router.get("/ports/health", response_model=list[PortHealth])
 def check_port_health(
     user: Annotated[CurrentUser, Depends(get_current_user)],
@@ -85,10 +97,22 @@ def check_port_health(
     """
     Probe the configured service ports and report whether each is reachable.
 
-    TODO: `status` must be exactly "healthy" or "unreachable" — any other value renders
-    as unreachable in the UI. Ports must be unique, as they are the list key.
+    `status` is exactly "healthy" or "unreachable" - the view treats anything else as
+    unreachable - and the ports are unique because the frontend uses them as the list key.
+
+    The probes run concurrently so the worst case is one timeout rather than one per port,
+    and the result is deliberately not written to the audit log: this is a read that the
+    dashboard triggers on every load, and it would bury the real events.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    ports = [port for port, _ in MONITORED_PORTS]
+
+    with ThreadPoolExecutor(max_workers=len(ports)) as pool:
+        reachable = list(pool.map(_probe_port, ports))
+
+    return [
+        PortHealth(name=name, port=port, status="healthy" if ok else "unreachable")
+        for (port, name), ok in zip(MONITORED_PORTS, reachable)
+    ]
 
 
 def _log_response(kind: str, download_name: str) -> Response:
