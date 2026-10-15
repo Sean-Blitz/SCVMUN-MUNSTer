@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from API.dependencies import CurrentUser, get_current_user, require_roles
 from API import papers
+import core.audit
 from core.controls import (
     TIMELINE_PHASES,
     award_options,
@@ -349,6 +350,8 @@ def grade_position_paper(
             f"Comments are limited to {MAX_GRADE_COMMENTS} characters.",
         )
 
+    already_graded = delegate.paper_status == "graded"
+
     earned = sum(scores.values())
     possible = sum(criterion.maxScore for criterion in rubric.values())
 
@@ -357,6 +360,17 @@ def grade_position_paper(
     delegate.paper_grade = f"{_format_number(earned)}/{_format_number(possible)}"
     delegate.paper_status = "graded"
     db.commit()
+
+    core.audit.business(
+        "grade.saved",
+        actor=core.audit.actor(user),
+        delegate=delegate.account_id,
+        country=delegate.country,
+        committee=delegate.committee,
+        total=delegate.paper_grade,
+        criteria=len(scores),
+        regrade=already_graded,
+    )
 
     return {"message": "Grade saved.", "totalScore": delegate.paper_grade}
 
@@ -625,5 +639,16 @@ def assign_award(
     # NULL rather than 0.0 when nothing was scored, so the badge stays hidden.
     delegate.overall_total_score = sum(scores.values()) if scores else None
     db.commit()
+
+    core.audit.business(
+        "award.assigned",
+        actor=core.audit.actor(user),
+        delegate=delegate.account_id,
+        country=delegate.country,
+        committee=delegate.committee,
+        award=award,
+        total=delegate.overall_total_score,
+        criteria=len(scores),
+    )
 
     return {"message": "Award saved.", "assignedAward": award}

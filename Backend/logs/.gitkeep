@@ -1,0 +1,2 @@
+# Audit logs live here in development (see core/audit.py).
+# The logs themselves are git-ignored; only this placeholder is tracked.

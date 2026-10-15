@@ -12,34 +12,21 @@ import secrets
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from fastapi.responses import FileResponse
 from sqlalchemy import delete, func, or_, select
 from sqlalchemy.orm import Session
+from crud.db import get_db, utcnow
 
 from API.dependencies import CurrentUser, get_current_user, require_roles
+import core.audit
 from core.controls import BROADCAST_LIMITS, TIMELINE_PHASES
-from crud.database_schema import (
-    Account,
-    AuthSession,
-    Broadcast,
-    ChecklistProgress,
-    Committees,
-    ConferenceChecklist,
-    Delegates,
-    School,
-    TimelineEvent,
-)
-from crud.db import get_db, utcnow
-from schemas.request_models import (
-    BroadcastRequest,
-    BroadcastUpdateRequest,
-    ChecklistProgressRequest,
-    ChecklistUpdateRequest,
-    DelegateHashRequest,
-    DropDelegatesRequest,
-    NewHashRequest,
-    SchoolHashRequest,
-    TimelineUpdateRequest,
-)
+from crud.database_schema import (Account,AuthSession,Broadcast,
+    ChecklistProgress,Committees,ConferenceChecklist,Delegates,
+    School,TimelineEvent)
+from schemas.request_models import (BroadcastRequest,BroadcastUpdateRequest,
+    ChecklistProgressRequest,ChecklistUpdateRequest,DelegateHashRequest,DropDelegatesRequest,
+    NewHashRequest,SchoolHashRequest,TimelineUpdateRequest)
+
 from schemas.response_models import (
     AdminDashboardStatsResponse,
     AwardEntry,
@@ -98,21 +85,31 @@ def check_port_health(
     raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
 
 
+def _log_response(kind: str, download_name: str) -> Response:
+    """Stream one audit log as plain text.
+
+    Never an HTTPException: the frontend saves whatever bytes arrive, so a JSON error body
+    would be written into the downloaded .txt. A log that has not been written yet is an
+    empty file, which is the honest answer for "nothing has happened".
+    """
+    path = core.audit.log_path(kind)
+    if not path.is_file():
+        return Response(content="", media_type="text/plain")
+    # Streamed rather than read into memory: these files are never rotated, so they only
+    # ever grow.
+    return FileResponse(path, media_type="text/plain", filename=download_name)
+
+
 @router.get("/logs/business.txt")
 def download_business_log(user: Annotated[CurrentUser, Depends(get_current_user)]) -> Response:
-    """
-    Return the business log as a plain-text blob.
-
-    TODO: return Response(content=..., media_type="text/plain"). Errors must not be
-    returned as JSON here — the frontend saves whatever bytes come back as the .txt file.
-    """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    """Return the business log as a plain-text blob."""
+    return _log_response("business", "business.log")
 
 
 @router.get("/logs/technology.txt")
 def download_technology_log(user: Annotated[CurrentUser, Depends(get_current_user)]) -> Response:
     """Return the technology log as a plain-text blob. See the note on the business log."""
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    return _log_response("technical", "technology.log")
 
 
 @router.get("/export/database.csv")
@@ -252,6 +249,14 @@ def create_school_or_delegate_hashes(
         )
 
     db.commit()
+
+    core.audit.technical(
+        "hash.minted",
+        actor=core.audit.actor(user),
+        school=payload.school_name,
+        count=len(hashes),
+    )
+
     return HashListResponse(hashes=hashes)
 
 
@@ -294,6 +299,13 @@ def regenerate_delegate_hash(
     account.identifier = new_hash
     db.commit()
 
+    core.audit.technical(
+        "hash.reissued",
+        actor=core.audit.actor(user),
+        delegate=f"{payload.country} ({payload.committee})",
+        hash=core.audit.masked(new_hash),
+    )
+
     return HashEntry(name=f"{payload.country} ({payload.committee})", hash=new_hash)
 
 
@@ -331,6 +343,14 @@ def regenerate_school_hashes(
         )
 
     db.commit()
+
+    core.audit.technical(
+        "hash.reissued",
+        actor=core.audit.actor(user),
+        school=payload.school,
+        count=len(hashes),
+    )
+
     return HashListResponse(hashes=hashes)
 
 
@@ -381,6 +401,18 @@ def drop_delegates_and_delete_hashes(
                 db.delete(account)
 
     db.commit()
+
+    core.audit.technical(
+        "delegates.dropped",
+        actor=core.audit.actor(user),
+        count=len(dropped),
+        delegates=", ".join(entry.name for entry in dropped) or "-",
+    )
+    # Same action, business view: the roster changed. Two lines, each log coherent.
+    core.audit.business(
+        "roster.dropped", actor=core.audit.actor(user), count=len(dropped)
+    )
+
     return DropDelegatesResponse(dropped=dropped)
 
 
@@ -580,6 +612,15 @@ def create_broadcast(
     db.commit()
     db.refresh(broadcast)  # created_at is a server default, so it only exists post-insert
 
+    core.audit.business(
+        "broadcast.published",
+        actor=core.audit.actor(user),
+        id=broadcast.id,
+        kind=broadcast.kind,
+        target=broadcast.committee_name or "all",
+        line=core.audit.short(broadcast.body),
+    )
+
     return BroadcastEntry.model_validate(broadcast)
 
 
@@ -626,6 +667,15 @@ def update_broadcast(
     broadcast.updated_at = utcnow()
     db.commit()
 
+    core.audit.business(
+        "broadcast.edited",
+        actor=core.audit.actor(user),
+        id=broadcast.id,
+        kind=broadcast.kind,
+        target=broadcast.committee_name or "all",
+        line=core.audit.short(broadcast.body),
+    )
+
     return BroadcastEntry.model_validate(broadcast)
 
 
@@ -640,6 +690,14 @@ def delete_broadcast(
     if broadcast is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"No broadcast with id {broadcast_id}.")
 
+    core.audit.business(
+        "broadcast.withdrawn",
+        actor=core.audit.actor(user),
+        id=broadcast.id,
+        kind=broadcast.kind,
+        target=broadcast.committee_name or "all",
+        line=core.audit.short(broadcast.body),
+    )
     db.delete(broadcast)
     db.commit()
 
@@ -795,6 +853,12 @@ def replace_checklist(
 
     db.commit()
 
+    core.audit.business(
+        "checklist.updated",
+        actor=core.audit.actor(user),
+        lines=len(prepared),
+    )
+
     return get_checklist(user, db)
 
 
@@ -868,6 +932,14 @@ def update_school_checklist(
             row.updated_at = utcnow()
 
     db.commit()
+
+    core.audit.business(
+        "checklist.progress",
+        actor=core.audit.actor(user),
+        school=school.school_name,
+        ticked=sum(1 for _, completed in resolved if completed),
+        cleared=sum(1 for _, completed in resolved if not completed),
+    )
 
     return _school_checklist(db, school)
 
@@ -957,5 +1029,11 @@ def replace_timeline(
     db.execute(delete(TimelineEvent))
     db.add_all(events)
     db.commit()
+
+    core.audit.business(
+        "timeline.updated",
+        actor=core.audit.actor(user),
+        events=len(events),
+    )
 
     return _timeline_response(db)

@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from API import papers
 from API.dependencies import CurrentUser, get_current_user, require_roles
+import core.audit
 import core.security
 from crud.database_schema import (
     Account,
@@ -174,7 +175,16 @@ def verify_hashes_and_reveal(
         )
 
     school = _get_school(db, user.id)
-    return _delegates_for_school(db, school, reveal_hashes=True)
+    revealed = _delegates_for_school(db, school, reveal_hashes=True)
+    # Handing over a school's real access codes is a credential event: it belongs in the
+    # technical log beside the logins those codes are about to be used for.
+    core.audit.technical(
+        "hashes.revealed",
+        actor=core.audit.actor(user),
+        school=school.school_name,
+        count=revealed.total,
+    )
+    return revealed
 
 
 def _checklist_items(db: Session, school: School) -> list[ChecklistItem]:

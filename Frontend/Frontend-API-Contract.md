@@ -511,6 +511,27 @@ Field notes:
 Field notes:
 - Fetched with `responseType: 'blob'` and saved as `business-log.txt`, `technology-log.txt`,
   and `database-export.csv` respectively.
+- Both logs are plain text, one event per line, appended to. They are **never** an error body: a
+  log that has not been written yet downloads as an empty file, because the view saves whatever
+  bytes come back and a JSON error would end up inside the downloaded `.txt`.
+- A line reads `2026-10-14T05:26:52Z login.failed actor=chair:2 hash=CHAI…(6) reason=bad_password`
+  — a UTC timestamp, an `action`, then `key=value` fields (values containing spaces are quoted).
+
+**Which log gets what** (a convention, since nothing in the code can enforce it):
+
+| `technology.txt` | `business.txt` |
+| --- | --- |
+| logins and their failures, registrations, hash issuing/reissuing/dropping, hash reveals, database setup | papers submitted and graded, awards assigned, announcements published/edited/withdrawn, checklist labels and per-school progress, timeline changes |
+
+Conventions worth knowing:
+- **No access code is ever written in full.** Login lines record a masked fragment
+  (`AB12…(16)`) — enough to correlate a code with an account, not enough to use it. The
+  technical log is still sensitive and is written mode `0600`.
+- `actor` is `role:id`, so it survives a rename; `-` means no caller (a script).
+- One action can legitimately appear in both logs when it is both a credential and a business
+  event: dropping delegates revokes their codes (technical) *and* changes the roster (business).
+- Location is `LOG_DIR`, defaulting to `Backend/logs`; on the server point it somewhere durable
+  such as `/var/log/scvmun`, owned by the account that runs the API.
 
 ### 8.4 Delegate hashes
 

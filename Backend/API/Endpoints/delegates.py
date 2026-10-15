@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 
 from API import papers
 from API.dependencies import CurrentUser, get_current_user, require_roles
+import core.audit
 import core.storage
 from core.controls import paper_rubric_data
 from crud.database_schema import Broadcast, Delegates, Uploads
@@ -249,6 +250,16 @@ async def upload_position_paper(
         db.rollback()
         core.storage.delete_paper(stored_name)
         raise
+
+    core.audit.business(
+        "paper.submitted",
+        actor=core.audit.actor(user),
+        delegate=delegate.account_id,
+        country=delegate.country,
+        committee=delegate.committee,
+        file=stored_name,
+        bytes=len(data),
+    )
 
     return {
         "message": "Position paper received.",

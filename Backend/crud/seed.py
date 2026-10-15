@@ -25,6 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from sqlalchemy.exc import SQLAlchemyError
 
+import core.audit
+
 from crud.database_schema import Base
 from crud.db import DATABASE_URL, engine
 
@@ -50,6 +52,12 @@ def main() -> None:
         raise SystemExit(f"Could not create tables: {exc}") from exc
 
     print("Tables present: " + ", ".join(sorted(Base.metadata.tables)))
+
+    # Recorded only when the application has already created its log directory: running
+    # this script as another user (root, say) must not leave root-owned 0600 log files
+    # that the API then cannot append to.
+    if core.audit.log_dir().is_dir():
+        core.audit.technical("db.tables_created", tables=len(Base.metadata.tables))
 
 
 if __name__ == "__main__":

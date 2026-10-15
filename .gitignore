@@ -235,3 +235,7 @@ Frontend/src/views/.DS_Store
 Frontend/.DS_Store
 Backend/crud/pdf_uploads/*
 !Backend/crud/pdf_uploads/.gitkeep
+
+# Audit logs (server filesystem, never in git)
+Backend/logs/*
+!Backend/logs/.gitkeep

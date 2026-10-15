@@ -12,6 +12,7 @@ from schemas.request_models import LoginRequest
 from schemas.response_models import LoginResponse, User
 from crud.db import get_db, utcnow
 from crud.database_schema import Account, AuthSession
+import core.audit
 import core.security
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -56,11 +57,24 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse
     user = db.scalars(statement).first()
 
     if user is None:
+        core.audit.technical(
+            "login.failed", hash=core.audit.masked(payload.hash), reason="unknown_code"
+        )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid access code or password. Check if you have registered yet.")
 
     if not core.security.verify_password(payload.password, user.password_hash):
+        # The response deliberately says the same thing either way; the log does not have
+        # to, and "they have not registered yet" is the first thing to check when a
+        # delegate swears their password is right.
+        core.audit.technical(
+            "login.failed",
+            actor=core.audit.actor(user),
+            hash=core.audit.masked(payload.hash),
+            reason="unregistered" if user.password_hash is None else "bad_password",
+        )
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid access code or password. Check if you have registered yet.")
 
+    core.audit.technical("login.ok", actor=core.audit.actor(user))
     token = _start_session(db, user)
 
     # Build the small `User` model explicitly: Pydantic does not read attributes off
@@ -83,6 +97,9 @@ def register(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginRespo
     user = db.scalars(statement).first()
 
     if user is None:
+        core.audit.technical(
+            "register.failed", hash=core.audit.masked(payload.hash), reason="unknown_code"
+        )
         raise HTTPException(
             status.HTTP_401_UNAUTHORIZED,
             "Unknown access code. Ask your advisor for a valid hash.",
@@ -97,6 +114,9 @@ def register(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginRespo
         )
 
     user.password_hash = core.security.hash_password(payload.password)
+    core.audit.technical(
+        "register.claimed", actor=core.audit.actor(user), hash=core.audit.masked(payload.hash)
+    )
 
     token = _start_session(db, user)
 
