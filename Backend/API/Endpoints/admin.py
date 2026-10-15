@@ -8,8 +8,14 @@ one set of request/response schemas; the `/hashes` and `/awards` paths are uncha
 apart from living under this router's `/admin` prefix.
 """
 
+import csv
+import io
+import json
 import secrets
-from typing import Annotated
+import socket
+from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime, timezone
+from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
@@ -112,15 +118,80 @@ def download_technology_log(user: Annotated[CurrentUser, Depends(get_current_use
     return _log_response("technical", "technology.log")
 
 
-@router.get("/export/database.csv")
-def export_database_csv(user: Annotated[CurrentUser, Depends(get_current_user)]) -> Response:
-    """
-    Return a CSV export of the database.
+def _csv_cell(value: Any) -> Any:
+    """Render one database value as a CSV cell.
 
-    TODO: return Response(content=..., media_type="text/csv"), ideally with a
-    Content-Disposition header.
+    Timestamps are naive UTC in the database, so they go out ISO-8601 with an explicit
+    offset rather than as a bare local-looking string; JSONB becomes compact JSON in one
+    cell; NULL becomes an empty cell, which is the CSV convention.
     """
-    raise HTTPException(status.HTTP_501_NOT_IMPLEMENTED, "Not implemented yet.")
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.replace(tzinfo=timezone.utc).isoformat(sep=" ", timespec="seconds")
+    if isinstance(value, (dict, list)):
+        # sort_keys so two exports of the same database are byte-identical.
+        return json.dumps(value, separators=(",", ":"), sort_keys=True, default=str)
+    return value
+
+
+@router.get("/export/database.csv")
+def export_database_csv(
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> Response:
+    """
+    Return every table as one CSV: a `# <table>` marker row per table, then its column
+    headers, then its rows, with a blank line between tables. The `#` keeps a marker
+    distinguishable from a header row of a one-column table such as `committees`.
+
+    The columns come from SQLAlchemy's metadata and the rows from `select(table)`, so a new
+    column or table appears in the export without anyone maintaining a list here. Tables are
+    written in dependency order (accounts before the rows that reference it) and each table's
+    rows by primary key, so two exports of an unchanged database are byte-identical.
+
+    This is a full dump: `accounts.password_hash`, `accounts.identifier` (the access codes)
+    and `sessions.token_hash` are included verbatim, because an export that quietly redacted
+    them would be useless for a backup. The file is therefore as sensitive as the database,
+    and the download is recorded in the technical log.
+    """
+    buffer = io.StringIO()
+    writer = csv.writer(buffer, lineterminator="\n")
+
+    tables = Base.metadata.sorted_tables
+    written = 0
+
+    for table in tables:
+        # "# name" rather than a bare name: a table with a single column would otherwise
+        # produce a heading row identical to its own header row (committees, for one).
+        writer.writerow([f"# {table.name}"])
+        writer.writerow([column.name for column in table.columns])
+
+        rows = db.execute(select(table).order_by(*table.primary_key.columns)).all()
+        for row in rows:
+            writer.writerow([_csv_cell(value) for value in row])
+            written += 1
+
+        writer.writerow([])
+
+    # The BOM is what makes Excel open a UTF-8 file as UTF-8 (accents in names); Sheets
+    # strips it. Without it, "José" arrives as mojibake on Windows.
+    payload = "\ufeff" + buffer.getvalue()
+
+    core.audit.technical(
+        "db.exported",
+        actor=core.audit.actor(user),
+        tables=len(tables),
+        rows=written,
+        bytes=len(payload.encode("utf-8")),
+    )
+
+    stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    return Response(
+        content=payload,
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="scvmun-export-{stamp}.csv"'},
+    )
 
 
 # --- Delegate hashes (§8.4) ---
