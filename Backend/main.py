@@ -69,7 +69,13 @@ app.add_middleware(
 
 @app.exception_handler(StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
-    return JSONResponse(status_code=exc.status_code, content={"message": exc.detail})
+    # Keep the handler's own headers: without this a 429's Retry-After (and a 401's
+    # WWW-Authenticate) would be silently dropped on the way out.
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"message": exc.detail},
+        headers=exc.headers,
+    )
 
 
 @app.exception_handler(RequestValidationError)

@@ -22,3 +22,9 @@ BROADCAST_LIMITS: Dict[str, Dict[str, int]] = {
 # expects them. Kept here because both the admin editor (which validates `phase`) and the
 # chair overview (which must always return both keys, even when empty) need the same list.
 TIMELINE_PHASES = ("preConference", "duringConference")
+
+# How many position papers one delegate may upload in a rolling hour. Each upload costs up
+# to PAPER_MAX_MB, and re-uploading is allowed until the paper is graded, so without a cap
+# a valid token could churn the disk. The old file is deleted on each re-upload
+# (see API/Endpoints/delegates.py), so the steady state is one stored paper per delegate.
+MAX_UPLOADS_PER_HOUR = 5

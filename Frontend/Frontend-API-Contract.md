@@ -139,8 +139,15 @@ Response: body is not read; only the status code matters.
 Field notes:
 - Re-uploading is allowed until a chair has graded the paper (`409` after that); each upload is
   its own row, and the newest one is what everything downstream serves.
+- **Storage is bounded to one file per delegate.** The previous file is deleted once the new
+  one is committed — the rows stay as history, but only the live paper's bytes exist.
+- **At most `MAX_UPLOADS_PER_HOUR` (5) uploads per delegate in a rolling hour**, then `429` with
+  a `Retry-After` header. That is per *account*, independent of nginx's per-IP limits.
 - Rejections: `400` if the file is not a PDF (checked by the `%PDF-` signature, not just the
-  name), `413` if it exceeds `PAPER_MAX_MB`, `404` if the account has no delegate profile.
+  name), `413` if it exceeds `PAPER_MAX_MB`, `404` if the account has no delegate profile,
+  `429` for the hourly cap. nginx also answers `429` with the same `{"message": ...}` shape
+  when the per-IP rate is exceeded before the request reaches the app.
+- Dropping a delegate through the admin hash tooling deletes its stored paper as well.
 
 ### 2.3 `GET /delegate/my-paper`
 

@@ -5,20 +5,21 @@ Every route here is scoped to the calling delegate; the account comes from the t
 rather than from the request body, so a delegate cannot request another's assignment.
 """
 
+from datetime import timedelta
 from pathlib import Path
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from API import papers
 from API.dependencies import CurrentUser, get_current_user, require_roles
 import core.audit
 import core.storage
-from core.controls import paper_rubric_data
+from core.controls import MAX_UPLOADS_PER_HOUR, paper_rubric_data
 from crud.database_schema import Broadcast, Delegates, Uploads
 from crud.db import get_db, utcnow
 from schemas.response_models import (
@@ -180,6 +181,15 @@ async def upload_position_paper(
     and `upload_id` is the live paper. Once the paper is graded it can no longer be
     replaced.
 
+    Two things bound what an upload can cost, because a valid delegate token is otherwise
+    free to fill the disk:
+
+    - at most `MAX_UPLOADS_PER_HOUR` uploads per delegate in a rolling hour (429 otherwise,
+      with a `Retry-After`), which also limits the churn;
+    - every earlier file for that delegate is **deleted** once the new one is committed. The
+      rows stay as history, but only the live paper's bytes exist, so the storage ceiling is
+      one paper per delegate rather than one per upload.
+
     The PDF itself lives on disk under PAPER_UPLOAD_DIR (see core.storage); only the
     relative path is recorded. Nothing is served straight from that directory - the
     advisor and chair download routes are what check permissions and stream it.
@@ -196,6 +206,33 @@ async def upload_position_paper(
             status.HTTP_409_CONFLICT,
             "This paper has already been graded and cannot be replaced.",
         )
+
+    # A rolling window read from stored rows. `upload_time` is written explicitly below so
+    # this comparison is against the same clock as utcnow(): the column's server default
+    # would use the database session's clock and timezone, which need not be UTC.
+    window_start = utcnow() - timedelta(hours=1)
+    recent_uploads = db.scalar(
+        select(func.count())
+        .select_from(Uploads)
+        .where(
+            Uploads.delegate_id == delegate.account_id,
+            Uploads.upload_time >= window_start,
+        )
+    ) or 0
+    if recent_uploads >= MAX_UPLOADS_PER_HOUR:
+        raise HTTPException(
+            status.HTTP_429_TOO_MANY_REQUESTS,
+            f"You can upload a position paper at most {MAX_UPLOADS_PER_HOUR} times an hour.",
+            headers={"Retry-After": "3600"},
+        )
+
+    # Files belonging to earlier uploads, removed once this one is committed. The rows stay:
+    # the schema keeps a row per attempt, and only the live paper is ever served.
+    superseded = list(
+        db.scalars(
+            select(Uploads.file_path).where(Uploads.delegate_id == delegate.account_id)
+        ).all()
+    )
 
     # The extension and content type are the client's claims - cheap to check, trivial to
     # fake - so the %PDF- signature below is the check that actually matters.
@@ -239,6 +276,7 @@ async def upload_position_paper(
             delegate_id=delegate.account_id,
             file_name=filename[:256] or "position-paper.pdf",
             file_path=stored_name,  # relative to PAPER_UPLOAD_DIR, never absolute
+            upload_time=utcnow(),
         )
     )
     delegate.paper_status = "submitted"
@@ -251,6 +289,11 @@ async def upload_position_paper(
         core.storage.delete_paper(stored_name)
         raise
 
+    # Committed, so the new paper is safe: the earlier files can go. Best-effort, because a
+    # delete failure must not fail an upload that has already succeeded.
+    for stale in superseded:
+        core.storage.delete_paper(stale)
+
     core.audit.business(
         "paper.submitted",
         actor=core.audit.actor(user),
@@ -259,6 +302,7 @@ async def upload_position_paper(
         committee=delegate.committee,
         file=stored_name,
         bytes=len(data),
+        replaced=len(superseded),
     )
 
     return {

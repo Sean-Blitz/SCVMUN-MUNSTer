@@ -28,6 +28,7 @@ from crud.db import get_db, utcnow
 from API.dependencies import CurrentUser, get_current_user, require_roles
 import core.audit
 import core.monitor
+import core.storage
 from core.controls import BROADCAST_LIMITS, TIMELINE_PHASES
 
 from crud.database_schema import (Account,AuthSession,Base,Broadcast,
@@ -554,6 +555,7 @@ def drop_delegates_and_delete_hashes(
             )
 
     dropped: list[DroppedDelegate] = []
+    orphaned_files: list[str] = []
 
     for country, committee, _committee_type in payload.countryAndCommitteeList:
         delegates = db.scalars(
@@ -568,6 +570,12 @@ def drop_delegates_and_delete_hashes(
                 dropped.append(DroppedDelegate(name=account.name, hash=account.identifier))
                 _revoke_sessions(db, account.id)
 
+            # The paper rows go with the delegate, but their files do not: collect the paths
+            # now and unlink them after the commit, so a failed delete leaves the files (and
+            # the rows) intact rather than the other way round.
+            for upload in delegate.position_papers:
+                orphaned_files.append(upload.file_path)
+
             # Delete the profile row first and flush: its position-paper children are
             # removed by the ORM cascade, and there is no relationship between Account
             # and Delegates for the unit of work to order these two deletes by, so the
@@ -579,6 +587,10 @@ def drop_delegates_and_delete_hashes(
                 db.delete(account)
 
     db.commit()
+
+    # Best-effort: the rows are gone, so a file that cannot be removed is only wasted disk.
+    for stale in orphaned_files:
+        core.storage.delete_paper(stale)
 
     core.audit.technical(
         "delegates.dropped",
