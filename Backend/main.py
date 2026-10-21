@@ -18,6 +18,8 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from API.endpoints import api_router
+import core.audit
+import core.captcha
 import core.monitor
 
 API_PREFIX = "/api"
@@ -30,6 +32,22 @@ async def lifespan(app: FastAPI):
     Started here rather than at import so tests do not spawn threads or write heartbeat
     files, and stopped on shutdown so --reload does not leave one behind.
     """
+    if not core.captcha.enabled():
+        # Not fatal - development and the test suite run this way - but a deployment that
+        # forgot the key would otherwise be silently open, so it goes in the log an admin
+        # actually reads.
+        core.audit.technical(
+            "captcha.disabled",
+            hint="set TURNSTILE_SECRET to require the human check on login and register",
+        )
+    elif not core.captcha.ALLOWED_HOSTNAMES:
+        # Fail-closed is the right default, but it means every login is rejected, so say so
+        # at startup rather than leaving it to the first confused delegate.
+        core.audit.technical(
+            "captcha.misconfigured",
+            hint="TURNSTILE_HOSTNAMES is empty, so every login and registration will be rejected",
+        )
+
     core.monitor.start()
     try:
         yield

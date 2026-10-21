@@ -10,6 +10,7 @@ from sqlalchemy import select
 
 from schemas.request_models import LoginRequest
 from schemas.response_models import LoginResponse, User
+from API.dependencies import require_captcha
 from crud.db import get_db, utcnow
 from crud.database_schema import Account, AuthSession
 import core.audit
@@ -44,7 +45,7 @@ def _start_session(db: Session, user: Account) -> str:
     return token
 
 
-@router.post("/login", response_model=LoginResponse)
+@router.post("/login", response_model=LoginResponse, dependencies=[Depends(require_captcha)])
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
     """
     Exchange a delegate/advisor/chair/admin hash and password for a session token.
@@ -82,7 +83,7 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse
     return LoginResponse(user=User(name=user.name, role=user.role), token=token)
 
 
-@router.post("/register", response_model=LoginResponse)
+@router.post("/register", response_model=LoginResponse, dependencies=[Depends(require_captcha)])
 def register(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
     """
     Register the delegate/advisor/chair/admin identified by a hash, then log them in.

@@ -8,13 +8,20 @@ The frontend attaches `Authorization: Bearer <token>` to every request
 
 from typing import Annotated
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+
+from core import captcha
 
 # auto_error=False so a missing header raises our own 401 with the {"message": ...}
 # body the frontend expects, instead of FastAPI's default {"detail": ...}.
 bearer_scheme = HTTPBearer(auto_error=False)
+
+# The browser sends the Turnstile token here rather than in the JSON body, so the
+# login/register contract does not change and non-browser clients simply omit it when the
+# check is disabled.
+CAPTCHA_HEADER = "X-Turnstile-Token"
 
 
 class CurrentUser(BaseModel):
@@ -63,3 +70,37 @@ def require_roles(*roles: str):
         return user
 
     return guard
+
+
+def require_captcha(
+    request: Request,
+    token: Annotated[str | None, Header(alias=CAPTCHA_HEADER)] = None,
+) -> None:
+    """Require a valid Turnstile token on a pre-auth route.
+
+    A no-op when no secret is configured, which is how development and the test suite run.
+    Otherwise: a missing or rejected token is 400 ("complete the human check"), and a
+    Cloudflare outage is 503 - failing closed, but telling the visitor the difference
+    between "you failed" and "we could not check right now".
+
+    Applied to /auth/login and /auth/register; everything else is behind a bearer token and
+    does not need it.
+    """
+    if not captcha.enabled():
+        return
+
+    client_ip = request.client.host if request.client else None
+
+    try:
+        passed = captcha.verify(token, client_ip)
+    except captcha.CaptchaUnavailable:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "The human check is unavailable right now. Please try again in a moment.",
+        ) from None
+
+    if not passed:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Please complete the human check and try again.",
+        )

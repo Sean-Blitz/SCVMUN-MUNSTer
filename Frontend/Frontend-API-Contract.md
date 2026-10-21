@@ -51,6 +51,25 @@ as `.txt` and `.csv` respectively.
 
 ## 1. Auth — `LoginRegisterView.vue`
 
+Both routes are **pre-auth** and can require a Cloudflare Turnstile token, sent in the
+`X-Turnstile-Token` header (not the JSON body, so the body contract stays as below).
+
+- Required only when the server has `TURNSTILE_SECRET` set. Without it the header is ignored,
+  which is how development and the test suite run; the API writes `captcha.disabled` to the
+  technical log at startup so a production deploy cannot miss it.
+- Three things are checked server-side, not just `success`: the **action** must be `auth`
+  (the widget's configured action), the token must not be older than 5 minutes or reused, and
+  the **hostname** Siteverify reports must be in the server's `TURNSTILE_HOSTNAMES` allow-list.
+  An empty allow-list rejects everything rather than accepting any hostname.
+- A missing, expired (>5 min), reused or forged token → `400` with
+  `{"message": "Please complete the human check and try again."}`. The view shows that in a
+  toast and resets the widget, because Turnstile tokens are single-use.
+- Cloudflare unreachable → `503` `"The human check is unavailable right now. Please try again
+  in a moment."` Fail-closed, but the visitor is told it is not their fault.
+- The site key is `VITE_TURNSTILE_SITE_KEY`, baked in at build time: a production build must
+  be made with it set, or the widget is compiled out while the server still demands a token.
+  The two keys are a pair — set both or neither.
+
 ### 1.1 `POST /auth/login`
 
 Request:

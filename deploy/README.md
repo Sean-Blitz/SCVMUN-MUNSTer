@@ -73,3 +73,70 @@ done
 route, and **12m** only on the upload location — double the app's own 10 MB paper limit
 (`PAPER_MAX_MB` in `core/storage.py`), so the app still gets to answer with its own 413
 message rather than nginx's.
+
+## Cloudflare Turnstile keys
+
+The human check on login/register needs **both** keys, or it is off:
+
+| where | variable | notes |
+| --- | --- | --- |
+| server env | `TURNSTILE_SECRET` | the widget's secret; never in the repo, and it also turns the check on |
+| server env | `TURNSTILE_HOSTNAMES` | **required when the secret is set**; comma-separated frontend hostnames |
+| frontend build | `VITE_TURNSTILE_SITE_KEY` | public; **baked in at build time** |
+
+Store the secret in the ignored `Backend/crud/.env`, without ever putting it in a shell
+history or a chat message:
+
+```bash
+cd Backend/crud
+read -rsp 'Turnstile secret: ' s; echo
+printf '\nTURNSTILE_SECRET=%s\n' "$s" >> .env
+unset s
+```
+
+`TURNSTILE_HOSTNAMES` must list the frontend's hostname exactly as Siteverify reports it:
+
+| deployment | value |
+| --- | --- |
+| production | `scvmun.esuhsd.org` |
+| local development | `localhost,127.0.0.1` |
+
+**Production must not include `localhost` or `127.0.0.1`.** Anyone can serve a page from
+`localhost`, so a shared allow-list would let a token minted on someone else's machine pass
+on the real site — which is the whole reason the flow keeps the two lists apart. An empty
+list is treated as a misconfiguration and *rejects every login*, deliberately: with nothing
+to compare against, accepting any hostname Cloudflare reports would make the check theatre.
+
+The widget's own domain list (Cloudflare dashboard → Turnstile → the widget → Settings) has
+to contain **both** `scvmun.esuhsd.org` and `localhost`, or the widget refuses to render on
+the origin it is served from. Registering both is safe precisely because each deployment
+validates its own hostname above.
+
+The widget is rendered with `action: "auth"`, which Siteverify echoes back; the server
+rejects a token minted for any other action, so the value in
+`Frontend/src/views/auth/LoginRegisterView.vue` and `core/captcha.py` must stay in step.
+
+```bash
+# Frontend/.env (or .env.production) before building:
+VITE_TURNSTILE_SITE_KEY=0x4AAAAAAFfdf-btRVoOqr55
+cd Frontend && npm run build
+```
+
+Because Vite inlines the key, a production bundle built without it has the widget compiled
+out while the API (with the secret set) still demands a token — every login would fail. Set
+both, or neither.
+
+For local development, leave both unset. To exercise the widget without a Cloudflare
+account, use the published test key that always passes:
+`VITE_TURNSTILE_SITE_KEY=1x00000000000000000000AA` with
+`TURNSTILE_SECRET=1x0000000000000000000000000000000AA` (the test secret still calls
+Cloudflare's API, so it needs network access).
+
+Startup tells you which state you are in, in the technical log:
+
+| log line | meaning |
+| --- | --- |
+| `captcha.disabled` | no `TURNSTILE_SECRET`: logins are open (development) |
+| `captcha.misconfigured` | secret set but `TURNSTILE_HOSTNAMES` empty: every login is rejected |
+| (neither) | the check is on |
+

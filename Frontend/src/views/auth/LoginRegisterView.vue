@@ -33,10 +33,16 @@
             />
           </div>
 
+          <div v-if="captchaEnabled" class="captcha-group">
+            <div ref="captchaContainer" class="captcha-widget"></div>
+            <p v-if="captchaError" class="captcha-error">{{ captchaError }}</p>
+          </div>
+
           <div class="button-group">
             <button 
               type="button" 
               @click="handleLogin" 
+              :disabled="isLoading || captchaPending"
               class="btn btn-login"
             >
               Log In
@@ -45,6 +51,7 @@
             <button 
               type="button" 
               @click="handleRegister" 
+              :disabled="isLoading || captchaPending"
               class="btn btn-register"
             >
               First-Time Register
@@ -73,7 +80,7 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
@@ -88,19 +95,114 @@ const userHash = ref('')
 const userPassword = ref('')
 const isLoading = ref(false)
 
+// ---------- Human check (Cloudflare Turnstile) ----------
+// The site key is public and baked in at build time, so leaving it unset disables the
+// widget completely - which is how development runs, matching the backend's behaviour
+// when TURNSTILE_SECRET_KEY is absent.
+const turnstileSiteKey = import.meta.env.VITE_TURNSTILE_SITE_KEY || ''
+const captchaEnabled = Boolean(turnstileSiteKey)
+const TURNSTILE_SCRIPT = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit'
+
+const captchaContainer = ref(null)
+const captchaToken = ref('')
+const captchaWidgetId = ref(null)
+const captchaError = ref('')
+
+// Turnstile tokens are single-use and expire after 5 minutes, so a submission needs one
+// that this page has just obtained: until the callback fires there is nothing to send.
+const captchaPending = computed(() => captchaEnabled && !captchaToken.value)
+
+let scriptPromise = null
+
+const loadTurnstile = () => {
+  if (window.turnstile) return Promise.resolve()
+  if (scriptPromise) return scriptPromise
+
+  scriptPromise = new Promise((resolve, reject) => {
+    const script = document.createElement('script')
+    script.src = TURNSTILE_SCRIPT
+    script.async = true
+    script.defer = true
+    script.onload = () => resolve()
+    script.onerror = () => reject(new Error('Turnstile failed to load'))
+    document.head.appendChild(script)
+  })
+
+  return scriptPromise
+}
+
+const renderCaptcha = () => {
+  if (!captchaEnabled || !window.turnstile || !captchaContainer.value) return
+
+  captchaWidgetId.value = window.turnstile.render(captchaContainer.value, {
+    sitekey: turnstileSiteKey,
+    theme: 'light',
+    // Must match captcha.ACTION in the backend: Siteverify echoes this back and the server
+    // rejects a token minted for any other action.
+    action: 'auth',
+    // Stays out of the way unless Cloudflare decides an interactive challenge is needed.
+    appearance: 'interaction-only',
+    // Fetch a fresh token when the old one expires behind the five-minute limit.
+    'refresh-expired': 'auto',
+    callback: (token) => {
+      captchaToken.value = token
+      captchaError.value = ''
+    },
+    'expired-callback': () => { captchaToken.value = '' },
+    'timeout-callback': () => { captchaToken.value = '' },
+    'error-callback': () => {
+      captchaToken.value = ''
+      captchaError.value = 'The human check failed to run. Please refresh the page.'
+    }
+  })
+}
+
+// A failed submit has consumed the token (they are single-use), so the next attempt needs
+// a fresh one. Safe to call on any error, including a network failure.
+const resetCaptcha = () => {
+  captchaToken.value = ''
+  if (captchaWidgetId.value !== null && window.turnstile) {
+    window.turnstile.reset(captchaWidgetId.value)
+  }
+}
+
+const captchaHeaders = () =>
+  captchaEnabled && captchaToken.value ? { 'X-Turnstile-Token': captchaToken.value } : {}
+
+onMounted(async () => {
+  if (!captchaEnabled) return
+  try {
+    await loadTurnstile()
+    renderCaptcha()
+  } catch (error) {
+    captchaError.value = 'The human check could not load. Please refresh the page.'
+  }
+})
+
+onBeforeUnmount(() => {
+  if (captchaWidgetId.value !== null && window.turnstile) {
+    window.turnstile.remove(captchaWidgetId.value)
+  }
+})
+
 const handleLogin = async () => {
   if (!userHash.value || !userPassword.value) {
     toastStore.showToast('Please enter both your hash and password.', 'error')
+    return
+  }
+  if (captchaPending.value) {
+    toastStore.showToast('Please complete the human check first.', 'error')
     return
   }
 
   isLoading.value = true
   try {
     // 1. Send credentials to backend login endpoint
-    const response = await apiClient.post('/auth/login', {
-      hash: userHash.value,
-      password: userPassword.value
-    })
+    const response = await apiClient.post(
+      '/auth/login',
+      { hash: userHash.value, password: userPassword.value },
+      { headers: captchaHeaders() }
+    )
 
     // 2. Extract returned user and token
     const { user, token } = response.data
@@ -114,6 +216,7 @@ const handleLogin = async () => {
     router.push(`/${user.role}/dashboard`)
   } catch (error) {
     // Backend error message will automatically trigger via the global Toast Interceptor
+    resetCaptcha()
   } finally {
     isLoading.value = false
   }
@@ -124,14 +227,19 @@ const handleRegister = async () => {
     toastStore.showToast('Please enter both your hash and password.', 'error')
     return
   }
+  if (captchaPending.value) {
+    toastStore.showToast('Please complete the human check first.', 'error')
+    return
+  }
 
   isLoading.value = true
   try {
     // 1. Send registration payload to backend
-    const response = await apiClient.post('/auth/register', {
-      hash: userHash.value,
-      password: userPassword.value
-    })
+    const response = await apiClient.post(
+      '/auth/register',
+      { hash: userHash.value, password: userPassword.value },
+      { headers: captchaHeaders() }
+    )
 
     const { user, token } = response.data
 
@@ -144,6 +252,7 @@ const handleRegister = async () => {
     router.push(`/${user.role}/dashboard`)
   } catch (error) {
     // Backend error message handles popup automatically
+    resetCaptcha()
   } finally {
     isLoading.value = false
   }
@@ -273,6 +382,25 @@ const handleRegister = async () => {
   cursor: pointer;
   font-size: 0.95rem;
   transition: background-color 0.2s ease;
+}
+
+.captcha-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+
+.captcha-error {
+  margin: 0;
+  color: #b33;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .btn-login {
