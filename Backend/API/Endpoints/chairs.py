@@ -357,6 +357,7 @@ def grade_position_paper(
 
     delegate.paper_rubric_grade = scores
     delegate.paper_comments = comments or None
+
     delegate.paper_grade = f"{_format_number(earned)}/{_format_number(possible)}"
     delegate.paper_status = "graded"
     db.commit()
@@ -371,8 +372,7 @@ def grade_position_paper(
         criteria=len(scores),
         regrade=already_graded,
     )
-
-    return {"message": "Grade saved.", "totalScore": delegate.paper_grade}
+    return {"message": "Grade saved.", "totalScore": delegate.paper_grade} # type: ignore[return-value]
 
 
 @router.get("/papers/{delegate_id}/download")
