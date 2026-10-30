@@ -31,6 +31,24 @@ from crud.database_schema import Base
 from crud.db import DATABASE_URL, engine
 
 
+def ensure_schema(bind) -> list[str]:
+    """Create every table in Base.metadata that is missing; return their names.
+
+    The one place that knows how to make the schema, shared with crud/bootstrap.py so the
+    two scripts cannot drift. Safe to call any number of times, and a no-op when the tables
+    already exist - `create_all` checks before emitting DDL.
+
+    Raises SystemExit with the driver's own message (Postgres not running, database or
+    credentials missing) rather than a bare traceback, because that is the likely cause.
+    """
+    try:
+        Base.metadata.create_all(bind=bind)
+    except SQLAlchemyError as exc:
+        raise SystemExit(f"Could not create tables: {exc}") from exc
+
+    return sorted(Base.metadata.tables)
+
+
 def main() -> None:
     """Create every table in Base.metadata; skip any that already exist."""
     if not DATABASE_URL:
@@ -43,15 +61,9 @@ def main() -> None:
     target = engine.url.render_as_string(hide_password=True)
     print(f"Creating tables in {target} ...")
 
-    try:
-        Base.metadata.create_all(bind=engine)
-    except SQLAlchemyError as exc:
-        # Most often: Postgres is not running, or the database/credentials in
-        # DATABASE_URL do not exist yet. Surface the driver's message instead of a
-        # bare traceback.
-        raise SystemExit(f"Could not create tables: {exc}") from exc
+    tables = ensure_schema(engine)
 
-    print("Tables present: " + ", ".join(sorted(Base.metadata.tables)))
+    print("Tables present: " + ", ".join(tables))
 
     # Recorded only when the application has already created its log directory: running
     # this script as another user (root, say) must not leave root-owned 0600 log files

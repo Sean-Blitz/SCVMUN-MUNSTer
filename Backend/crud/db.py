@@ -5,7 +5,15 @@ from dotenv import load_dotenv; load_dotenv()  # Load environment variables from
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-DATABASE_URL: str = os.getenv("DATABASE_URL", "")  # Replace with your actual database URL
+DATABASE_URL: str = os.getenv("DATABASE_URL", "")  # e.g. postgresql+psycopg2://user:pass@host/db
+
+if not DATABASE_URL:
+    # create_engine("") raises a URL-parse error that says nothing about the cause. In a
+    # container there is no .env to fall back on, so this is the likely first failure.
+    raise SystemExit(
+        "DATABASE_URL is not set. Set it in the environment (containers) or in "
+        "Backend/crud/.env (local development)."
+    )
 
 # Basic logic of this file: This sets up the database connection and session management for SQLAlchemy.
 # Each session is basically an interaction between Python and the database. Whenever someone wants to read/update data in the database, Python endpoints see it.

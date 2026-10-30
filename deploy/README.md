@@ -140,3 +140,88 @@ Startup tells you which state you are in, in the technical log:
 | `captcha.misconfigured` | secret set but `TURNSTILE_HOSTNAMES` empty: every login is rejected |
 | (neither) | the check is on |
 
+## Running it in Docker
+
+The image is `Backend/Dockerfile`, built from `Backend/`:
+
+```bash
+docker build -t scvmun-api Backend/
+```
+
+Everything the app writes lives under `/data` — submitted papers, audit logs, and the
+heartbeat history the dashboard reports as uptime — so one volume holds all the state that
+must survive a rebuild:
+
+```bash
+docker run -d --name scvmun-api \
+  --env-file Backend/crud/.env \
+  -e DATABASE_URL='postgresql+psycopg2://scvmun:CHANGEME@host.docker.internal:5432/scvmun' \
+  -e FORWARDED_ALLOW_IPS=172.17.0.1 \
+  --add-host host.docker.internal:host-gateway \
+  -p 127.0.0.1:8001:8000 \
+  -v /srv/scvmun/data:/data \
+  --restart unless-stopped \
+  scvmun-api
+```
+
+Notes that matter:
+
+- **`-p 127.0.0.1:8001:8000`** keeps uvicorn off the public interface; nginx is the only
+  thing listening publicly. Point `proxy_pass` at `127.0.0.1:8001`.
+- **The driver must be in the URL**: `postgresql+psycopg2://…`, not `postgresql://`.
+  SQLAlchemy resolves the bare form to the psycopg **v3** dialect, while
+  `requirements.txt` installs `psycopg2-binary`, so the bare form dies at import with
+  `ModuleNotFoundError: No module named 'psycopg'`. Either spell the driver out (what the
+  project does) or add `psycopg[binary]` to the requirements.
+- **`--add-host host.docker.internal:host-gateway`** is how the container reaches a
+  Postgres on the bare metal host. Postgres needs `listen_addresses = '*'` and a
+  `pg_hba.conf` line for the docker bridge, e.g.
+  `host all all 172.17.0.0/16 scram-sha-256`.
+- **`FORWARDED_ALLOW_IPS`** must name the proxy that reaches the container. With the
+  command above that is the bridge gateway (`172.17.0.1`); leaving it at `127.0.0.1` makes
+  every request look like one client and silently collapses the per-IP limits.
+- **The image contains no secrets.** `Backend/crud/.env` is excluded by
+  `Backend/.dockerignore` and configuration arrives through `--env-file`/`-e`.
+- **One worker.** The audit log handlers and the heartbeat thread are per-process; add
+  `--workers` only after revisiting `core/monitor.py`'s deduplication.
+- **`/data` ownership.** The container runs as uid 10001, and storage plus audit logs are
+  written `0600`, so a bind mount must be owned by that uid: `chown -R 10001:10001 /srv/scvmun/data`.
+
+The health probe is `GET /healthz`, which runs `SELECT 1`, so `docker ps` shows unhealthy
+when the API is up but the database is not. `HEALTHCHECK` is built into the image.
+
+For local development there is a compose file at the repo root that pairs the API with a
+`postgres:16` container (no Postgres install needed on the Mac):
+
+```bash
+docker compose up -d --build
+docker compose exec api python -m crud.bootstrap --admin-name "You"
+curl -s localhost:8001/healthz
+```
+
+## First-run bootstrap
+
+`crud/seed.py` creates tables and nothing else. The first admin and the schools come from
+`crud/bootstrap.py`, which calls the same `ensure_schema()` and then fills in rows:
+
+```bash
+# native
+python -m crud.bootstrap --admin-name "Ethan Santiago" --schools ../deploy/schools.example.json
+
+# in the container
+docker compose run --rm api python -m crud.bootstrap --admin-name "Ethan" --schools /schools.json
+```
+
+- Creates every missing table, one **admin** account with no password, and one **advisor**
+  account plus `School` row per entry in the `--schools` file
+  (`deploy/schools.example.json` shows the shape).
+- **Schools have to exist before anything else works**: `POST /admin/hashes` requires one
+  and no endpoint creates it. Committees are *not* needed — minting a hash creates them —
+  and the checklist and timeline are editable from the admin UI afterwards.
+- Prints each access code **once**. Both the admin and every advisor claim theirs with
+  "First-Time Register" on the login screen, so no password is ever invented by the script.
+  A lost advisor code can be read back with
+  `SELECT name, identifier FROM accounts WHERE role = 'advisor';`.
+- **Idempotent**: an existing admin is left alone (never reset), an existing school is
+  skipped, so re-running after adding a school only adds that school.
+- Records `bootstrap.completed` in the technical log.

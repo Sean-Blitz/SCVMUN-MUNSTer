@@ -11,16 +11,20 @@ Interactive docs (generated from the response models) are at /docs.
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import Depends, FastAPI, HTTPException, Request, status
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from API.endpoints import api_router
 import core.audit
 import core.captcha
 import core.monitor
+from crud.db import get_db
 
 API_PREFIX = "/api"
 
@@ -129,3 +133,20 @@ app.include_router(api_router, prefix=API_PREFIX)
 def root() -> dict[str, str]:
     """Convenience landing route; not part of the frontend contract."""
     return {"message": "SCVMUN Platform API", "docs": "/docs"}
+
+
+@app.get("/healthz", tags=["meta"])
+def healthz(db: Session = Depends(get_db)) -> dict[str, str]:
+    """Liveness probe for the container healthcheck and an external monitor.
+
+    Deliberately unauthenticated and deliberately not shallow: the API process answering
+    while the database is unreachable is the failure a process-only check hides, and it is
+    the one that takes a conference down. Reveals nothing beyond up/down.
+    """
+    try:
+        db.execute(text("SELECT 1"))
+    except SQLAlchemyError:
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE, "Database unavailable."
+        ) from None
+    return {"status": "ok"}

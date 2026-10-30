@@ -1,0 +1,16 @@
+[
+  {
+    "school_name": "Example High School",
+    "school_address": "1 Example Way",
+    "city": "Santa Clarita",
+    "state": "CA",
+    "zip_code": "91350",
+    "advisor_name": "Jane Doe",
+    "advisor_phone": "555-0100",
+    "advisor_email": "jane.doe@example.edu",
+    "head_delegate_name": "Alex Smith",
+    "head_delegate_email": "alex.smith@example.edu",
+    "head_delegate_phone": "555-0101",
+    "payment_status": "unpaid"
+  }
+]
