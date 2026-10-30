@@ -313,10 +313,15 @@ class SchoolChecklistResponse(BaseModel):
 
 
 class SchoolEntry(BaseModel):
-    """One school, for the progress picker."""
+    """One school, for the progress picker and the school/advisor hash tooling.
+
+    `advisor_hash` is the access code the advisor signs up with. Admin-only, so it is
+    returned unmasked - the same way /admin/hashes returns the delegates' real hashes.
+    """
 
     id: int  # schools.account_id, which is the advisor's account id
     name: str
+    advisor_hash: str | None = None
 
 
 class SchoolListResponse(BaseModel):

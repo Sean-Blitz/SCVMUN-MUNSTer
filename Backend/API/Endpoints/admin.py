@@ -29,12 +29,13 @@ from API.dependencies import CurrentUser, get_current_user, require_roles
 import core.audit
 import core.monitor
 import core.storage
+import crud.onboarding as onboarding
 from core.controls import BROADCAST_LIMITS, TIMELINE_PHASES
 
 from crud.database_schema import (Account,AuthSession,Base,Broadcast,
     ChecklistProgress,Committees,ConferenceChecklist,Delegates,
     School,TimelineEvent)
-from schemas.request_models import (BroadcastRequest,BroadcastUpdateRequest,
+from schemas.request_models import (BroadcastRequest,BroadcastUpdateRequest,SchoolRequest,
     ChecklistProgressRequest,ChecklistUpdateRequest,DelegateHashRequest,DropDelegatesRequest,
     NewHashRequest,SchoolHashRequest,TimelineUpdateRequest)
 
@@ -313,9 +314,8 @@ def export_database_csv(
 
 
 def _mint_hash() -> str:
-    """Mint a fresh login hash for an account.
-    """
-    return secrets.token_hex(8)
+    """Mint a fresh login hash for an account (see crud.onboarding for the reason)."""
+    return onboarding.mint_hash()
 
 
 def _display_name(school_name: str, key: str) -> str:
@@ -329,7 +329,7 @@ def _get_school(db: Session, school_name: str) -> School:
     if school is None:
         raise HTTPException(
             status.HTTP_404_NOT_FOUND,
-            f"Unknown school '{school_name}'. It must exist before its delegates can get hashes.",
+            f"Unknown school '{school_name}'. Create it with POST /admin/schools first.",
         )
     return school
 
@@ -351,15 +351,20 @@ def _revoke_sessions(db: Session, account_id: int) -> None:
 
 
 @router.post("/hashes", response_model=HashListResponse, status_code=status.HTTP_201_CREATED)
-def create_school_or_delegate_hashes(
+def create_delegate_hashes(
     payload: NewHashRequest,
     user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ) -> HashListResponse:
     """
-    Register new delegates for a school and return the hash minted for each one.
+    Mint a login hash for each new delegate of an existing school.
 
-    `payload.school_name` names an existing school; its advisor account owns the new
+    **This does not create the school.** The name is deliberate: the school, its advisor
+    account and the advisor's own hash come from POST /admin/schools, because a school row
+    needs details this request has no room for (address, advisor contacts, payment status).
+    An unknown name is a 404 that points at that endpoint.
+
+    `payload.school_name` names the existing school; its advisor account owns the new
     delegates. The keys of `payload.finalAssignments` are per-school display labels
     ("1", "2") and each value is positional: [committee, committeeType, country].
     `committeeType` has no column in the schema (leftover from the CLI's shape), so it
@@ -943,15 +948,82 @@ def _school_checklist(db: Session, school: School) -> SchoolChecklistResponse:
     )
 
 
+@router.post("/schools", response_model=SchoolEntry, status_code=status.HTTP_201_CREATED)
+def create_school(
+    payload: SchoolRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SchoolEntry:
+    """
+    Create a school and issue its advisor's login hash.
+
+    A school cannot exist without an advisor - `schools.account_id` is the advisor's account
+    id - so this creates both, with `password_hash` NULL: the advisor claims the hash through
+    "First-Time Register" on the login screen, exactly as a delegate does. The hash is
+    returned because this is the only moment the admin is guaranteed to see it.
+
+    Hashes for the school's delegates come afterwards, from POST /admin/hashes.
+    """
+    values = payload.model_dump()
+
+    missing = onboarding.missing_fields(values)
+    if missing:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Missing required school details: " + ", ".join(missing) + ".",
+        )
+
+    if values["payment_status"] not in onboarding.PAYMENT_STATUSES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "payment_status must be one of: "
+            + ", ".join(onboarding.PAYMENT_STATUSES)
+            + ".",
+        )
+
+    school_name = values["school_name"].strip()
+    if db.scalars(select(School).where(School.school_name == school_name)).first() is not None:
+        # Not a hash-reissue: keeping the same school_name is what ties its delegates'
+        # papers, progress ticks and invoices together, so a duplicate is a mistake to
+        # surface, not something to merge.
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            f"A school named '{school_name}' already exists.",
+        )
+
+    advisor, _school = onboarding.create_school_with_advisor(db, values=values)
+    db.commit()
+
+    core.audit.technical(
+        "school.created",
+        actor=core.audit.actor(user),
+        school=school_name,
+        advisor=advisor.id,
+    )
+
+    return SchoolEntry(id=advisor.id, name=school_name, advisor_hash=advisor.identifier)
+
+
 @router.get("/schools", response_model=SchoolListResponse)
 def list_schools(
     user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Session = Depends(get_db),
 ) -> SchoolListResponse:
-    """Every school, for the progress picker (and for a script that needs the ids)."""
-    schools = db.scalars(select(School).order_by(School.school_name)).all()
+    """Every school, with its advisor's hash, for the progress picker and the hash tooling.
+
+    The advisor hash is included so a code that was misplaced can be read back without a
+    database query; admin-only, and the same exposure as GET /admin/hashes for delegates.
+    """
+    rows = db.execute(
+        select(School, Account.identifier)
+        .join(Account, Account.id == School.account_id)
+        .order_by(School.school_name)
+    ).all()
     return SchoolListResponse(
-        schools=[SchoolEntry(id=school.account_id, name=school.school_name) for school in schools]
+        schools=[
+            SchoolEntry(id=school.account_id, name=school.school_name, advisor_hash=identifier)
+            for school, identifier in rows
+        ]
     )
 
 

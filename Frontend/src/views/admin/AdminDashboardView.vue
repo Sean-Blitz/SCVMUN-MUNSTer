@@ -155,6 +155,116 @@
 
     <!-- ============================ HASH MANAGEMENT ============================ -->
     <template v-if="activeTab === 'hashes'">
+      <!-- CREATE A SCHOOL (and its advisor account) -->
+      <div class="section-card">
+        <h2>Create a School</h2>
+        <p class="section-desc">
+          Creates the school and its advisor account, and issues the advisor's login hash. The
+          advisor claims it with "First-Time Register", exactly as a delegate does. Delegate
+          hashes can be generated below once the school exists.
+        </p>
+
+        <div class="school-fields">
+          <div class="field-pair">
+            <label class="field-label" for="new-school-name">School name</label>
+            <input id="new-school-name" v-model="newSchool.school_name" class="text-input" type="text" placeholder="e.g. Lincoln High School" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-address">Address</label>
+            <input id="new-school-address" v-model="newSchool.school_address" class="text-input" type="text" placeholder="1 Main St" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-city">City</label>
+            <input id="new-school-city" v-model="newSchool.city" class="text-input" type="text" placeholder="San Jose" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-state">State</label>
+            <input id="new-school-state" v-model="newSchool.state" class="text-input" type="text" placeholder="CA" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-zip">ZIP</label>
+            <input id="new-school-zip" v-model="newSchool.zip_code" class="text-input" type="text" placeholder="95112" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-payment">Payment status</label>
+            <select id="new-school-payment" v-model="newSchool.payment_status" class="text-input">
+              <option value="unpaid">unpaid</option>
+              <option value="partially paid">partially paid</option>
+              <option value="paid">paid</option>
+            </select>
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-advisor">Advisor name</label>
+            <input id="new-school-advisor" v-model="newSchool.advisor_name" class="text-input" type="text" placeholder="Jane Doe" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-advisor-email">Advisor email</label>
+            <input id="new-school-advisor-email" v-model="newSchool.advisor_email" class="text-input" type="text" placeholder="jane@school.edu" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-advisor-phone">Advisor phone</label>
+            <input id="new-school-advisor-phone" v-model="newSchool.advisor_phone" class="text-input" type="text" placeholder="555-0100" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-head">Head delegate</label>
+            <input id="new-school-head" v-model="newSchool.head_delegate_name" class="text-input" type="text" placeholder="Alex Smith" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-head-email">Head delegate email</label>
+            <input id="new-school-head-email" v-model="newSchool.head_delegate_email" class="text-input" type="text" placeholder="alex@school.edu" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="new-school-head-phone">Head delegate phone</label>
+            <input id="new-school-head-phone" v-model="newSchool.head_delegate_phone" class="text-input" type="text" placeholder="555-0101" />
+          </div>
+        </div>
+
+        <div class="row-actions">
+          <button class="btn-refresh" :disabled="creatingSchool" @click="createSchool">
+            {{ creatingSchool ? 'Creating...' : 'Create School & Issue Advisor Hash' }}
+          </button>
+        </div>
+
+        <div v-if="createdSchool" class="hash-result">
+          <h3>Advisor hash for {{ createdSchool.name }}</h3>
+          <div class="hash-row">
+            <span class="hash-name">{{ createdSchool.name }} — advisor</span>
+            <span class="hash-value">{{ createdSchool.advisor_hash }}</span>
+            <button class="btn-copy" @click="copyHash(createdSchool.advisor_hash)">Copy</button>
+          </div>
+          <p class="section-desc">
+            Give this to the advisor. It is shown again in the school list below, and it cannot
+            be reissued from here.
+          </p>
+        </div>
+
+        <div v-if="schools.length" class="school-list">
+          <h3>Schools</h3>
+          <div v-for="school in schools" :key="school.id" class="school-block">
+            <div class="hash-row">
+              <span class="hash-name">{{ school.name }}</span>
+              <span class="hash-value">{{ school.advisor_hash || 'no advisor hash' }}</span>
+              <button v-if="school.advisor_hash" class="btn-copy" @click="copyHash(school.advisor_hash)">Copy</button>
+              <button
+                class="btn-copy"
+                :disabled="generatingForSchool === school.id"
+                title="Mints a hash for each delegate row you filled in below, for this school"
+                @click="generateHashesForSchool(school)"
+              >
+                {{ generatingForSchool === school.id ? 'Generating…' : 'Issue delegate hashes' }}
+              </button>
+            </div>
+            <div v-if="delegateHashesBySchool[school.id]" class="hash-result">
+              <div v-for="entry in delegateHashesBySchool[school.id]" :key="entry.name" class="hash-row">
+                <span class="hash-name">{{ entry.name }}</span>
+                <span class="hash-value">{{ entry.hash }}</span>
+                <button class="btn-copy" @click="copyHash(entry.hash)">Copy</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
       <!-- CREATE + REGENERATE -->
       <div class="section-card">
         <h2>Generate Hashes for New Delegates</h2>
@@ -715,6 +825,68 @@ const checkingPorts = ref(false)
 
 // ---------- Hash management state ----------
 const schoolName = ref('')
+
+// ---------- Create a school (POST /admin/schools) ----------
+const emptySchool = () => ({
+  school_name: '',
+  school_address: '',
+  city: '',
+  state: '',
+  zip_code: '',
+  payment_status: 'unpaid',
+  advisor_name: '',
+  advisor_email: '',
+  advisor_phone: '',
+  head_delegate_name: '',
+  head_delegate_email: '',
+  head_delegate_phone: ''
+})
+
+const newSchool = ref(emptySchool())
+const creatingSchool = ref(false)
+const createdSchool = ref(null)
+
+// Per-school delegate hashes, keyed by school id, plus which row is mid-request.
+const delegateHashesBySchool = ref({})
+const generatingForSchool = ref(null)
+
+const createSchool = async () => {
+  const required = [
+    ['school_name', 'school name'],
+    ['school_address', 'address'],
+    ['city', 'city'],
+    ['state', 'state'],
+    ['zip_code', 'ZIP code'],
+    ['advisor_name', 'advisor name'],
+    ['advisor_email', 'advisor email'],
+    ['advisor_phone', 'advisor phone'],
+    ['head_delegate_name', 'head delegate name'],
+    ['head_delegate_email', 'head delegate email'],
+    ['head_delegate_phone', 'head delegate phone']
+  ]
+  const missing = required.filter(([key]) => !String(newSchool.value[key] || '').trim())
+  if (missing.length) {
+    toastStore.showToast(
+      `Please fill in: ${missing.map(([, label]) => label).join(', ')}.`,
+      'error'
+    )
+    return
+  }
+
+  creatingSchool.value = true
+  try {
+    const response = await apiClient.post('/admin/schools', newSchool.value)
+    createdSchool.value = response.data
+    newSchool.value = emptySchool()
+    // The school must show up in the progress picker and in the list above.
+    await loadSchools()
+    toastStore.showToast(`${response.data.name} created — advisor hash issued.`, 'success')
+  } catch (error) {
+    // 409 for a duplicate name and the 400s come through the global toast interceptor
+  } finally {
+    creatingSchool.value = false
+  }
+}
 const newDelegates = ref([{ committee: '', committeeType: '', country: '' }])
 const generatingHashes = ref(false)
 const generatedHashes = ref([])
@@ -872,6 +1044,9 @@ const broadcastGroups = computed(() => {
 const switchTab = (tab) => {
   activeTab.value = tab
   editingId.value = null
+  if (tab === 'hashes' && schools.value.length === 0) {
+    loadSchools()
+  }
   if (tab === 'hashes' && lookupHashes.value.length === 0) {
     lookupHashesForSchool()
   }
@@ -942,16 +1117,11 @@ const removeDelegateRow = (index) => {
   newDelegates.value.splice(index, 1)
 }
 
-const generateHashes = async () => {
-  const school = schoolName.value.trim()
-  if (!school) {
-    toastStore.showToast('Enter a school name before generating hashes.', 'error')
-    return
-  }
-
-  // Key each delegate by its position ("1", "2"); the value is [committee, type, country].
-  // The school travels separately as `school_name`, and the backend labels each entry
-  // "<school> - #<n>" for display.
+// The delegate rows entered in the card below, keyed by position ("1", "2"); each value is
+// [committee, type, country]. The school travels separately as `school_name`, and the
+// backend labels every entry "<school> - #<n>" for display. Shared by both entry points so
+// there is one definition of what gets submitted.
+const buildAssignments = () => {
   const finalAssignments = {}
   newDelegates.value.forEach((row, index) => {
     if (!row.committee.trim() && !row.committeeType.trim() && !row.country.trim()) return
@@ -961,24 +1131,54 @@ const generateHashes = async () => {
       row.country.trim()
     ]
   })
+  return finalAssignments
+}
 
+// POST /admin/hashes for one school name. Returns null when there is nothing to send, so
+// callers can bail without treating it as an error; real failures throw.
+const requestHashes = async (school) => {
+  const finalAssignments = buildAssignments()
   if (Object.keys(finalAssignments).length === 0) {
-    toastStore.showToast('Add at least one delegate row.', 'error')
+    toastStore.showToast('Add at least one delegate row first.', 'error')
+    return null
+  }
+  const response = await apiClient.post('/admin/hashes', { school_name: school, finalAssignments })
+  return response.data.hashes || []
+}
+
+const generateHashes = async () => {
+  const school = schoolName.value.trim()
+  if (!school) {
+    toastStore.showToast('Enter a school name before generating hashes.', 'error')
     return
   }
 
   generatingHashes.value = true
   try {
-    const response = await apiClient.post('/admin/hashes', {
-      school_name: school,
-      finalAssignments
-    })
-    generatedHashes.value = response.data.hashes
+    const hashes = await requestHashes(school)
+    if (hashes === null) return
+    generatedHashes.value = hashes
     toastStore.showToast('Hashes generated.', 'success')
   } catch (error) {
     // Errors automatically pop up via global toast interceptor
   } finally {
     generatingHashes.value = false
+  }
+}
+
+// Issued from the school list: the school name comes from the row, the delegates from the
+// rows below. Results are stored per school so they appear where the button was clicked.
+const generateHashesForSchool = async (school) => {
+  generatingForSchool.value = school.id
+  try {
+    const hashes = await requestHashes(school.name)
+    if (hashes === null) return
+    delegateHashesBySchool.value = { ...delegateHashesBySchool.value, [school.id]: hashes }
+    toastStore.showToast(`${hashes.length} hash(es) issued for ${school.name}.`, 'success')
+  } catch (error) {
+    // Errors automatically pop up via global toast interceptor
+  } finally {
+    generatingForSchool.value = null
   }
 }
 
@@ -1939,6 +2139,29 @@ onMounted(async () => {
   border: 1px solid #e8c604;
   border-radius: 6px;
   padding: 12px;
+}
+
+.school-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0 16px;
+}
+
+.field-pair {
+  display: flex;
+  flex-direction: column;
+}
+
+.school-list {
+  margin-top: 18px;
+}
+
+.school-block {
+  margin-bottom: 12px;
+}
+
+.school-list h3 {
+  margin: 0 0 8px;
 }
 
 .hash-row {

@@ -39,6 +39,27 @@ class AwardAssignmentRequest(BaseModel):
 # frontend-facing API.
 
 
+class SchoolRequest(BaseModel):
+    """A new school and the advisor account that comes with it.
+
+    Every field except `payment_status` and `invoiceURL` is required: the school row has
+    NOT NULL columns for them, and an advisor cannot be reached without a phone or email.
+    """
+    school_name: str
+    school_address: str
+    city: str
+    state: str
+    zip_code: str
+    advisor_name: str
+    advisor_phone: str
+    advisor_email: str
+    head_delegate_name: str
+    head_delegate_email: str
+    head_delegate_phone: str
+    payment_status: str = "unpaid"
+    invoiceURL: str | None = None
+
+
 class NewHashRequest(BaseModel):
     """
     Delegates to create, keyed by a display name such as "1".

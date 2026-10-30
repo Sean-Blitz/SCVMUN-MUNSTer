@@ -11,8 +11,13 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.orm import Session
 
 from core import captcha
+from core.security import hash_token
+from crud.database_schema import Account, AuthSession
+from crud.db import get_db, utcnow
 
 # auto_error=False so a missing header raises our own 401 with the {"message": ...}
 # body the frontend expects, instead of FastAPI's default {"detail": ...}.
@@ -34,18 +39,38 @@ class CurrentUser(BaseModel):
 
 def get_current_user(
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    db: Annotated[Session, Depends(get_db)],
 ) -> CurrentUser:
     """
     Resolve the bearer token into the user it belongs to.
 
-    TODO: validate `credentials.credentials` against the session store created by
-    /auth/login and return the matching account. Until then every authenticated
-    request returns 401.
+    The token itself is never stored - `core.security.hash_token` digests it at issue time -
+    so this looks the digest up in `sessions` and joins the account. Expiry is checked here
+    rather than by a cleanup job: a stale row is harmless as long as it cannot authenticate,
+    and deleting it on the way through would turn every read into a write.
+
+    One 401 message for "no such session" and "expired session" on purpose: telling a caller
+    which of the two it is would confirm that a token was once valid.
     """
     if credentials is None:
         raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Authentication required.")
 
-    raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired session token.")
+    row = db.execute(
+        select(Account, AuthSession.expires_at)
+        .join(AuthSession, AuthSession.account_id == Account.id)
+        .where(AuthSession.token_hash == hash_token(credentials.credentials))
+    ).first()
+
+    if row is None:
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired session token.")
+
+    account, expires_at = row
+
+    # Naive UTC on both sides, like every other timestamp column (see crud.db.utcnow).
+    if expires_at is not None and expires_at <= utcnow():
+        raise HTTPException(status.HTTP_401_UNAUTHORIZED, "Invalid or expired session token.")
+
+    return CurrentUser(id=account.id, name=account.name, role=account.role)
 
 
 def require_roles(*roles: str):

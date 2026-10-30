@@ -608,8 +608,11 @@ Request:
 ```
 
 Field notes:
-- `school_name` identifies the school the new delegates belong to. It must match an
-  existing school; an unknown name returns `404` with a `{"message": ...}` body.
+- `school_name` identifies the school the new delegates belong to. **This endpoint does not
+  create the school** (it was named `create_school_or_delegate_hashes` before the split, and
+  no school was ever created there): an unknown name returns `404` pointing at
+  `POST /admin/schools`, which creates the school, its advisor account and the advisor's
+  hash. Create first, then mint delegates.
 - `finalAssignments` keys are the per-school labels the form uses as row positions
   ("1", "2", …); the backend turns each into the `<school> - #<key>` display name.
   Its value is positional — `[committee, committeeType, country]` (the CLI's
@@ -818,12 +821,55 @@ case-insensitively, so a line can also be addressed by name.
 Limits: at most **20** lines, each label 200 characters or fewer after trimming, no blank
 labels and no duplicates (`400` otherwise).
 
-#### 8.7.1 `GET /admin/schools`
+#### 8.7.1 `POST /admin/schools`
 
-Response `200`: `{ "schools": [ { "id": 7, "name": "Lincoln High School" } ] }` — `id` is
-`schools.account_id`. Used by the progress picker, and by a script that needs the ids.
+Creates a school **and its advisor account**, and issues the advisor's login hash.
 
-#### 8.7.2 `GET /admin/checklist`
+```json
+{
+  "school_name": "Lincoln High School",
+  "school_address": "1 Main St",
+  "city": "San Jose",
+  "state": "CA",
+  "zip_code": "95112",
+  "advisor_name": "Jane Doe",
+  "advisor_phone": "555-0100",
+  "advisor_email": "jane@lhs.edu",
+  "head_delegate_name": "Alex Smith",
+  "head_delegate_email": "alex@lhs.edu",
+  "head_delegate_phone": "555-0101",
+  "payment_status": "unpaid",
+  "invoiceURL": null
+}
+```
+
+Response `201`: `{ "id": 7, "name": "Lincoln High School", "advisor_hash": "8987407363cd1356" }`
+— `id` is `schools.account_id`, i.e. the advisor's account id.
+
+Field notes:
+- **A school cannot exist without an advisor**: `schools.account_id` *is* its primary key. The
+  advisor account is created with no password, so the advisor claims the hash through
+  **First-Time Register** on the login screen — the same flow as a delegate. There is no
+  separate "create advisor" step.
+- `advisor_hash` is the only chance the admin is guaranteed to see the code; it is also
+  returned by `GET /admin/schools` afterwards, so it can be recovered.
+- `payment_status` is one of `paid`, `partially paid`, `unpaid` (default `unpaid`);
+  `invoiceURL` is optional.
+- `400` when a required detail is blank (the message names the fields), `409` when the
+  school name is taken. Names are not merged: the name is what ties a school's delegates,
+  papers and ticks together.
+- Delegate hashes for the school come afterwards from `POST /admin/hashes`. Minting does
+  **not** create a school; an unknown name is a `404` pointing here.
+
+#### 8.7.2 `GET /admin/schools`
+
+Response `200`:
+`{ "schools": [ { "id": 7, "name": "Lincoln High School", "advisor_hash": "8987407363cd1356" } ] }`
+— `id` is `schools.account_id`, `advisor_hash` is the advisor's login code (admin-only, so
+unmasked). Used by the progress picker, the school list in the Hash Management tab, and by a
+script that needs either the ids or the codes.
+
+#### 8.7.3 `GET /admin/checklist`
 
 The shared lines, in display order.
 
@@ -831,7 +877,7 @@ The shared lines, in display order.
 { "items": [ { "id": 3, "label": "Submit position papers" } ] }
 ```
 
-#### 8.7.3 `PUT /admin/checklist`
+#### 8.7.4 `PUT /admin/checklist`
 
 Request — the whole set of lines, in the order they should appear:
 
@@ -847,11 +893,11 @@ Request — the whole set of lines, in the order they should appear:
 Field notes:
 - `id` omitted creates a new line; `id` present renames/reorders the existing one and keeps
   its ticks. Line `1` above is deleted, and with it every school's tick for it.
-- Response `200`: the saved lines, as in §8.7.2; `{"items": []}` clears the checklist for
+- Response `200`: the saved lines, as in §8.7.3; `{"items": []}` clears the checklist for
   everyone. `400` for a blank, over-long or duplicate label, a repeated id, or more than 20
   lines; `404` for an unknown id.
 
-#### 8.7.4 `GET /admin/schools/{id}/checklist`
+#### 8.7.5 `GET /admin/schools/{id}/checklist`
 
 One school's checklist: every shared line, plus that school's tick.
 
@@ -867,7 +913,7 @@ Field notes:
 - `school_name` is echoed so a script can confirm it addressed the school it meant to.
 - `404` if the school does not exist.
 
-#### 8.7.5 `PATCH /admin/schools/{id}/checklist`
+#### 8.7.6 `PATCH /admin/schools/{id}/checklist`
 
 Tick or untick lines for one school.
 
@@ -886,7 +932,7 @@ Field notes:
 - Each entry gives **exactly one** of `id` or `label` (the label is matched
   case-insensitively after trimming); `completed` is required. `400` if both or neither is
   given, `404` for an unknown line or school.
-- Response `200`: the school's checklist afterwards, as in §8.7.4.
+- Response `200`: the school's checklist afterwards, as in §8.7.5.
 - Idempotent, so it is safe to replay. A script driving it:
 
 ```python
@@ -995,6 +1041,7 @@ Field notes:
 | 33 | Admin | DELETE | `/admin/broadcasts/{id}` | (204, no body) |
 | 34 | Admin | GET | `/admin/committees` | `[string]` |
 | 35 | Admin | GET | `/admin/schools` | `{schools[]}` |
+| 35a | Admin | POST | `/admin/schools` | school entry incl. `advisor_hash` |
 | 36 | Admin | GET | `/admin/checklist` | `{items[]}` |
 | 37 | Admin | PUT | `/admin/checklist` | `{items[]}` |
 | 38 | Admin | GET | `/admin/schools/{id}/checklist` | `{school_id, school_name, items[]}` |
