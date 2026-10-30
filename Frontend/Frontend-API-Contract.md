@@ -159,7 +159,9 @@ Field notes:
 - Re-uploading is allowed until a chair has graded the paper (`409` after that); each upload is
   its own row, and the newest one is what everything downstream serves.
 - **Storage is bounded to one file per delegate.** The previous file is deleted once the new
-  one is committed — the rows stay as history, but only the live paper's bytes exist.
+  one is committed — the rows stay as history, but only the live paper's bytes exist. The
+  sweep runs after the commit and keeps *the newest row's* file, so two overlapping uploads
+  cannot leave two files behind: whichever request finishes last removes the other's.
 - **At most `MAX_UPLOADS_PER_HOUR` (5) uploads per delegate in a rolling hour**, then `429` with
   a `Retry-After` header. That is per *account*, independent of nginx's per-IP limits.
 - Rejections: `400` if the file is not a PDF (checked by the `%PDF-` signature, not just the

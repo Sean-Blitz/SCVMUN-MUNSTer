@@ -226,14 +226,6 @@ async def upload_position_paper(
             headers={"Retry-After": "3600"},
         )
 
-    # Files belonging to earlier uploads, removed once this one is committed. The rows stay:
-    # the schema keeps a row per attempt, and only the live paper is ever served.
-    superseded = list(
-        db.scalars(
-            select(Uploads.file_path).where(Uploads.delegate_id == delegate.account_id)
-        ).all()
-    )
-
     # The extension and content type are the client's claims - cheap to check, trivial to
     # fake - so the %PDF- signature below is the check that actually matters.
     filename = Path((paper.filename or "").strip()).name
@@ -289,10 +281,16 @@ async def upload_position_paper(
         core.storage.delete_paper(stored_name)
         raise
 
-    # Committed, so the new paper is safe: the earlier files can go. Best-effort, because a
-    # delete failure must not fail an upload that has already succeeded.
-    for stale in superseded:
-        core.storage.delete_paper(stale)
+    # Committed, so the new paper is safe and the earlier bytes can go. The rows are re-read
+    # *after* the commit so two overlapping uploads converge on the same survivor (see
+    # papers.prune_superseded_files); best-effort, because a delete failure must not fail an
+    # upload that has already succeeded.
+    try:
+        replaced = papers.prune_superseded_files(db, delegate.account_id)
+    except Exception:
+        # The paper is stored and committed; an unswept file is cheaper than telling the
+        # delegate their successful upload failed and having them upload again.
+        replaced = 0
 
     core.audit.business(
         "paper.submitted",
@@ -302,7 +300,7 @@ async def upload_position_paper(
         committee=delegate.committee,
         file=stored_name,
         bytes=len(data),
-        replaced=len(superseded),
+        replaced=replaced,
     )
 
     return {

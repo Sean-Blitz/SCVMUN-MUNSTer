@@ -33,6 +33,37 @@ def latest_paper(db: Session, delegate_account_id: int) -> Uploads | None:
     ).first()
 
 
+def prune_superseded_files(db: Session, delegate_account_id: int) -> int:
+    """Delete every stored file for the delegate except the one in force.
+
+    Uploads are append-only rows, but only the newest file is kept, so a delegate's disk use
+    is one paper. Doing this by *re-reading* the rows after the writing request commits -
+    rather than deleting a list captured before it - is what makes two overlapping uploads
+    agree: whichever request finishes last deletes everything that is not the newest row's
+    file, so both keep the same survivor instead of each keeping its own.
+
+    Returns how many files it asked to remove. Called from the upload route after commit, so
+    a failure here must not fail the upload: an orphan is harmless and the next upload sweeps
+    it up.
+    """
+    live = latest_paper(db, delegate_account_id)
+    if live is None:
+        return 0
+
+    superseded = db.scalars(
+        select(Uploads.file_path).where(
+            Uploads.delegate_id == delegate_account_id,
+            Uploads.upload_id != live.upload_id,
+        )
+    ).all()
+
+    for stale in superseded:
+        # Best-effort by design: a file that is already gone is not a failure.
+        core.storage.delete_paper(stale)
+
+    return len(superseded)
+
+
 def paper_response(
     db: Session,
     delegate_account_id: int,
