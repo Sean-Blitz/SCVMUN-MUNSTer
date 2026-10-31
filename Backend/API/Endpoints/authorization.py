@@ -3,14 +3,16 @@ These are the only routes with no role gate: they are how a client obtains a tok
 """
 
 from datetime import timedelta
+from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
-from sqlalchemy import select
+from sqlalchemy import delete, select
 
 from schemas.request_models import LoginRequest
 from schemas.response_models import LoginResponse, User
-from API.dependencies import require_captcha
+from API.dependencies import bearer_scheme, require_captcha
 from crud.db import get_db, utcnow
 from crud.database_schema import Account, AuthSession
 import core.audit
@@ -122,3 +124,35 @@ def register(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginRespo
     token = _start_session(db, user)
 
     return LoginResponse(user=User(name=user.name, role=user.role), token=token)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+def logout(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(bearer_scheme)],
+    db: Session = Depends(get_db),
+) -> Response:
+    """
+    Delete the session behind the presented token. Idempotent, and deliberately unguarded.
+
+    No role check and no 401: logging out means "this token must stop working", so a
+    second call, an already-expired token, or no token at all get the same `204`. Failing
+    here would only make the client show an error while it is already signed out.
+
+    Only the presented session is removed - other devices stay signed in. A token that is
+    no longer valid has nothing to delete, which is why nothing is logged in that case: the
+    audit trail records real revocations, not repeated logout clicks.
+    """
+    if credentials is not None:
+        session = db.scalars(
+            select(AuthSession).where(
+                AuthSession.token_hash == core.security.hash_token(credentials.credentials)
+            )
+        ).first()
+
+        if session is not None:
+            account_id = session.account_id
+            db.execute(delete(AuthSession).where(AuthSession.id == session.id))
+            db.commit()
+            core.audit.technical("logout.ok", account=account_id)
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

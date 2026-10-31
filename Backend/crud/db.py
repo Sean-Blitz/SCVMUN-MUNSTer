@@ -20,7 +20,9 @@ if not DATABASE_URL:
 # The endpoints then ask the database; since multiple users can be requesting at the same time, each endpoint/user gets their own session.
 # A session stores changes to the databases in RAM. Only when the changes are finished are the changes pushed to the database in storage.
 
-engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20)
+# pre_ping costs one cheap round trip per checkout and saves the first request after a
+# Postgres restart (or a dropped connection) from failing on a stale pooled connection.
+engine = create_engine(DATABASE_URL, pool_size=10, max_overflow=20, pool_pre_ping=True)
 SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 def get_db():

@@ -100,6 +100,22 @@ Request: identical to login (`{ hash, password }`).
 
 Response `200`: identical to login (`{ user, token }`).
 
+### 1.3 `POST /auth/logout`
+
+Revokes the session behind the `Authorization: Bearer` token. No body.
+
+Response `204`, always — including with no token, an unknown token, or a token that has
+already been logged out. Logout is idempotent by design: the client has signed the user out
+locally either way, and a `401` here would only put an error toast on top of a successful
+sign-out.
+
+- Removes **only the presented session**, so a second device stays signed in. Reissuing a
+  hash still revokes every session for that account.
+- The view calls it best-effort before clearing local state; a network failure does not
+  stop the sign-out.
+- `authStore` persists `token`/`user` in `localStorage` on login and clears them on logout,
+  so a refresh keeps the session and signing out leaves nothing behind.
+
 ---
 
 ## 2. Delegate — `DelegateDashboardView.vue`
@@ -1007,6 +1023,7 @@ Field notes:
 | # | View | Method | Path (relative to `/api`) | Response |
 | --- | --- | --- | --- | --- |
 | 1 | Auth | POST | `/auth/login` | `{user, token}` |
+| 1a | Auth | POST | `/auth/logout` | (204, no body) |
 | 2 | Auth | POST | `/auth/register` | `{user, token}` |
 | 3 | Delegate | GET | `/delegate/my-assignment` | dashboard object |
 | 4 | Delegate | POST | `/delegate/upload-paper` | (ignored) |
