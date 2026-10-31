@@ -1036,6 +1036,88 @@ Field notes:
 - Response `200`: the saved events, as in §8.8.1. `{"events": []}` clears the schedule, which
   every chair then sees as two empty lists.
 
+### 8.9 Existing Schools — one school in detail
+
+The **Existing Schools** tab in `AdminDashboardView.vue`. The dropdown is populated from
+`GET /admin/schools` (§8.7.2); selecting a school loads only that school's data.
+
+#### 8.9.1 `GET /admin/schools/{id}`
+
+```json
+{
+  "id": 7,
+  "advisor_hash": "63d391ca027f0763",
+  "school": {
+    "school_name": "Lincoln High", "school_address": "1 Main St", "city": "San Jose",
+    "state": "CA", "zip_code": "95112", "advisor_name": "Jane Doe",
+    "advisor_phone": "+1-555-0100", "advisor_email": "jane@lhs.edu",
+    "head_delegate_name": "Alex Smith", "head_delegate_email": "alex@lhs.edu",
+    "head_delegate_phone": "555-0101", "payment_status": "unpaid", "invoiceURL": null
+  },
+  "delegates": [
+    {
+      "account_id": 12, "name": "Lincoln High - #1",
+      "country": "France", "committee": "DISEC", "hash": "9fa9de7f41e33d6b",
+      "paper_status": "graded", "paper_grade": "18/20", "has_paper": true
+    }
+  ]
+}
+```
+
+Field notes:
+- `id` is `schools.account_id`, as everywhere else. `404` for an unknown id.
+- Delegates are ordered by committee then country. `paper_status` comes straight from the
+  delegate row, so it cannot drift from what chairs see.
+- `has_paper` is about the **file**, not the row: a paper row whose bytes went missing reads
+  `false`, which is the case an admin needs to see.
+- `name` is the stored label (`"<school> - #<key>"`), and it is rewritten when the school is
+  renamed (§8.9.2).
+
+#### 8.9.2 `PATCH /admin/schools/{id}`
+
+Body: any subset of `school`'s fields above. Only the fields present are applied — the same
+partial-update shape as §8.6.4.
+
+- Response `200`: the whole detail object of §8.9.1, so the view refreshes in one step.
+- `400` if a field is sent blank, if `payment_status` is not `paid` / `partially paid` /
+  `unpaid`, if no fields are sent, or if a rename would push a delegate label past 100
+  characters.
+- `409` if the new `school_name` is already taken.
+- `422` for over-long values (see Global Conventions).
+- **Renaming rewrites delegate labels**: `"<old> - #1"` becomes `"<new> - #1"` for every
+  delegate whose label still carries the old prefix, so the hash lists never show a school
+  that no longer exists.
+
+#### 8.9.3 `PATCH /admin/schools/{school_id}/delegates/{account_id}`
+
+Body: `{ "country": "Brazil", "committee": "UNHRC" }` — either may be omitted.
+
+- Response `200`: the updated delegate entry (the shape from §8.9.1's `delegates[]`).
+- `404` if the delegate is not part of `school_id` (the path is checked, so a wrong school id
+  cannot edit another school's delegate).
+- `409` if another delegate already holds that `(committee, country)` — there is no database
+  constraint for it, so the rule is enforced here, mirroring `POST /admin/hashes`.
+- Naming a committee that does not exist yet creates it.
+- The hash is **not** writable here: use `POST /admin/hashes/regenerate/delegate` (§8.4.2),
+  which the view calls with the row's current committee and country.
+
+#### 8.9.4 `DELETE /admin/schools/{id}?confirm=<school name>`
+
+`confirm` must repeat the school's current name exactly (URL-encoded); anything else is a
+`400`. The dialog lives in the browser, so the server checks intent itself.
+
+Response `200`:
+
+```json
+{ "school": "Lincoln High", "delegates_deleted": 12, "files_deleted": 7 }
+```
+
+- Removes the delegates, their `position_papers` rows, their sessions, their stored PDFs, the
+  advisor account **and** the school row (the last two by cascade).
+- Delegate rows are deleted before the advisor account, because `delegates.school_id ->
+  schools` is `NO ACTION`; the other order fails on a real database.
+- `404` for an unknown id. There is no soft delete and no undo — `pg_dump` is the net.
+
 ---
 
 ## Quick Reference
@@ -1085,6 +1167,10 @@ Field notes:
 | 39 | Admin | PATCH | `/admin/schools/{id}/checklist` | same as `GET` |
 | 40 | Admin | GET | `/admin/timeline` | `{events[]}` |
 | 41 | Admin | PUT | `/admin/timeline` | `{events[]}` |
+| 42 | Admin | GET | `/admin/schools/{id}` | school detail + delegates |
+| 43 | Admin | PATCH | `/admin/schools/{id}` | same as `GET` |
+| 44 | Admin | PATCH | `/admin/schools/{id}/delegates/{aid}` | delegate entry |
+| 45 | Admin | DELETE | `/admin/schools/{id}?confirm=` | deletion summary |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.

@@ -19,6 +19,12 @@
         Hash Management
       </button>
       <button
+        :class="['toggle-btn', { active: activeTab === 'schools' }]"
+        @click="switchTab('schools')"
+      >
+        Existing Schools
+      </button>
+      <button
         :class="['toggle-btn', { active: activeTab === 'awards' }]"
         @click="switchTab('awards')"
       >
@@ -416,6 +422,177 @@
     </template>
 
     <!-- ============================ AWARDS OVERVIEW ============================ -->
+    <template v-if="activeTab === 'schools'">
+      <!-- PICKER -->
+      <div class="section-card">
+        <h2>Existing Schools</h2>
+        <p class="section-desc">
+          Pick a school to see and edit everything attached to it. Only the selected school's
+          data is loaded.
+        </p>
+        <label class="field-label" for="existing-school">School</label>
+        <select
+          id="existing-school"
+          v-model="selectedSchoolId"
+          class="text-input"
+          @change="loadSchoolDetail"
+        >
+          <option :value="null">— choose a school —</option>
+          <option v-for="school in schools" :key="school.id" :value="school.id">
+            {{ school.name }}
+          </option>
+        </select>
+        <div v-if="!schools.length" class="empty-state">
+          No schools yet. Create one in Hash Management.
+        </div>
+      </div>
+
+      <!-- SCHOOL DETAILS -->
+      <div v-if="schoolDetail" class="section-card">
+        <div class="card-header-action">
+          <h2>{{ schoolDetail.school.school_name }}</h2>
+          <button
+            class="btn-refresh"
+            :disabled="!schoolDirty || savingSchool"
+            @click="saveSchool"
+          >
+            {{ savingSchool ? 'Saving...' : 'Save changes' }}
+          </button>
+        </div>
+        <p class="section-desc">
+          Every field below is editable. The advisor hash is shown for reference; delegate
+          hashes are reissued rather than typed.
+        </p>
+
+        <div class="school-fields">
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-name">School name</label>
+            <input id="edit-school-name" v-model="schoolDraft.school_name" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-address">Address</label>
+            <input id="edit-school-address" v-model="schoolDraft.school_address" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-city">City</label>
+            <input id="edit-school-city" v-model="schoolDraft.city" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-state">State</label>
+            <input id="edit-school-state" v-model="schoolDraft.state" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-zip">ZIP</label>
+            <input id="edit-school-zip" v-model="schoolDraft.zip_code" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-payment">Payment status</label>
+            <select id="edit-school-payment" v-model="schoolDraft.payment_status" class="text-input">
+              <option value="unpaid">unpaid</option>
+              <option value="partially paid">partially paid</option>
+              <option value="paid">paid</option>
+            </select>
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-advisor">Advisor name</label>
+            <input id="edit-school-advisor" v-model="schoolDraft.advisor_name" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-advisor-email">Advisor email</label>
+            <input id="edit-school-advisor-email" v-model="schoolDraft.advisor_email" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-advisor-phone">Advisor phone</label>
+            <input id="edit-school-advisor-phone" v-model="schoolDraft.advisor_phone" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-head">Head delegate</label>
+            <input id="edit-school-head" v-model="schoolDraft.head_delegate_name" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-head-email">Head delegate email</label>
+            <input id="edit-school-head-email" v-model="schoolDraft.head_delegate_email" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-head-phone">Head delegate phone</label>
+            <input id="edit-school-head-phone" v-model="schoolDraft.head_delegate_phone" class="text-input" type="text" />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" for="edit-school-invoice">Invoice URL (optional)</label>
+            <input id="edit-school-invoice" v-model="schoolDraft.invoiceURL" class="text-input" type="text" />
+          </div>
+        </div>
+
+        <div class="hash-row">
+          <span class="hash-name">Advisor hash</span>
+          <span class="hash-value">{{ schoolDetail.advisor_hash || '—' }}</span>
+          <button
+            v-if="schoolDetail.advisor_hash"
+            class="btn-copy"
+            @click="copyHash(schoolDetail.advisor_hash)"
+          >
+            Copy
+          </button>
+        </div>
+
+        <div class="row-actions">
+          <button class="btn-danger" :disabled="deletingSchool" @click="deleteSchool">
+            {{ deletingSchool ? 'Deleting...' : 'Delete this school' }}
+          </button>
+        </div>
+      </div>
+
+      <!-- DELEGATES -->
+      <div v-if="schoolDetail" class="section-card">
+        <h2>Delegates ({{ schoolDetail.delegates.length }})</h2>
+        <p class="section-desc">
+          Country and committee are editable — Save applies them. Reissuing a hash replaces the
+          old one immediately.
+        </p>
+
+        <div v-if="!schoolDetail.delegates.length" class="empty-state">
+          This school has no delegates yet.
+        </div>
+        <div v-else class="delegate-table">
+          <div class="delegate-head">
+            <span>Label</span>
+            <span>Country</span>
+            <span>Committee</span>
+            <span>Paper</span>
+            <span>Hash</span>
+            <span></span>
+          </div>
+          <div v-for="row in delegateDrafts" :key="row.account_id" class="delegate-row">
+            <span class="delegate-label">{{ row.name }}</span>
+            <input v-model="row.country" class="text-input" type="text" />
+            <input v-model="row.committee" class="text-input" type="text" />
+            <span class="paper-badge" :class="'is-' + row.paper_status">
+              {{ row.paper_status }}<template v-if="row.paper_grade"> · {{ row.paper_grade }}</template><template
+                v-if="!row.has_paper && row.paper_status !== 'unsubmitted'"
+              > (no file)</template>
+            </span>
+            <span class="hash-value">{{ row.hash }}</span>
+            <div class="delegate-actions">
+              <button
+                class="btn-refresh"
+                :disabled="!delegateDirty(row) || savingDelegateId === row.account_id"
+                @click="saveDelegate(row)"
+              >
+                {{ savingDelegateId === row.account_id ? 'Saving...' : 'Save' }}
+              </button>
+              <button
+                class="btn-copy"
+                :disabled="reissuingId === row.account_id"
+                @click="reissueHash(row)"
+              >
+                {{ reissuingId === row.account_id ? 'Reissuing...' : 'Reissue hash' }}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <template v-if="activeTab === 'awards'">
       <div class="section-card">
         <div class="card-header-action">
@@ -1047,6 +1224,9 @@ const switchTab = (tab) => {
   if (tab === 'hashes' && schools.value.length === 0) {
     loadSchools()
   }
+  if (tab === 'schools' && schools.value.length === 0) {
+    loadSchools()
+  }
   if (tab === 'hashes' && lookupHashes.value.length === 0) {
     lookupHashesForSchool()
   }
@@ -1539,6 +1719,176 @@ const saveChecklist = async () => {
     // Backend errors pop up via the global toast interceptor
   } finally {
     savingChecklist.value = false
+  }
+}
+
+// ---------- Existing Schools: per-school detail, editing, deletion ----------
+const selectedSchoolId = ref(null)
+const schoolDetail = ref(null)
+const schoolDraft = ref(null)
+const delegateDrafts = ref([])
+const savingSchool = ref(false)
+const savingDelegateId = ref(null)
+const reissuingId = ref(null)
+const deletingSchool = ref(false)
+
+const applySchoolDetail = (detail) => {
+  schoolDetail.value = detail
+  schoolDraft.value = { ...detail.school }
+  delegateDrafts.value = (detail.delegates || []).map((row) => ({ ...row }))
+}
+
+const loadSchoolDetail = async () => {
+  if (selectedSchoolId.value === null) {
+    schoolDetail.value = null
+    schoolDraft.value = null
+    delegateDrafts.value = []
+    return
+  }
+  try {
+    const response = await apiClient.get(`/admin/schools/${selectedSchoolId.value}`)
+    applySchoolDetail(response.data)
+  } catch (error) {
+    // Backend errors pop up via the global toast interceptor
+  }
+}
+
+const schoolDirty = computed(() => {
+  if (!schoolDetail.value || !schoolDraft.value) return false
+  return Object.keys(schoolDraft.value).some(
+    (key) =>
+      String(schoolDraft.value[key] ?? '') !== String(schoolDetail.value.school[key] ?? '')
+  )
+})
+
+const delegateDirty = (row) => {
+  const original = schoolDetail.value?.delegates.find((d) => d.account_id === row.account_id)
+  if (!original) return false
+  return (
+    row.country.trim() !== original.country || row.committee.trim() !== original.committee
+  )
+}
+
+const saveSchool = async () => {
+  if (!schoolDetail.value || !schoolDraft.value) return
+  const changes = {}
+  for (const key of Object.keys(schoolDraft.value)) {
+    if (String(schoolDraft.value[key] ?? '') !== String(schoolDetail.value.school[key] ?? '')) {
+      changes[key] = schoolDraft.value[key]
+    }
+  }
+
+  savingSchool.value = true
+  try {
+    const response = await apiClient.patch(`/admin/schools/${schoolDetail.value.id}`, changes)
+    // A rename rewrites the delegate labels server-side, so refresh from the response -
+    // but keep whatever the admin has typed into the editable columns.
+    const typed = new Map(delegateDrafts.value.map((row) => [row.account_id, row]))
+    applySchoolDetail(response.data)
+    delegateDrafts.value = delegateDrafts.value.map((fresh) => {
+      const row = typed.get(fresh.account_id)
+      return row ? { ...fresh, country: row.country, committee: row.committee } : fresh
+    })
+    await loadSchools()
+    toastStore.showToast('School updated.', 'success')
+  } catch (error) {
+    // 409 / 400 / 422 all arrive as {"message": ...} and are toasted by the interceptor
+  } finally {
+    savingSchool.value = false
+  }
+}
+
+const saveDelegate = async (row) => {
+  if (!schoolDetail.value) return false
+  const original = schoolDetail.value.delegates.find((d) => d.account_id === row.account_id)
+  if (!original) return false
+
+  const changes = {}
+  if (row.country.trim() !== original.country) changes.country = row.country.trim()
+  if (row.committee.trim() !== original.committee) changes.committee = row.committee.trim()
+  if (!Object.keys(changes).length) return true
+
+  savingDelegateId.value = row.account_id
+  try {
+    const response = await apiClient.patch(
+      `/admin/schools/${schoolDetail.value.id}/delegates/${row.account_id}`,
+      changes
+    )
+    Object.assign(row, response.data)
+    const index = schoolDetail.value.delegates.findIndex(
+      (d) => d.account_id === row.account_id
+    )
+    if (index !== -1) schoolDetail.value.delegates[index] = { ...response.data }
+    toastStore.showToast('Delegate updated.', 'success')
+    return true
+  } catch (error) {
+    return false
+  } finally {
+    savingDelegateId.value = null
+  }
+}
+
+const reissueHash = async (row) => {
+  // The regenerate endpoint identifies a delegate by committee + country, so pending edits
+  // have to be saved first or it would reissue the hash of the old assignment.
+  if (delegateDirty(row) && !(await saveDelegate(row))) return
+  if (
+    !window.confirm(
+      `Reissue the hash for ${row.country} (${row.committee})?\n\nThe current hash stops working immediately.`
+    )
+  ) {
+    return
+  }
+
+  reissuingId.value = row.account_id
+  try {
+    const response = await apiClient.post('/admin/hashes/regenerate/delegate', {
+      committee: row.committee,
+      country: row.country
+    })
+    row.hash = response.data.hash
+    const original = schoolDetail.value.delegates.find((d) => d.account_id === row.account_id)
+    if (original) original.hash = response.data.hash
+    toastStore.showToast('Hash reissued.', 'success')
+  } catch (error) {
+    // toasted by the interceptor
+  } finally {
+    reissuingId.value = null
+  }
+}
+
+const deleteSchool = async () => {
+  const detail = schoolDetail.value
+  if (!detail) return
+
+  const delegates = detail.delegates.length
+  const papers = detail.delegates.filter((row) => row.has_paper).length
+  const warning =
+    `Delete "${detail.school.school_name}"?\n\n` +
+    `This removes ${delegates} delegate(s) and their hashes` +
+    (papers ? `, plus ${papers} stored paper(s)` : '') +
+    '.\n\nThis cannot be undone.'
+  if (!window.confirm(warning)) return
+
+  deletingSchool.value = true
+  try {
+    const response = await apiClient.delete(`/admin/schools/${detail.id}`, {
+      // The server checks this, so a stray request cannot delete a school by id alone.
+      params: { confirm: detail.school.school_name }
+    })
+    toastStore.showToast(
+      `${response.data.school} deleted (${response.data.delegates_deleted} delegate(s)).`,
+      'success'
+    )
+    selectedSchoolId.value = null
+    schoolDetail.value = null
+    schoolDraft.value = null
+    delegateDrafts.value = []
+    await loadSchools()
+  } catch (error) {
+    // toasted by the interceptor
+  } finally {
+    deletingSchool.value = false
   }
 }
 
@@ -2158,6 +2508,73 @@ onMounted(async () => {
 
 .school-block {
   margin-bottom: 12px;
+}
+
+.delegate-table {
+  margin-top: 12px;
+}
+
+.delegate-head,
+.delegate-row {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1fr 1.2fr 1.3fr auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.delegate-head {
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #00007e93;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #e6e6f0;
+}
+
+.delegate-row {
+  padding: 8px 0;
+  border-bottom: 1px solid #f0f0f6;
+}
+
+.delegate-label {
+  font-weight: 600;
+}
+
+.delegate-actions {
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.paper-badge {
+  font-size: 0.8rem;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #eef0f7;
+  white-space: nowrap;
+}
+
+.paper-badge.is-submitted {
+  background: #e8f1ff;
+}
+
+.paper-badge.is-graded {
+  background: #e6f7ec;
+}
+
+.btn-danger {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #b3261e;
+  color: #ffffff;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.btn-danger:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .school-list h3 {

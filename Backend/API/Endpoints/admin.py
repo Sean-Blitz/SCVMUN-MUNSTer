@@ -29,13 +29,15 @@ from API.dependencies import CurrentUser, get_current_user, require_roles
 import core.audit
 import core.monitor
 import core.storage
+from API import papers
 import crud.onboarding as onboarding
 from core.controls import BROADCAST_LIMITS, TIMELINE_PHASES
 
 from crud.database_schema import (Account,AuthSession,Base,Broadcast,
     ChecklistProgress,Committees,ConferenceChecklist,Delegates,
-    School,TimelineEvent)
-from schemas.request_models import (BroadcastRequest,BroadcastUpdateRequest,SchoolRequest,
+    School,TimelineEvent,Uploads)
+from schemas.request_models import (BroadcastRequest,BroadcastUpdateRequest,DelegateUpdateRequest,
+    SchoolRequest,SchoolUpdateRequest,
     ChecklistProgressRequest,ChecklistUpdateRequest,DelegateHashRequest,DropDelegatesRequest,
     NewHashRequest,SchoolHashRequest,TimelineUpdateRequest)
 
@@ -44,7 +46,8 @@ from schemas.response_models import (AdminDashboardStatsResponse,AwardEntry,
     CommitteeAwards,CommitteeCount,ConferenceChecklistItem,ConferenceChecklistResponse,
     DowntimeEvent,DropDelegatesResponse,DroppedDelegate,HashEntry,
     HashListResponse,PortHealth,SchoolChecklistItem,
-    SchoolChecklistResponse,SchoolEntry,SchoolListResponse,StorageUsage,TimelineEntry,
+    SchoolChecklistResponse,SchoolDelegateEntry,SchoolDetailResponse,SchoolDeletedResponse,
+    SchoolDetails,SchoolEntry,SchoolListResponse,StorageUsage,TimelineEntry,
     TimelineListResponse,)
 
 router = APIRouter(prefix="/admin",tags=["admin"],dependencies=[Depends(require_roles("admin"))])
@@ -1024,6 +1027,346 @@ def list_schools(
             SchoolEntry(id=school.account_id, name=school.school_name, advisor_hash=identifier)
             for school, identifier in rows
         ]
+    )
+
+
+# --- Admin: one school in detail, editable, deletable (§8.8) ---
+
+SCHOOL_TEXT_FIELDS = (
+    "school_name",
+    "school_address",
+    "city",
+    "state",
+    "zip_code",
+    "advisor_name",
+    "advisor_phone",
+    "advisor_email",
+    "head_delegate_name",
+    "head_delegate_email",
+    "head_delegate_phone",
+)
+
+
+def _school_details(school: School) -> SchoolDetails:
+    """The school row as the detail view edits it."""
+    return SchoolDetails(
+        school_name=school.school_name,
+        school_address=school.school_address,
+        city=school.city,
+        state=school.state,
+        zip_code=school.zip_code,
+        advisor_name=school.advisor_name,
+        advisor_phone=school.advisor_phone,
+        advisor_email=school.advisor_email,
+        head_delegate_name=school.head_delegate_name,
+        head_delegate_email=school.head_delegate_email,
+        head_delegate_phone=school.head_delegate_phone,
+        payment_status=school.payment_status,
+        invoiceURL=school.invoiceURL,
+    )
+
+
+def _paper_on_disk(db: Session, delegate_account_id: int) -> bool:
+    """True when the delegate's live paper row still has bytes behind it."""
+    upload = papers.latest_paper(db, delegate_account_id)
+    if upload is None:
+        return False
+    try:
+        return core.storage.paper_path(upload.file_path).is_file()
+    except ValueError:
+        # A path that escapes the upload directory is missing, not a reason to fail the view.
+        return False
+
+
+def _delegate_entry(
+    delegate: Delegates, account: Account, has_paper: bool
+) -> SchoolDelegateEntry:
+    return SchoolDelegateEntry(
+        account_id=delegate.account_id,
+        name=account.name,
+        country=delegate.country,
+        committee=delegate.committee,
+        hash=account.identifier,
+        paper_status=delegate.paper_status,
+        paper_grade=delegate.paper_grade,
+        has_paper=has_paper,
+    )
+
+
+def _school_delegate_rows(db: Session, school_id: int):
+    """(Delegates, Account) pairs for one school, in committee/country order."""
+    return db.execute(
+        select(Delegates, Account)
+        .join(Account, Account.id == Delegates.account_id)
+        .where(Delegates.school_id == school_id)
+        .order_by(Delegates.committee, Delegates.country)
+    ).all()
+
+
+def _school_detail(db: Session, school: School) -> SchoolDetailResponse:
+    advisor = db.get(Account, school.account_id)
+    return SchoolDetailResponse(
+        id=school.account_id,
+        advisor_hash=advisor.identifier if advisor is not None else None,
+        school=_school_details(school),
+        delegates=[
+            _delegate_entry(delegate, account, _paper_on_disk(db, delegate.account_id))
+            for delegate, account in _school_delegate_rows(db, school.account_id)
+        ],
+    )
+
+
+@router.get("/schools/{school_id}", response_model=SchoolDetailResponse)
+def get_school_detail(
+    school_id: int,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SchoolDetailResponse:
+    """
+    One school: every editable detail, the advisor's hash, and each delegate with its
+    country, committee, hash and paper status.
+
+    One request per selection rather than a dump of every school, so the Existing Schools
+    view never loads more than the admin is looking at.
+    """
+    school = db.get(School, school_id)
+    if school is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No school with id {school_id}.")
+    return _school_detail(db, school)
+
+
+@router.patch("/schools/{school_id}", response_model=SchoolDetailResponse)
+def update_school(
+    school_id: int,
+    payload: SchoolUpdateRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SchoolDetailResponse:
+    """
+    Apply the fields present in the body; leave the rest alone.
+
+    Renaming is the one behaviour with a side effect: delegate labels are stored as
+    "<school> - #<key>" in `accounts.name`, so the rename rewrites the ones that still carry
+    the old prefix, or the hash lists would keep showing a school that no longer exists.
+    """
+    school = db.get(School, school_id)
+    if school is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No school with id {school_id}.")
+
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No changes were sent.")
+
+    for field in SCHOOL_TEXT_FIELDS:
+        if field in changes:
+            value = (changes[field] or "").strip()
+            if not value:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST,
+                    f"{field.replace('_', ' ')} cannot be blank.",
+                )
+            changes[field] = value
+
+    if "payment_status" in changes and changes["payment_status"] not in onboarding.PAYMENT_STATUSES:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "payment_status must be one of: " + ", ".join(onboarding.PAYMENT_STATUSES) + ".",
+        )
+
+    if "invoiceURL" in changes and changes["invoiceURL"] is not None:
+        changes["invoiceURL"] = changes["invoiceURL"].strip() or None
+
+    old_name = school.school_name
+    new_name = changes.get("school_name", old_name)
+    renaming = new_name != old_name
+    rows = _school_delegate_rows(db, school.account_id) if renaming else []
+
+    if renaming:
+        clash = db.scalars(
+            select(School).where(
+                School.school_name == new_name, School.account_id != school.account_id
+            )
+        ).first()
+        if clash is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, f"A school named '{new_name}' already exists."
+            )
+
+        # The label column is 100 characters; refuse rather than let Postgres truncate-fail.
+        old_prefix = f"{old_name} - #"
+        too_long = [
+            account.name
+            for _delegate, account in rows
+            if account.name.startswith(old_prefix)
+            and len(f"{new_name} - #{account.name[len(old_prefix):]}") > 100
+        ]
+        if too_long:
+            raise HTTPException(
+                status.HTTP_400_BAD_REQUEST,
+                "That name is too long: the delegate labels would exceed 100 characters.",
+            )
+
+    for field, value in changes.items():
+        setattr(school, field, value)
+
+    if renaming:
+        old_prefix = f"{old_name} - #"
+        for _delegate, account in rows:
+            if account.name.startswith(old_prefix):
+                account.name = f"{new_name} - #{account.name[len(old_prefix):]}"
+
+    db.commit()
+
+    core.audit.technical(
+        "school.updated",
+        actor=core.audit.actor(user),
+        school=new_name,
+        fields=",".join(sorted(changes)),
+    )
+
+    return _school_detail(db, school)
+
+
+@router.patch("/schools/{school_id}/delegates/{account_id}", response_model=SchoolDelegateEntry)
+def update_school_delegate(
+    school_id: int,
+    account_id: int,
+    payload: DelegateUpdateRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> SchoolDelegateEntry:
+    """
+    Move one delegate to a different country or committee.
+
+    The school id in the path must own the delegate, so a wrong id cannot be used to edit
+    another school's delegate. Country and committee are the only writable fields; the hash
+    is reissued through POST /admin/hashes/regenerate/delegate instead of being typed.
+    """
+    delegate = db.get(Delegates, account_id)
+    if delegate is None or delegate.school_id != school_id:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "That delegate is not part of this school."
+        )
+    account = db.get(Account, account_id)
+    if account is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That delegate no longer exists.")
+
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No changes were sent.")
+
+    country, committee = delegate.country, delegate.committee
+    for field, current in (("country", country), ("committee", committee)):
+        if field in changes:
+            value = (changes[field] or "").strip()
+            if not value:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST, f"{field} cannot be blank."
+                )
+            if field == "country":
+                country = value
+            else:
+                committee = value
+
+    if (country, committee) != (delegate.country, delegate.committee):
+        # There is no unique constraint on the pair, so the rule that a delegation has one
+        # hash lives here, mirroring create_delegate_hashes.
+        clash = db.scalars(
+            select(Delegates).where(
+                Delegates.committee == committee,
+                Delegates.country == country,
+                Delegates.account_id != account_id,
+            )
+        ).first()
+        if clash is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT,
+                f"{country} ({committee}) already has a delegate hash.",
+            )
+
+        if committee != delegate.committee:
+            _ensure_committee(db, committee)  # the FK needs the row to exist
+
+        delegate.country = country
+        delegate.committee = committee
+        db.commit()
+
+        core.audit.technical(
+            "delegate.updated",
+            actor=core.audit.actor(user),
+            account=account_id,
+            school=school_id,
+            fields=",".join(sorted(changes)),
+        )
+
+    return _delegate_entry(delegate, account, _paper_on_disk(db, account_id))
+
+
+@router.delete("/schools/{school_id}", response_model=SchoolDeletedResponse)
+def delete_school(
+    school_id: int,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    confirm: Annotated[
+        str, Query(description="Repeat the school's current name to confirm the deletion")
+    ],
+    db: Session = Depends(get_db),
+) -> SchoolDeletedResponse:
+    """
+    Delete a school, its advisors and its delegates, and unlink their stored papers.
+
+    `confirm` must repeat the school's name: the confirmation dialog lives in the browser,
+    so the server checks intent itself rather than trusting that the UI asked.
+
+    Order matters. `delegates.school_id -> schools` is NO ACTION, so the delegates have to
+    go before the advisor account whose deletion cascades the school away. Papers are rows
+    deleted by the ORM cascade but files unlinked here, because a cascade only removes rows.
+    """
+    school = db.get(School, school_id)
+    if school is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"No school with id {school_id}.")
+
+    if confirm.strip() != school.school_name:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "To delete a school, `confirm` must repeat its current name exactly.",
+        )
+
+    name = school.school_name
+    rows = _school_delegate_rows(db, school.account_id)
+
+    files: list[str] = []
+    for delegate, account in rows:
+        files.extend(
+            db.scalars(
+                select(Uploads.file_path).where(Uploads.delegate_id == account.id)
+            ).all()
+        )
+        db.delete(delegate)
+        db.flush()  # the delegate row must go before the account it belongs to
+        db.delete(account)
+
+    db.commit()
+
+    # Best-effort, like DELETE /admin/hashes: the rows are gone, so a file that cannot be
+    # removed is only wasted disk.
+    for path in files:
+        core.storage.delete_paper(path)
+
+    advisor = db.get(Account, school.account_id)
+    if advisor is not None:
+        db.delete(advisor)  # cascades the schools row
+        db.commit()
+
+    core.audit.technical(
+        "school.deleted",
+        actor=core.audit.actor(user),
+        school=name,
+        delegates=len(rows),
+        files=len(files),
+    )
+
+    return SchoolDeletedResponse(
+        school=name, delegates_deleted=len(rows), files_deleted=len(files)
     )
 
 

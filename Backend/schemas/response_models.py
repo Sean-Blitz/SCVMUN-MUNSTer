@@ -328,6 +328,58 @@ class SchoolListResponse(BaseModel):
     schools: list[SchoolEntry] = []
 
 
+class SchoolDetails(BaseModel):
+    """Every editable column of one school (the row minus the advisor foreign key)."""
+
+    school_name: str
+    school_address: str
+    city: str
+    state: str
+    zip_code: str
+    advisor_name: str
+    advisor_phone: str
+    advisor_email: str
+    head_delegate_name: str
+    head_delegate_email: str
+    head_delegate_phone: str
+    payment_status: str
+    invoiceURL: str | None = None
+
+
+class SchoolDelegateEntry(BaseModel):
+    """One delegate of a school, as the Existing Schools view shows it.
+
+    `has_paper` is about the *file*, not the row: a paper row whose bytes went missing is
+    exactly what an admin rebuilding a school needs to see.
+    """
+
+    account_id: int
+    name: str  # accounts.name, e.g. "Lincoln High - #1"
+    country: str
+    committee: str
+    hash: str
+    paper_status: str  # 'unsubmitted' | 'submitted' | 'graded'
+    paper_grade: str | None = None
+    has_paper: bool = False
+
+
+class SchoolDetailResponse(BaseModel):
+    """One school and its delegates, for the per-school detail view."""
+
+    id: int
+    advisor_hash: str | None = None
+    school: SchoolDetails
+    delegates: list[SchoolDelegateEntry] = []
+
+
+class SchoolDeletedResponse(BaseModel):
+    """What a school deletion actually removed."""
+
+    school: str
+    delegates_deleted: int
+    files_deleted: int
+
+
 # --- Admin: conference timeline ---
 
 

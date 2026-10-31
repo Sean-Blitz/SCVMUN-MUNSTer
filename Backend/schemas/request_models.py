@@ -82,6 +82,40 @@ class SchoolRequest(BaseModel):
     invoiceURL: Annotated[str | None, Field(max_length=300)] = None
 
 
+class SchoolUpdateRequest(BaseModel):
+    """Partial edit of one school: only the fields present in the JSON are applied.
+
+    Every field is optional so the view can PATCH just what changed; sending `null` for
+    `invoiceURL` clears it, while `null` for any other field is rejected by the endpoint
+    because those columns are NOT NULL.
+    """
+
+    school_name: Annotated[str | None, Field(max_length=100)] = None
+    school_address: Annotated[str | None, Field(max_length=200)] = None
+    city: Annotated[str | None, Field(max_length=100)] = None
+    state: Annotated[str | None, Field(max_length=100)] = None
+    zip_code: Annotated[str | None, Field(max_length=10)] = None
+    advisor_name: Annotated[str | None, Field(max_length=100)] = None
+    advisor_phone: Annotated[str | None, Field(max_length=20)] = None
+    advisor_email: Annotated[str | None, Field(max_length=100)] = None
+    head_delegate_name: Annotated[str | None, Field(max_length=100)] = None
+    head_delegate_email: Annotated[str | None, Field(max_length=100)] = None
+    head_delegate_phone: Annotated[str | None, Field(max_length=20)] = None
+    payment_status: Annotated[str | None, Field(max_length=50)] = None
+    invoiceURL: Annotated[str | None, Field(max_length=300)] = None
+
+
+class DelegateUpdateRequest(BaseModel):
+    """Partial edit of one delegate's assignment.
+
+    The hash is not here on purpose: it is reissued through
+    POST /admin/hashes/regenerate/delegate rather than typed by hand.
+    """
+
+    country: Annotated[str | None, Field(max_length=100)] = None
+    committee: Annotated[str | None, Field(max_length=100)] = None
+
+
 class NewHashRequest(BaseModel):
     """
     Delegates to create, keyed by a display name such as "1".
