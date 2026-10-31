@@ -41,6 +41,26 @@ The client interceptor reads `error.response.data.message` and displays it as a 
 is absent, a generic `"Server Error (<status>)"` message is shown instead. A `401` also
 clears the auth session and redirects to the login page.
 
+### Field validation (`422`)
+
+Request bodies are validated against the same length limits as the database columns, so an
+over-long value is rejected before it reaches Postgres (which would answer with a `500`). The
+body is the usual `{"message": ...}`, written as a sentence because it goes straight into the
+toast:
+
+```json
+{ "message": "Advisor phone must be at most 20 characters." }
+```
+
+- Up to three problems are reported at once, joined by `; `:
+  `"School address must be at most 200 characters; zip code must be at most 10 characters."`
+- A missing field reads `"Advisor name is required."`; a nested entry names its row:
+  `"FinalAssignments (entry 1) must be at most 100 characters."`
+- Limits come from `crud/database_schema.py` — see `schemas/request_models.py` for the
+  mapping. Storage limits live in the models; business rules that need their own wording
+  (blank or duplicate checklist labels, an unsupported `payment_status`, a delegate triple
+  that is not three items) stay in the endpoints and still return `400`.
+
 ### File responses
 
 Endpoints documented as **blob** return raw binary or text (`responseType: 'blob'`), not JSON.

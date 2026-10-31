@@ -6,29 +6,49 @@ Field names are camelCase to match the JSON the frontend actually sends
 """
 
 from datetime import datetime
+from typing import Annotated
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+
+# Bounds here mirror the VARCHAR limits in crud/database_schema.py. They exist so an
+# over-long value is rejected with a readable 422 instead of reaching Postgres, which
+# raises a DataError and came back as a 500 (SQLite silently ignored the limits, which is
+# why this was invisible for so long).
+#
+# The split of responsibilities: these are *storage* limits, so they live in the model.
+# Business rules that need their own wording - a blank checklist label, a duplicate line,
+# an unsupported payment_status, a delegate triple that is not three items - stay in the
+# endpoints, where they can return the 400 the admin UI already expects.
+HASH_MAX = 100         # accounts.identifier
+NAME_MAX = 100         # accounts.name, committees.committee_name, most people/place names
+LABEL_MAX = 200        # conference_checklist.label, timeline_events.label
+COUNTRY_MAX = 100      # delegates.country
+PASSWORD_MAX = 200     # never stored raw; a cap keeps Argon2 from hashing megabytes
+
+# [committee, committeeType, country] - committeeType has no column, so it gets the
+# committee limit.
+AssignmentValue = Annotated[str, Field(max_length=NAME_MAX)]
 
 
 class LoginRequest(BaseModel):
-    hash: str
-    password: str
+    hash: Annotated[str, Field(max_length=HASH_MAX)]
+    password: Annotated[str, Field(max_length=PASSWORD_MAX)]
 
 
 class VerifyHashesRequest(BaseModel):
-    password: str
+    password: Annotated[str | None, Field(max_length=PASSWORD_MAX)] = None
 
 
 class GradeSubmissionRequest(BaseModel):
     delegateId: int
     scores: dict[str, float]
-    totalScore: str  # "<earned>/<max>", e.g. "18/20"
-    comments: str = ""
+    totalScore: Annotated[str, Field(max_length=100)]  # "<earned>/<max>", e.g. "18/20"
+    comments: Annotated[str, Field(max_length=500)] = ""  # delegates.paper_comments
 
 
 class AwardAssignmentRequest(BaseModel):
     delegateId: int
-    assignedAward: str
+    assignedAward: Annotated[str, Field(max_length=NAME_MAX)]  # delegates.assigned_award
     scores: dict[str, float]
     totalScore: float
 
@@ -45,19 +65,21 @@ class SchoolRequest(BaseModel):
     Every field except `payment_status` and `invoiceURL` is required: the school row has
     NOT NULL columns for them, and an advisor cannot be reached without a phone or email.
     """
-    school_name: str
-    school_address: str
-    city: str
-    state: str
-    zip_code: str
-    advisor_name: str
-    advisor_phone: str
-    advisor_email: str
-    head_delegate_name: str
-    head_delegate_email: str
-    head_delegate_phone: str
-    payment_status: str = "unpaid"
-    invoiceURL: str | None = None
+    school_name: Annotated[str, Field(max_length=100)]
+    school_address: Annotated[str, Field(max_length=200)]
+    city: Annotated[str, Field(max_length=100)]
+    state: Annotated[str, Field(max_length=100)]
+    zip_code: Annotated[str, Field(max_length=10)]
+    advisor_name: Annotated[str, Field(max_length=100)]
+    advisor_phone: Annotated[str, Field(max_length=20)]
+    advisor_email: Annotated[str, Field(max_length=100)]
+    head_delegate_name: Annotated[str, Field(max_length=100)]
+    head_delegate_email: Annotated[str, Field(max_length=100)]
+    head_delegate_phone: Annotated[str, Field(max_length=20)]
+    # The allowed values are checked in POST /admin/schools so the admin UI gets the 400
+    # listing them, rather than a generic validation message.
+    payment_status: Annotated[str, Field(max_length=50)] = "unpaid"
+    invoiceURL: Annotated[str | None, Field(max_length=300)] = None
 
 
 class NewHashRequest(BaseModel):
@@ -67,21 +89,23 @@ class NewHashRequest(BaseModel):
     Each value is positional, matching the CLI's `FinalAssignments`:
     [committee, committeeType, country].
     """
-    school_name: str
-    finalAssignments: dict[str, list[str]]
+    school_name: Annotated[str, Field(max_length=100)]
+    # The triple's arity is checked in the endpoint (its message names the offending
+    # delegate); only the per-string storage limit belongs here.
+    finalAssignments: dict[str, list[AssignmentValue]]
 
 
 class DelegateHashRequest(BaseModel):
     """Identify a single delegate by committee and country."""
 
-    committee: str
-    country: str
+    committee: Annotated[str, Field(max_length=NAME_MAX)]
+    country: Annotated[str, Field(max_length=COUNTRY_MAX)]
 
 
 class SchoolHashRequest(BaseModel):
     """Identify a school whose delegates all need fresh hashes."""
 
-    school: str
+    school: Annotated[str, Field(max_length=100)]
 
 
 class DropDelegatesRequest(BaseModel):
@@ -91,7 +115,7 @@ class DropDelegatesRequest(BaseModel):
     Mirrors the CLI's `CountryAndCommitteeList` payload.
     """
 
-    countryAndCommitteeList: list[list[str]]
+    countryAndCommitteeList: list[list[AssignmentValue]]
 
 
 # --- Admin: announcements & conference links ---
@@ -102,10 +126,10 @@ class DropDelegatesRequest(BaseModel):
 class BroadcastRequest(BaseModel):
     """Create one announcement or conference link."""
 
-    kind: str  # 'announcement' | 'link'
-    body: str
-    url: str | None = None
-    committee_name: str | None = None  # null = every delegate
+    kind: Annotated[str, Field(max_length=20)]  # 'announcement' | 'link'
+    body: Annotated[str, Field(max_length=300)]
+    url: Annotated[str | None, Field(max_length=300)] = None
+    committee_name: Annotated[str | None, Field(max_length=100)] = None  # null = every delegate
     position: int = 0  # display order within the strip
     starts_at: datetime | None = None  # null = live immediately
     ends_at: datetime | None = None  # null = no planned end
@@ -119,9 +143,9 @@ class BroadcastUpdateRequest(BaseModel):
     the link strip means deleting it and creating it again.
     """
 
-    body: str | None = None
-    url: str | None = None
-    committee_name: str | None = None
+    body: Annotated[str | None, Field(max_length=300)] = None
+    url: Annotated[str | None, Field(max_length=300)] = None
+    committee_name: Annotated[str | None, Field(max_length=100)] = None
     position: int | None = None
     starts_at: datetime | None = None
     ends_at: datetime | None = None
@@ -140,7 +164,9 @@ class ChecklistItemRequest(BaseModel):
     """
 
     id: int | None = None
-    label: str
+    # Length, blank and duplicate rules live in the endpoint: they return the 400 the
+    # contract documents, with messages the editor's toast shows as-is.
+    label: Annotated[str, Field(max_length=LABEL_MAX)]
 
 
 class ChecklistUpdateRequest(BaseModel):
@@ -178,8 +204,8 @@ class TimelineEventRequest(BaseModel):
     accepts; an aware value is rejected rather than silently shifted.
     """
 
-    phase: str  # 'preConference' | 'duringConference'
-    label: str
+    phase: Annotated[str, Field(max_length=20)]  # 'preConference' | 'duringConference'
+    label: Annotated[str, Field(max_length=LABEL_MAX)]
     starts_at: datetime
 
 
