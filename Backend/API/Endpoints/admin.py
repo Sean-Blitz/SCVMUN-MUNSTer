@@ -39,15 +39,15 @@ from crud.database_schema import (Account,AuthSession,Base,Broadcast,Chairs,
 from schemas.request_models import (BroadcastRequest,BroadcastUpdateRequest,ChairHashRequest,
     ChairRequest,ChairUpdateRequest,CommitteeRequest,CommitteeUpdateRequest,
     DelegateUpdateRequest,SchoolRequest,SchoolUpdateRequest,
-    ChecklistProgressRequest,ChecklistUpdateRequest,DelegateHashRequest,DropDelegatesRequest,
-    NewHashRequest,SchoolHashRequest,TimelineUpdateRequest)
+    ChecklistProgressRequest,ChecklistUpdateRequest,DelegateHashRequest,
+    NewHashRequest,TimelineUpdateRequest)
 
 from schemas.response_models import (AdminDashboardStatsResponse,AwardEntry,
     AwardsOverviewResponse,BroadcastEntry,BroadcastListResponse,
     CommitteeAwards,CommitteeChairEntry,CommitteeCount,CommitteeDelegateEntry,
     CommitteeDetailResponse,ConferenceChecklistItem,ConferenceChecklistResponse,
     DelegateRemovedResponse,
-    DowntimeEvent,DropDelegatesResponse,DroppedDelegate,HashEntry,
+    DowntimeEvent,HashEntry,
     HashListResponse,PortHealth,SchoolChecklistItem,
     SchoolChecklistResponse,SchoolDelegateEntry,SchoolDetailResponse,SchoolDeletedResponse,
     SchoolDetails,SchoolEntry,SchoolListResponse,StorageUsage,TimelineEntry,
@@ -542,124 +542,6 @@ def regenerate_chair_hash(
     )
 
     return HashEntry(name=chair.name, hash=account.identifier)
-
-
-@router.post("/hashes/regenerate/school", response_model=HashListResponse)
-def regenerate_school_hashes(
-    payload: SchoolHashRequest,
-    user: Annotated[CurrentUser, Depends(get_current_user)],
-    db: Session = Depends(get_db),
-) -> HashListResponse:
-    """
-    Mint fresh hashes for every delegate in `payload.school`.
-
-    Each delegate's previous hash and live sessions are invalidated, exactly as in the
-    single-delegate variant.
-    """
-    school = _get_school(db, payload.school)
-
-    delegates = db.scalars(
-        select(Delegates)
-        .where(Delegates.school_id == school.account_id)
-        .order_by(Delegates.committee, Delegates.country)
-    ).all()
-
-    hashes: list[HashEntry] = []
-    for delegate in delegates:
-        account = db.get(Account, delegate.account_id)
-        if account is None:
-            continue
-
-        _revoke_sessions(db, account.id)
-        new_hash = _mint_hash()
-        account.identifier = new_hash
-        hashes.append(
-            HashEntry(name=f"{delegate.country} ({delegate.committee})", hash=new_hash)
-        )
-
-    db.commit()
-
-    core.audit.technical(
-        "hash.reissued",
-        actor=core.audit.actor(user),
-        school=payload.school,
-        count=len(hashes),
-    )
-
-    return HashListResponse(hashes=hashes)
-
-
-@router.delete("/hashes", response_model=DropDelegatesResponse)
-def drop_delegates_and_delete_hashes(
-    payload: DropDelegatesRequest,
-    user: Annotated[CurrentUser, Depends(get_current_user)],
-    db: Session = Depends(get_db),
-) -> DropDelegatesResponse:
-    """
-    Remove delegates and delete their hashes.
-
-    `payload.countryAndCommitteeList` holds [country, committee, committeeType] triples,
-    matching the CLI payload (and the rows the dashboard builds). `committeeType` is not
-    persisted, so it only has to be present. Triples that match no delegate are skipped:
-    the response lists the hashes that were actually revoked.
-    """
-    for entry in payload.countryAndCommitteeList:
-        if len(entry) != 3:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                "Each entry must be [country, committee, committeeType].",
-            )
-
-    dropped: list[DroppedDelegate] = []
-    orphaned_files: list[str] = []
-
-    for country, committee, _committee_type in payload.countryAndCommitteeList:
-        delegates = db.scalars(
-            select(Delegates).where(
-                Delegates.country == country, Delegates.committee == committee
-            )
-        ).all()
-
-        for delegate in delegates:
-            account = db.get(Account, delegate.account_id)
-            if account is not None:
-                dropped.append(DroppedDelegate(name=account.name, hash=account.identifier))
-                _revoke_sessions(db, account.id)
-
-            # The paper rows go with the delegate, but their files do not: collect the paths
-            # now and unlink them after the commit, so a failed delete leaves the files (and
-            # the rows) intact rather than the other way round.
-            for upload in delegate.position_papers:
-                orphaned_files.append(upload.file_path)
-
-            # Delete the profile row first and flush: its position-paper children are
-            # removed by the ORM cascade, and there is no relationship between Account
-            # and Delegates for the unit of work to order these two deletes by, so the
-            # accounts row would otherwise be deleted while its profile row still
-            # pointed at it.
-            db.delete(delegate)
-            db.flush()
-            if account is not None:
-                db.delete(account)
-
-    db.commit()
-
-    # Best-effort: the rows are gone, so a file that cannot be removed is only wasted disk.
-    for stale in orphaned_files:
-        core.storage.delete_paper(stale)
-
-    core.audit.technical(
-        "delegates.dropped",
-        actor=core.audit.actor(user),
-        count=len(dropped),
-        delegates=", ".join(entry.name for entry in dropped) or "-",
-    )
-    # Same action, business view: the roster changed. Two lines, each log coherent.
-    core.audit.business(
-        "roster.dropped", actor=core.audit.actor(user), count=len(dropped)
-    )
-
-    return DropDelegatesResponse(dropped=dropped)
 
 
 @router.get("/hashes", response_model=HashListResponse)

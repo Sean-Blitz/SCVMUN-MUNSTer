@@ -176,22 +176,6 @@ class DelegateHashRequest(BaseModel):
     country: Annotated[str, Field(max_length=COUNTRY_MAX)]
 
 
-class SchoolHashRequest(BaseModel):
-    """Identify a school whose delegates all need fresh hashes."""
-
-    school: Annotated[str, Field(max_length=100)]
-
-
-class DropDelegatesRequest(BaseModel):
-    """
-    Delegates to remove and de-hash, as [country, committee, committeeType] triples.
-
-    Mirrors the CLI's `CountryAndCommitteeList` payload.
-    """
-
-    countryAndCommitteeList: list[list[AssignmentValue]]
-
-
 # --- Admin: announcements & conference links ---
 # Bodies for the /admin/broadcasts routes. Timestamps are naive UTC, like the columns
 # they land in (see crud/db.utcnow).

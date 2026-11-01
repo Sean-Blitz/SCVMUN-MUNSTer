@@ -16,13 +16,7 @@
         :class="['toggle-btn', { active: activeTab === 'hashes' }]"
         @click="switchTab('hashes')"
       >
-        Hash Management
-      </button>
-      <button
-        :class="['toggle-btn', { active: activeTab === 'schools' }]"
-        @click="switchTab('schools')"
-      >
-        Existing Schools
+        Schools Management
       </button>
       <button
         :class="['toggle-btn', { active: activeTab === 'awards' }]"
@@ -325,116 +319,6 @@
         </div>
       </div>
 
-      <div class="metrics-grid">
-        <!-- REGENERATE ONE DELEGATE -->
-        <div class="section-card">
-          <h2>Regenerate a Delegate Hash</h2>
-          <p class="section-desc">
-            Issues a replacement hash and invalidates the delegate's previous one.
-          </p>
-          <label class="field-label" for="regen-committee">Committee</label>
-          <input id="regen-committee" v-model="regenDelegate.committee" class="text-input" type="text" placeholder="e.g. DISEC" />
-          <label class="field-label" for="regen-country">Country</label>
-          <input id="regen-country" v-model="regenDelegate.country" class="text-input" type="text" placeholder="e.g. France" />
-          <div class="row-actions">
-            <button class="btn-refresh" :disabled="regeneratingDelegate" @click="regenerateDelegateHash">
-              {{ regeneratingDelegate ? 'Regenerating...' : 'Regenerate Hash' }}
-            </button>
-          </div>
-
-          <div v-if="regeneratedDelegateHash" class="hash-result">
-            <div class="hash-row">
-              <span class="hash-name">{{ regeneratedDelegateHash.name }}</span>
-              <span class="hash-value">{{ regeneratedDelegateHash.hash }}</span>
-              <button class="btn-copy" @click="copyHash(regeneratedDelegateHash.hash)">Copy</button>
-            </div>
-          </div>
-        </div>
-
-        <!-- REGENERATE A WHOLE SCHOOL -->
-        <div class="section-card">
-          <h2>Regenerate School Hashes</h2>
-          <p class="section-desc">
-            Issues new hashes for every delegate belonging to one school.
-          </p>
-          <label class="field-label" for="regen-school">School name</label>
-          <input id="regen-school" v-model="regenSchool" class="text-input" type="text" placeholder="e.g. Lincoln High School" />
-          <div class="row-actions">
-            <button class="btn-refresh" :disabled="regeneratingSchool" @click="regenerateSchoolHashes">
-              {{ regeneratingSchool ? 'Regenerating...' : 'Regenerate School Hashes' }}
-            </button>
-          </div>
-
-          <div v-if="regeneratedSchoolHashes.length" class="hash-result">
-            <div v-for="entry in regeneratedSchoolHashes" :key="entry.name" class="hash-row">
-              <span class="hash-name">{{ entry.name }}</span>
-              <span class="hash-value">{{ entry.hash }}</span>
-              <button class="btn-copy" @click="copyHash(entry.hash)">Copy</button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- LOOK UP -->
-      <div class="section-card">
-        <div class="card-header-action">
-          <h2>Look Up Hashes</h2>
-          <button class="btn-refresh" :disabled="lookingUpHashes" @click="lookupHashesForSchool">
-            {{ lookingUpHashes ? 'Loading...' : '🔄 Load Hashes' }}
-          </button>
-        </div>
-        <p class="section-desc">
-          Leave the school blank to list every hash, or enter a school name to narrow the list.
-        </p>
-        <input v-model="lookupSchool" class="text-input" type="text" placeholder="Filter by school (optional)" />
-
-        <div v-if="lookupHashes.length" class="hash-result">
-          <div v-for="entry in lookupHashes" :key="entry.name" class="hash-row">
-            <span class="hash-name">{{ entry.name }}</span>
-            <span class="hash-value">{{ entry.hash }}</span>
-            <button class="btn-copy" @click="copyHash(entry.hash)">Copy</button>
-          </div>
-        </div>
-        <div v-else class="empty-state">
-          {{ lookingUpHashes ? 'Loading hashes…' : 'No hashes loaded yet.' }}
-        </div>
-      </div>
-
-      <!-- DROP DELEGATES -->
-      <div class="section-card">
-        <h2>Drop Delegates & Delete Hashes</h2>
-        <p class="section-desc">
-          Removes the listed delegates and revokes their hashes. This cannot be undone.
-        </p>
-
-        <div class="form-rows">
-          <div v-for="(row, index) in dropDelegates" :key="index" class="form-row">
-            <input v-model="row.committee" class="text-input" type="text" placeholder="Committee" list="committee-names" />
-            <input v-model="row.committeeType" class="text-input" type="text" placeholder="Committee type" />
-            <input v-model="row.country" class="text-input" type="text" placeholder="Country" />
-            <button class="btn-icon" title="Remove row" @click="removeDropRow(index)">✕</button>
-          </div>
-        </div>
-
-        <div class="row-actions">
-          <button class="btn-secondary" @click="addDropRow">+ Add delegate</button>
-          <button class="btn-danger" :disabled="droppingDelegates" @click="dropSelectedDelegates">
-            {{ droppingDelegates ? 'Dropping...' : '🗑️ Drop Delegates' }}
-          </button>
-        </div>
-
-        <div v-if="droppedDelegates.length" class="hash-result">
-          <h3>Deleted Hashes</h3>
-          <div v-for="entry in droppedDelegates" :key="entry.name" class="hash-row">
-            <span class="hash-name">{{ entry.name }}</span>
-            <span class="hash-value">{{ entry.hash }}</span>
-          </div>
-        </div>
-      </div>
-    </template>
-
-    <!-- ============================ AWARDS OVERVIEW ============================ -->
-    <template v-if="activeTab === 'schools'">
       <!-- PICKER -->
       <div class="section-card">
         <h2>Existing Schools</h2>
@@ -455,7 +339,7 @@
           </option>
         </select>
         <div v-if="!schools.length" class="empty-state">
-          No schools yet. Create one in Hash Management.
+          No schools yet. Create one above.
         </div>
       </div>
 
@@ -601,6 +485,29 @@
               </button>
             </div>
           </div>
+        </div>
+      </div>
+      <!-- ALL HASHES (the old "Look Up Hashes" card, minus the filter) -->
+      <div class="section-card">
+        <div class="card-header-action">
+          <h2>All Hashes</h2>
+          <button class="btn-refresh" :disabled="loadingAllHashes" @click="loadAllHashes">
+            {{ loadingAllHashes ? 'Loading...' : '🔄 Load all hashes' }}
+          </button>
+        </div>
+        <p class="section-desc">
+          Every delegate hash on one list, for a handout or a spot check. Individual hashes are
+          reissued per delegate under Existing Schools above.
+        </p>
+        <div v-if="allHashes.length" class="hash-result">
+          <div v-for="entry in allHashes" :key="entry.name" class="hash-row">
+            <span class="hash-name">{{ entry.name }}</span>
+            <span class="hash-value">{{ entry.hash }}</span>
+            <button class="btn-copy" @click="copyHash(entry.hash)">Copy</button>
+          </div>
+        </div>
+        <div v-else class="empty-state">
+          {{ loadingAllHashes ? 'Loading hashes…' : 'No hashes loaded yet.' }}
         </div>
       </div>
     </template>
@@ -1159,7 +1066,7 @@ import { useToastStore } from '@/stores/toast'
 
 const toastStore = useToastStore()
 
-// Active tab: 'diagnostics' | 'hashes' | 'awards'
+// Active tab: 'diagnostics' | 'hashes' | 'committees' | 'awards' | 'content' | 'timeline'
 const activeTab = ref('diagnostics')
 
 // ---------- Diagnostics state ----------
@@ -1238,21 +1145,8 @@ const newDelegates = ref([{ committee: '', committeeType: '', country: '' }])
 const generatingHashes = ref(false)
 const generatedHashes = ref([])
 
-const regenDelegate = ref({ committee: '', country: '' })
-const regeneratingDelegate = ref(false)
-const regeneratedDelegateHash = ref(null)
-
-const regenSchool = ref('')
-const regeneratingSchool = ref(false)
-const regeneratedSchoolHashes = ref([])
-
-const lookupSchool = ref('')
-const lookingUpHashes = ref(false)
-const lookupHashes = ref([])
-
-const dropDelegates = ref([{ committee: '', committeeType: '', country: '' }])
-const droppingDelegates = ref(false)
-const droppedDelegates = ref([])
+const allHashes = ref([])
+const loadingAllHashes = ref(false)
 
 // ---------- Awards state ----------
 const awardsCommittees = ref([])
@@ -1394,17 +1288,11 @@ const switchTab = (tab) => {
   if (tab === 'hashes' && schools.value.length === 0) {
     loadSchools()
   }
-  if (tab === 'schools' && schools.value.length === 0) {
-    loadSchools()
-  }
   if (tab === 'committees' && committeeNames.value.length === 0) {
     loadCommittees()
   }
   if (tab === 'hashes' && committeeNames.value.length === 0) {
     loadCommittees()
-  }
-  if (tab === 'hashes' && lookupHashes.value.length === 0) {
-    lookupHashesForSchool()
   }
   if (tab === 'awards' && awardsCommittees.value.length === 0) {
     loadAwards()
@@ -1538,93 +1426,16 @@ const generateHashesForSchool = async (school) => {
   }
 }
 
-const regenerateDelegateHash = async () => {
-  if (!regenDelegate.value.committee.trim() || !regenDelegate.value.country.trim()) {
-    toastStore.showToast('Enter both a committee and a country.', 'error')
-    return
-  }
-
-  regeneratingDelegate.value = true
+const loadAllHashes = async () => {
+  loadingAllHashes.value = true
   try {
-    const response = await apiClient.post('/admin/hashes/regenerate/delegate', {
-      committee: regenDelegate.value.committee.trim(),
-      country: regenDelegate.value.country.trim()
-    })
-    regeneratedDelegateHash.value = response.data
-    toastStore.showToast('Delegate hash regenerated.', 'success')
+    // No schoolName filter: the endpoint returns every delegate hash when it is omitted.
+    const response = await apiClient.get('/admin/hashes')
+    allHashes.value = response.data.hashes || []
   } catch (error) {
     // Errors automatically pop up via global toast interceptor
   } finally {
-    regeneratingDelegate.value = false
-  }
-}
-
-const regenerateSchoolHashes = async () => {
-  const school = regenSchool.value.trim()
-  if (!school) {
-    toastStore.showToast('Enter a school name.', 'error')
-    return
-  }
-
-  regeneratingSchool.value = true
-  try {
-    const response = await apiClient.post('/admin/hashes/regenerate/school', { school })
-    regeneratedSchoolHashes.value = response.data.hashes
-    toastStore.showToast('School hashes regenerated.', 'success')
-  } catch (error) {
-    // Errors automatically pop up via global toast interceptor
-  } finally {
-    regeneratingSchool.value = false
-  }
-}
-
-const lookupHashesForSchool = async () => {
-  lookingUpHashes.value = true
-  try {
-    const response = await apiClient.get('/admin/hashes', {
-      params: { schoolName: lookupSchool.value.trim() || undefined }
-    })
-    lookupHashes.value = response.data.hashes
-  } catch (error) {
-    // Errors automatically pop up via global toast interceptor
-  } finally {
-    lookingUpHashes.value = false
-  }
-}
-
-const addDropRow = () => {
-  dropDelegates.value.push({ committee: '', committeeType: '', country: '' })
-}
-
-const removeDropRow = (index) => {
-  if (dropDelegates.value.length === 1) {
-    dropDelegates.value[0] = { committee: '', committeeType: '', country: '' }
-    return
-  }
-  dropDelegates.value.splice(index, 1)
-}
-
-const dropSelectedDelegates = async () => {
-  const countryAndCommitteeList = dropDelegates.value
-    .filter((row) => row.committee.trim() || row.country.trim())
-    .map((row) => [row.country.trim(), row.committee.trim(), row.committeeType.trim()])
-
-  if (countryAndCommitteeList.length === 0) {
-    toastStore.showToast('Add at least one delegate row to drop.', 'error')
-    return
-  }
-
-  droppingDelegates.value = true
-  try {
-    const response = await apiClient.delete('/admin/hashes', {
-      data: { countryAndCommitteeList }
-    })
-    droppedDelegates.value = response.data.dropped
-    toastStore.showToast('Delegates dropped and hashes deleted.', 'success')
-  } catch (error) {
-    // Errors automatically pop up via global toast interceptor
-  } finally {
-    droppingDelegates.value = false
+    loadingAllHashes.value = false
   }
 }
 

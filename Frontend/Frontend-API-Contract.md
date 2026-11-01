@@ -689,34 +689,7 @@ Response `200`:
 { "name": "France (DISEC)", "hash": "hash789ghi" }
 ```
 
-#### 8.4.3 `POST /admin/hashes/regenerate/school`
-
-Request:
-
-```json
-{ "school": "Lincoln High School" }
-```
-
-Response `200`: `{ "hashes": [ { "name": "string", "hash": "string" } ] }`
-
-#### 8.4.4 `DELETE /admin/hashes`
-
-Request:
-
-```json
-{ "countryAndCommitteeList": [["France", "DISEC", "General Assembly"]] }
-```
-
-Field notes:
-- Each entry is `[country, committee, committeeType]` (the CLI's `CountryAndCommitteeList`).
-
-Response `200`:
-
-```json
-{ "dropped": [ { "name": "string", "hash": "string" } ] }
-```
-
-#### 8.4.5 `GET /admin/hashes`
+#### 8.4.3 `GET /admin/hashes`
 
 Query: `schoolName` (optional) — narrows the list to a single school.
 
@@ -1040,8 +1013,10 @@ Field notes:
 
 ### 8.9 Existing Schools — one school in detail
 
-The **Existing Schools** tab in `AdminDashboardView.vue`. The dropdown is populated from
-`GET /admin/schools` (§8.7.2); selecting a school loads only that school's data.
+The **Existing Schools** section of the **Schools Management** tab in
+`AdminDashboardView.vue` (it sits under the create-a-school and mint-delegates cards). The
+dropdown is populated from `GET /admin/schools` (§8.7.2); selecting a school loads only that
+school's data.
 
 #### 8.9.1 `GET /admin/schools/{id}`
 
@@ -1231,42 +1206,40 @@ they have no committee+country pair; delegate reissue stays §8.4.2.
 | # | View | Method | Path (relative to `/api`) | Response |
 | --- | --- | --- | --- | --- |
 | 1 | Auth | POST | `/auth/login` | `{user, token}` |
-| 1a | Auth | POST | `/auth/logout` | (204, no body) |
-| 2 | Auth | POST | `/auth/register` | `{user, token}` |
-| 3 | Delegate | GET | `/delegate/my-assignment` | dashboard object |
-| 4 | Delegate | POST | `/delegate/upload-paper` | (ignored) |
-| 5 | Delegate | GET | `/delegate/my-paper` | blob PDF |
-| 6 | Advisor | GET | `/advisor/delegates` | `{delegates[], total}` |
-| 7 | Advisor | GET | `/advisor/delegates/{id}/paper` | blob PDF |
-| 8 | Advisor | POST | `/advisor/verify-hashes` | `{delegates[]}` |
-| 9 | Advisor | GET | `/advisor/school` | `{school, billing, checklist}` |
-| 10 | Chair | GET | `/chair/committee/overview` | overview object |
-| 11 | Chair | GET | `/chair/rubric` | `[{id, label, maxScore}]` |
-| 12 | Chair | GET | `/chair/delegates` | delegate array |
-| 13 | Chair | POST | `/chair/papers/{id}/grade` | (ignored) |
-| 14 | Chair | GET | `/chair/papers/{id}/download` | blob PDF |
-| 15 | Chair | GET | `/chair/awards/options` | `[string]` |
-| 16 | Chair | GET | `/chair/awards/rubric` | `[{id, label, levels[]}]` |
-| 17 | Chair | GET | `/chair/awards/delegates` | delegate array |
-| 18 | Chair | POST | `/chair/awards/{id}` | (ignored) |
-| 19 | Admin | GET | `/admin/dashboard-stats` | stats object |
-| 20 | Admin | GET | `/admin/ports/health` | port array |
-| 21 | Admin | GET | `/admin/logs/business.txt` | blob text |
-| 22 | Admin | GET | `/admin/logs/technology.txt` | blob text |
-| 23 | Admin | GET | `/admin/export/database.csv` | blob CSV |
-| 24 | Admin | POST | `/admin/hashes` | `{hashes[]}` |
-| 25 | Admin | POST | `/admin/hashes/regenerate/delegate` | `{name, hash}` |
-| 26 | Admin | POST | `/admin/hashes/regenerate/school` | `{hashes[]}` |
-| 27 | Admin | DELETE | `/admin/hashes` | `{dropped[]}` |
-| 28 | Admin | GET | `/admin/hashes?schoolName=` | `{hashes[]}` |
-| 29 | Admin | GET | `/admin/awards` | `{committees[]}` |
-| 30 | Admin | GET | `/admin/broadcasts?kind=` | `{broadcasts[]}` |
-| 31 | Admin | POST | `/admin/broadcasts` | broadcast entry |
-| 32 | Admin | PATCH | `/admin/broadcasts/{id}` | broadcast entry |
-| 33 | Admin | DELETE | `/admin/broadcasts/{id}` | (204, no body) |
-| 34 | Admin | GET | `/admin/committees` | `[string]` |
-| 35 | Admin | GET | `/admin/schools` | `{schools[]}` |
-| 35a | Admin | POST | `/admin/schools` | school entry incl. `advisor_hash` |
+| 2 | Auth | POST | `/auth/logout` | (204, no body) |
+| 3 | Auth | POST | `/auth/register` | `{user, token}` |
+| 4 | Delegate | GET | `/delegate/my-assignment` | dashboard object |
+| 5 | Delegate | POST | `/delegate/upload-paper` | (ignored) |
+| 6 | Delegate | GET | `/delegate/my-paper` | blob PDF |
+| 7 | Advisor | GET | `/advisor/delegates` | `{delegates[], total}` |
+| 8 | Advisor | GET | `/advisor/delegates/{id}/paper` | blob PDF |
+| 9 | Advisor | POST | `/advisor/verify-hashes` | `{delegates[]}` |
+| 10 | Advisor | GET | `/advisor/school` | `{school, billing, checklist}` |
+| 11 | Chair | GET | `/chair/committee/overview` | overview object |
+| 12 | Chair | GET | `/chair/rubric` | `[{id, label, maxScore}]` |
+| 13 | Chair | GET | `/chair/delegates` | delegate array |
+| 14 | Chair | POST | `/chair/papers/{id}/grade` | (ignored) |
+| 15 | Chair | GET | `/chair/papers/{id}/download` | blob PDF |
+| 16 | Chair | GET | `/chair/awards/options` | `[string]` |
+| 17 | Chair | GET | `/chair/awards/rubric` | `[{id, label, levels[]}]` |
+| 18 | Chair | GET | `/chair/awards/delegates` | delegate array |
+| 19 | Chair | POST | `/chair/awards/{id}` | (ignored) |
+| 20 | Admin | GET | `/admin/dashboard-stats` | stats object |
+| 21 | Admin | GET | `/admin/ports/health` | port array |
+| 22 | Admin | GET | `/admin/logs/business.txt` | blob text |
+| 23 | Admin | GET | `/admin/logs/technology.txt` | blob text |
+| 24 | Admin | GET | `/admin/export/database.csv` | blob CSV |
+| 25 | Admin | POST | `/admin/hashes` | `{hashes[]}` |
+| 26 | Admin | POST | `/admin/hashes/regenerate/delegate` | `{name, hash}` |
+| 27 | Admin | GET | `/admin/hashes?schoolName=` | `{hashes[]}` |
+| 28 | Admin | GET | `/admin/awards` | `{committees[]}` |
+| 29 | Admin | GET | `/admin/broadcasts?kind=` | `{broadcasts[]}` |
+| 30 | Admin | POST | `/admin/broadcasts` | broadcast entry |
+| 31 | Admin | PATCH | `/admin/broadcasts/{id}` | broadcast entry |
+| 32 | Admin | DELETE | `/admin/broadcasts/{id}` | (204, no body) |
+| 33 | Admin | GET | `/admin/committees` | `[string]` |
+| 34 | Admin | GET | `/admin/schools` | `{schools[]}` |
+| 35 | Admin | POST | `/admin/schools` | school entry incl. `advisor_hash` |
 | 36 | Admin | GET | `/admin/checklist` | `{items[]}` |
 | 37 | Admin | PUT | `/admin/checklist` | `{items[]}` |
 | 38 | Admin | GET | `/admin/schools/{id}/checklist` | `{school_id, school_name, items[]}` |

@@ -230,15 +230,6 @@ class HashListResponse(BaseModel):
     hashes: list[HashEntry] = []
 
 
-class DroppedDelegate(BaseModel):
-    name: str
-    hash: str  # the hash that was deleted along with the delegate
-
-
-class DropDelegatesResponse(BaseModel):
-    dropped: list[DroppedDelegate] = []
-
-
 class AwardEntry(BaseModel):
     country: str
     award: str
