@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { useAuthStore } from '../stores/auth'
+import { isPreviewing, useAuthStore } from '../stores/auth'
 import { useToastStore } from '../stores/toast'
 import router from '../router'
 
@@ -30,7 +30,10 @@ apiClient.interceptors.response.use(
       const errorMessage = error.response.data?.message || `Server Error (${error.response.status})`
       toastStore.showToast(errorMessage, 'error')
 
-      if (error.response.status === 401) {
+      // A role preview is not a real session, so a 401 must not end it - otherwise the first
+      // request from a previewed dashboard bounces you straight back to the login screen.
+      // isPreviewing() is false in every production build (see stores/auth.js).
+      if (error.response.status === 401 && !isPreviewing()) {
         authStore.logout()
         router.push('/')
       }
