@@ -3,9 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- Drop your icon at Frontend/public/favicon.png (square, 64x64 or larger). Files in
-         public/ are copied as-is, so replacing the image needs no rebuild of imports. -->
-    <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- The icon lives in src/assets so it can be replaced like any other asset. Vite
+         rewrites this to a hashed /assets/... URL at build time, and serves it directly in
+         dev - a path under public/ would work too, but only if the file is actually there. -->
+    <link rel="icon" type="image/png" href="/src/assets/favicon.png" />
     <title>MUNSTer</title>
   </head>
   <body>
