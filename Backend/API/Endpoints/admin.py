@@ -21,7 +21,7 @@ from typing import Annotated, Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
 from fastapi.responses import FileResponse
-from sqlalchemy import delete, func, or_, select
+from sqlalchemy import delete, func, or_, select, update
 from sqlalchemy.orm import Session
 from crud.db import get_db, utcnow
 
@@ -33,17 +33,20 @@ from API import papers
 import crud.onboarding as onboarding
 from core.controls import BROADCAST_LIMITS, TIMELINE_PHASES
 
-from crud.database_schema import (Account,AuthSession,Base,Broadcast,
+from crud.database_schema import (Account,AuthSession,Base,Broadcast,Chairs,
     ChecklistProgress,Committees,ConferenceChecklist,Delegates,
     School,TimelineEvent,Uploads)
-from schemas.request_models import (BroadcastRequest,BroadcastUpdateRequest,DelegateUpdateRequest,
-    SchoolRequest,SchoolUpdateRequest,
+from schemas.request_models import (BroadcastRequest,BroadcastUpdateRequest,ChairHashRequest,
+    ChairRequest,ChairUpdateRequest,CommitteeRequest,CommitteeUpdateRequest,
+    DelegateUpdateRequest,SchoolRequest,SchoolUpdateRequest,
     ChecklistProgressRequest,ChecklistUpdateRequest,DelegateHashRequest,DropDelegatesRequest,
     NewHashRequest,SchoolHashRequest,TimelineUpdateRequest)
 
 from schemas.response_models import (AdminDashboardStatsResponse,AwardEntry,
     AwardsOverviewResponse,BroadcastEntry,BroadcastListResponse,
-    CommitteeAwards,CommitteeCount,ConferenceChecklistItem,ConferenceChecklistResponse,
+    CommitteeAwards,CommitteeChairEntry,CommitteeCount,CommitteeDelegateEntry,
+    CommitteeDetailResponse,ConferenceChecklistItem,ConferenceChecklistResponse,
+    DelegateRemovedResponse,
     DowntimeEvent,DropDelegatesResponse,DroppedDelegate,HashEntry,
     HashListResponse,PortHealth,SchoolChecklistItem,
     SchoolChecklistResponse,SchoolDelegateEntry,SchoolDetailResponse,SchoolDeletedResponse,
@@ -337,11 +340,21 @@ def _get_school(db: Session, school_name: str) -> School:
     return school
 
 
-def _ensure_committee(db: Session, committee_name: str) -> None:
-    """Create the committees row a delegate's FK points at, if it is not there yet."""
-    if db.get(Committees, committee_name) is None:
-        db.add(Committees(committee_name=committee_name))
-        db.flush()  # visible to the next delegate that names the same committee
+def _require_committee(db: Session, committee_name: str) -> Committees:
+    """Look a committee up, or explain that it has to be created first.
+
+    This used to create the row on the spot, so a typo silently produced a committee with no
+    chair, no topic and no way to notice. Now the committee list is authoritative: the admin
+    creates committees on the Committees tab, and a delegate can only be minted into one that
+    exists. 404 mirrors what /admin/broadcasts already answers for an unknown committee.
+    """
+    committee = db.get(Committees, committee_name)
+    if committee is None:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            f"Unknown committee '{committee_name}'. Create it on the Committees tab first.",
+        )
+    return committee
 
 
 def _revoke_sessions(db: Session, account_id: int) -> None:
@@ -413,7 +426,7 @@ def create_delegate_hashes(
                     f"{country} ({committee}) already has a hash. Use regenerate to issue a new one.",
                 )
 
-            _ensure_committee(db, committee)
+            _require_committee(db, committee)
             account = Account(
                 identifier=_mint_hash(),
                 role="delegate",
@@ -494,6 +507,41 @@ def regenerate_delegate_hash(
     )
 
     return HashEntry(name=f"{payload.country} ({payload.committee})", hash=new_hash)
+
+
+@router.post("/hashes/regenerate/chair", response_model=HashEntry)
+def regenerate_chair_hash(
+    payload: ChairHashRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> HashEntry:
+    """
+    Mint a fresh hash for one chair, identified by account id.
+
+    Chairs have no committee+country pair to identify them by, so the account id is the key.
+    The old hash stops working and the chair's live sessions are revoked.
+    """
+    chair = db.get(Chairs, payload.account_id)
+    if chair is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "No chair has that account id.")
+
+    account = db.get(Account, payload.account_id)
+    if account is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That chair has no account.")
+
+    _revoke_sessions(db, account.id)
+    account.identifier = _mint_hash()
+    db.commit()
+
+    core.audit.technical(
+        "hash.reissued",
+        actor=core.audit.actor(user),
+        role="chair",
+        account=account.id,
+        committee=chair.committee_name,
+    )
+
+    return HashEntry(name=chair.name, hash=account.identifier)
 
 
 @router.post("/hashes/regenerate/school", response_model=HashListResponse)
@@ -778,6 +826,382 @@ def list_committees(
     """Committee names, for the broadcast target picker (and any future picker)."""
     return list(
         db.scalars(select(Committees.committee_name).order_by(Committees.committee_name)).all()
+    )
+
+
+# --- Admin: one committee in detail, its chairs, and its delegates (§8.10) ---
+
+
+def _committee_chairs(db: Session, committee_name: str) -> list[CommitteeChairEntry]:
+    rows = db.execute(
+        select(Chairs, Account)
+        .join(Account, Account.id == Chairs.account_id)
+        .where(Chairs.committee_name == committee_name)
+        .order_by(Chairs.name)
+    ).all()
+    return [
+        CommitteeChairEntry(
+            account_id=chair.account_id,
+            name=chair.name,
+            email=chair.email,
+            hash=account.identifier,
+        )
+        for chair, account in rows
+    ]
+
+
+def _committee_delegates(db: Session, committee_name: str) -> list[CommitteeDelegateEntry]:
+    """Delegates in the committee, with their school: a committee spans several schools."""
+    rows = db.execute(
+        select(Delegates, Account, School)
+        .join(Account, Account.id == Delegates.account_id)
+        .join(School, School.account_id == Delegates.school_id)
+        .where(Delegates.committee == committee_name)
+        .order_by(School.school_name, Delegates.country)
+    ).all()
+    return [
+        CommitteeDelegateEntry(
+            account_id=delegate.account_id,
+            name=account.name,
+            country=delegate.country,
+            school_name=school.school_name,
+            hash=account.identifier,
+            paper_status=delegate.paper_status,
+            paper_grade=delegate.paper_grade,
+            has_paper=_paper_on_disk(db, delegate.account_id),
+        )
+        for delegate, account, school in rows
+    ]
+
+
+def _committee_detail(db: Session, committee: Committees) -> CommitteeDetailResponse:
+    return CommitteeDetailResponse(
+        committee_name=committee.committee_name,
+        committee_type=committee.committee_type,
+        topic=committee.topic,
+        chairs=_committee_chairs(db, committee.committee_name),
+        delegates=_committee_delegates(db, committee.committee_name),
+    )
+
+
+@router.post("/committees", response_model=CommitteeDetailResponse, status_code=status.HTTP_201_CREATED)
+def create_committee(
+    payload: CommitteeRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> CommitteeDetailResponse:
+    """Create a committee. Its name is the primary key, so a duplicate is a 409."""
+    name = payload.committee_name.strip()
+    if not name:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "committee_name cannot be blank.")
+
+    if db.get(Committees, name) is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT, f"A committee named '{name}' already exists."
+        )
+
+    committee = Committees(
+        committee_name=name,
+        committee_type=(payload.committee_type or "").strip() or None,
+        topic=(payload.topic or "").strip() or None,
+    )
+    db.add(committee)
+    db.commit()
+
+    core.audit.technical("committee.created", actor=core.audit.actor(user), committee=name)
+    return _committee_detail(db, committee)
+
+
+@router.get("/committees/{committee_name}", response_model=CommitteeDetailResponse)
+def get_committee_detail(
+    committee_name: str,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> CommitteeDetailResponse:
+    """One committee: its type and topic, its chairs with their hashes, and its delegates."""
+    return _committee_detail(db, _require_committee(db, committee_name))
+
+
+@router.patch("/committees/{committee_name}", response_model=CommitteeDetailResponse)
+def update_committee(
+    committee_name: str,
+    payload: CommitteeUpdateRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> CommitteeDetailResponse:
+    """
+    Rename a committee and/or edit its type and topic.
+
+    Renaming is the delicate part: `delegates.committee`, `chairs.committee_name` and
+    `broadcasts.committee_name` all reference this primary key and none of them cascade on
+    update, so the rename inserts the new row, repoints all three, then removes the old row -
+    one transaction, so a failure anywhere leaves the old name and its children intact.
+    """
+    committee = _require_committee(db, committee_name)
+
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No changes were sent.")
+
+    new_name = committee.committee_name
+    if "committee_name" in changes:
+        value = (changes["committee_name"] or "").strip()
+        if not value:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "committee_name cannot be blank.")
+        new_name = value
+
+    for field in ("committee_type", "topic"):
+        if field in changes and changes[field] is not None:
+            changes[field] = changes[field].strip() or None
+
+    old_name = committee.committee_name
+    renaming = new_name != old_name
+
+    if renaming:
+        if db.get(Committees, new_name) is not None:
+            raise HTTPException(
+                status.HTTP_409_CONFLICT, f"A committee named '{new_name}' already exists."
+            )
+
+        db.add(
+            Committees(
+                committee_name=new_name,
+                committee_type=changes.get("committee_type", committee.committee_type),
+                topic=changes.get("topic", committee.topic),
+            )
+        )
+        db.flush()  # the children's new FK value must exist before they are repointed
+
+        db.execute(
+            update(Delegates)
+            .where(Delegates.committee == old_name)
+            .values(committee=new_name)
+        )
+        db.execute(
+            update(Chairs)
+            .where(Chairs.committee_name == old_name)
+            .values(committee_name=new_name)
+        )
+        db.execute(
+            update(Broadcast)
+            .where(Broadcast.committee_name == old_name)
+            .values(committee_name=new_name)
+        )
+
+        # Core delete on purpose: db.delete(committee) would honour the ORM's
+        # "all, delete-orphan" relationships and take the delegates and chairs with it.
+        db.execute(delete(Committees).where(Committees.committee_name == old_name))
+        # Drop the stale instance so a later lookup cannot resurrect the old name from the
+        # identity map.
+        db.expunge(committee)
+    else:
+        if "committee_type" in changes:
+            committee.committee_type = changes["committee_type"]
+        if "topic" in changes:
+            committee.topic = changes["topic"]
+
+    db.commit()
+
+    core.audit.technical(
+        "committee.updated",
+        actor=core.audit.actor(user),
+        committee=new_name,
+        renamed_from=old_name if renaming else "-",
+        fields=",".join(sorted(changes)),
+    )
+
+    return _committee_detail(db, _require_committee(db, new_name))
+
+
+@router.post(
+    "/committees/{committee_name}/chairs",
+    response_model=CommitteeChairEntry,
+    status_code=status.HTTP_201_CREATED,
+)
+def create_committee_chair(
+    committee_name: str,
+    payload: ChairRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> CommitteeChairEntry:
+    """
+    Add a chair to a committee and issue their login hash.
+
+    Same shape as creating a school's advisor: the account is created with
+    `password_hash` NULL, so the chair claims the hash with "First-Time Register". Nothing
+    else in the API creates a `chairs` row, which is why this exists.
+    """
+    committee = _require_committee(db, committee_name)
+
+    name = payload.name.strip()
+    email = payload.email.strip()
+    if not name:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "name cannot be blank.")
+    if not email:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "email cannot be blank.")
+
+    account = Account(identifier=_mint_hash(), role="chair", name=name)
+    db.add(account)
+    db.flush()  # the chair row uses the account id as its primary key
+
+    chair = Chairs(
+        account_id=account.id,
+        name=name,
+        committee_name=committee.committee_name,
+        email=email,
+    )
+    db.add(chair)
+    db.commit()
+
+    core.audit.technical(
+        "chair.created",
+        actor=core.audit.actor(user),
+        account=account.id,
+        committee=committee.committee_name,
+    )
+
+    return CommitteeChairEntry(
+        account_id=account.id, name=name, email=email, hash=account.identifier
+    )
+
+
+@router.patch(
+    "/committees/{committee_name}/chairs/{account_id}", response_model=CommitteeChairEntry
+)
+def update_committee_chair(
+    committee_name: str,
+    account_id: int,
+    payload: ChairUpdateRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> CommitteeChairEntry:
+    """Edit a chair's name or email. The path's committee must own the chair."""
+    chair = db.get(Chairs, account_id)
+    if chair is None or chair.committee_name != committee_name:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "That chair is not part of this committee."
+        )
+    account = db.get(Account, account_id)
+    if account is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "That chair no longer exists.")
+
+    changes = payload.model_dump(exclude_unset=True)
+    if not changes:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "No changes were sent.")
+
+    for field in ("name", "email"):
+        if field in changes:
+            value = (changes[field] or "").strip()
+            if not value:
+                raise HTTPException(
+                    status.HTTP_400_BAD_REQUEST, f"{field} cannot be blank."
+                )
+            setattr(chair, field, value)
+
+    # The account's name is what the login response calls the user, so keep it in step.
+    account.name = chair.name
+    db.commit()
+
+    core.audit.technical(
+        "chair.updated",
+        actor=core.audit.actor(user),
+        account=account_id,
+        committee=committee_name,
+        fields=",".join(sorted(changes)),
+    )
+
+    return CommitteeChairEntry(
+        account_id=chair.account_id,
+        name=chair.name,
+        email=chair.email,
+        hash=account.identifier,
+    )
+
+
+@router.delete(
+    "/committees/{committee_name}/chairs/{account_id}", status_code=status.HTTP_204_NO_CONTENT
+)
+def delete_committee_chair(
+    committee_name: str,
+    account_id: int,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> Response:
+    """Remove a chair: the profile row and the account, which cascades their sessions."""
+    chair = db.get(Chairs, account_id)
+    if chair is None or chair.committee_name != committee_name:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "That chair is not part of this committee."
+        )
+
+    account = db.get(Account, account_id)
+    db.delete(chair)
+    db.flush()  # the profile row must go before the account it belongs to
+    if account is not None:
+        db.delete(account)
+    db.commit()
+
+    core.audit.technical(
+        "chair.deleted",
+        actor=core.audit.actor(user),
+        account=account_id,
+        committee=committee_name,
+    )
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.delete(
+    "/committees/{committee_name}/delegates/{account_id}",
+    response_model=DelegateRemovedResponse,
+)
+def delete_committee_delegate(
+    committee_name: str,
+    account_id: int,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> DelegateRemovedResponse:
+    """
+    Remove one delegate from a committee: their rows, their hash and their stored paper.
+
+    The path's committee must own the delegate, so a wrong committee cannot remove someone
+    else's delegate. Files are unlinked after the commit because the cascade removes rows,
+    not bytes - the same ordering as removing a whole school.
+    """
+    delegate = db.get(Delegates, account_id)
+    if delegate is None or delegate.committee != committee_name:
+        raise HTTPException(
+            status.HTTP_404_NOT_FOUND, "That delegate is not in this committee."
+        )
+    account = db.get(Account, account_id)
+
+    country = delegate.country
+    school_name = (
+        db.scalar(select(School.school_name).where(School.account_id == delegate.school_id)) or ""
+    )
+    files = list(
+        db.scalars(select(Uploads.file_path).where(Uploads.delegate_id == account_id)).all()
+    )
+
+    db.delete(delegate)
+    db.flush()  # the delegate row must go before the account it belongs to
+    if account is not None:
+        db.delete(account)
+    db.commit()
+
+    for path in files:
+        core.storage.delete_paper(path)
+
+    core.audit.technical(
+        "delegate.deleted",
+        actor=core.audit.actor(user),
+        account=account_id,
+        committee=committee_name,
+        school=school_name,
+        files=len(files),
+    )
+
+    return DelegateRemovedResponse(
+        delegate=country, school=school_name, files_deleted=len(files)
     )
 
 
@@ -1285,7 +1709,7 @@ def update_school_delegate(
             )
 
         if committee != delegate.committee:
-            _ensure_committee(db, committee)  # the FK needs the row to exist
+            _require_committee(db, committee)  # the committee list is authoritative
 
         delegate.country = country
         delegate.committee = committee

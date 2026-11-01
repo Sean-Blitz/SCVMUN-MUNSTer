@@ -644,6 +644,8 @@ Request:
 ```
 
 Field notes:
+- **Every committee named in `finalAssignments` must already exist** (§8.10). An unknown one
+  returns `404` and creates nothing; committees are no longer conjured from a typo.
 - `school_name` identifies the school the new delegates belong to. **This endpoint does not
   create the school** (it was named `create_school_or_delegate_hashes` before the split, and
   no school was ever created there): an unknown name returns `404` pointing at
@@ -1097,7 +1099,8 @@ Body: `{ "country": "Brazil", "committee": "UNHRC" }` — either may be omitted.
   cannot edit another school's delegate).
 - `409` if another delegate already holds that `(committee, country)` — there is no database
   constraint for it, so the rule is enforced here, mirroring `POST /admin/hashes`.
-- Naming a committee that does not exist yet creates it.
+- The target committee must already exist (§8.10); an unknown one is a `404` and the
+  delegate is left where it was.
 - The hash is **not** writable here: use `POST /admin/hashes/regenerate/delegate` (§8.4.2),
   which the view calls with the row's current committee and country.
 
@@ -1117,6 +1120,109 @@ Response `200`:
 - Delegate rows are deleted before the advisor account, because `delegates.school_id ->
   schools` is `NO ACTION`; the other order fails on a real database.
 - `404` for an unknown id. There is no soft delete and no undo — `pg_dump` is the net.
+
+### 8.10 Committees — create, rename, chairs, delegate removal
+
+The **Committees** tab in `AdminDashboardView.vue`. `GET /admin/committees` (§8.6.2) still
+returns plain names and is what the dropdown and every committee field's `<datalist>` use.
+
+**A delegate's committee must already exist.** `POST /admin/hashes` no longer creates a
+committee from the name it is given: an unknown one returns `404`
+`"Unknown committee '<name>'. Create it on the Committees tab first."` and no row is created.
+The same rule applies when §8.9.3 moves a delegate to another committee.
+
+A committee has two optional descriptive fields besides its name: `committee_type` (e.g.
+"General Assembly", up to 50 chars) and `topic` (e.g. "Nuclear disarmament", up to 200).
+
+#### 8.10.1 `POST /admin/committees`
+
+```json
+{ "committee_name": "DISEC", "committee_type": "General Assembly", "topic": "Nuclear disarmament" }
+```
+
+Response `201`: the detail shape of §8.10.2. `400` blank name, `409` name taken (the name is
+the primary key), `422` over-long.
+
+#### 8.10.2 `GET /admin/committees/{committee_name}`
+
+```json
+{
+  "committee_name": "DISEC",
+  "committee_type": "General Assembly",
+  "topic": "Nuclear disarmament",
+  "chairs": [
+    { "account_id": 4, "name": "Alex Chair", "email": "alex@lhs.edu", "hash": "f2be0f1a16e7d084" }
+  ],
+  "delegates": [
+    {
+      "account_id": 12, "name": "Lincoln High - #1", "country": "France",
+      "school_name": "Lincoln High", "hash": "9fa9…", "paper_status": "graded",
+      "paper_grade": "18/20", "has_paper": true
+    }
+  ]
+}
+```
+
+Delegates are ordered by school then country — `school_name` is included because a committee
+spans several schools, so two "France" rows are otherwise indistinguishable. Chairs are
+ordered by name. `404` for an unknown committee.
+
+#### 8.10.3 `PATCH /admin/committees/{committee_name}`
+
+Body: any subset of `committee_name`, `committee_type`, `topic` (`null` clears the two
+optional ones). Response `200`: the detail shape after the change.
+
+- `409` when renaming to a taken name, `400` blank, `422` over-long.
+- **Renaming repoints every child in one transaction**: the delegates in it, its chairs, and
+  any announcement scoped to it (`broadcasts.committee_name`). Nothing in the schema cascades
+  on update, so the order is: insert the new row, update the three child tables, delete the
+  old row. A failure anywhere leaves the old name intact.
+
+#### 8.10.4 `POST /admin/committees/{committee_name}/chairs`
+
+```json
+{ "name": "Alex Chair", "email": "alex@lhs.edu" }
+```
+
+Response `201`: `{ "account_id": 4, "name": "Alex Chair", "email": "...", "hash": "f2be…" }` —
+the hash is handed out here and nowhere else.
+
+The chair account is created with `password_hash` NULL, so the chair claims the hash with
+"First-Time Register", exactly as an advisor does for a school. `404` unknown committee.
+
+#### 8.10.5 `PATCH /admin/committees/{committee_name}/chairs/{account_id}`
+
+Body: `{ "name": "...", "email": "..." }`, either optional. Response `200`: the chair entry.
+`404` when the chair is not part of that committee. The account's display name is kept in
+step with the profile name, so the login response shows the edit.
+
+#### 8.10.6 `DELETE /admin/committees/{committee_name}/chairs/{account_id}`
+
+Response `204`. Removes the chair profile row and the account, which cascades their sessions.
+`404` when the chair is not in that committee.
+
+#### 8.10.7 `DELETE /admin/committees/{committee_name}/delegates/{account_id}`
+
+Response `200`:
+
+```json
+{ "delegate": "France", "school": "Lincoln High", "files_deleted": 1 }
+```
+
+Removes the delegate row, the account (cascading sessions and paper rows) and unlinks the
+stored PDFs. `404` when the delegate is not in that committee — the path is checked, so a
+wrong committee cannot remove someone else's delegate. Country and committee *edits* stay in
+the Existing Schools view (§8.9.3).
+
+#### 8.10.8 `POST /admin/hashes/regenerate/chair`
+
+```json
+{ "account_id": 4 }
+```
+
+Response `200`: `{ "name": "Alex Chair", "hash": "<new>" }`. Mints a new hash, revokes that
+chair's sessions, and the old hash stops working. Chairs are identified by account id because
+they have no committee+country pair; delegate reissue stays §8.4.2.
 
 ---
 
@@ -1171,6 +1277,14 @@ Response `200`:
 | 43 | Admin | PATCH | `/admin/schools/{id}` | same as `GET` |
 | 44 | Admin | PATCH | `/admin/schools/{id}/delegates/{aid}` | delegate entry |
 | 45 | Admin | DELETE | `/admin/schools/{id}?confirm=` | deletion summary |
+| 46 | Admin | POST | `/admin/committees` | committee detail |
+| 47 | Admin | GET | `/admin/committees/{name}` | committee detail |
+| 48 | Admin | PATCH | `/admin/committees/{name}` | committee detail |
+| 49 | Admin | POST | `/admin/committees/{name}/chairs` | chair entry + hash |
+| 50 | Admin | PATCH | `/admin/committees/{name}/chairs/{aid}` | chair entry |
+| 51 | Admin | DELETE | `/admin/committees/{name}/chairs/{aid}` | (204, no body) |
+| 52 | Admin | DELETE | `/admin/committees/{name}/delegates/{aid}` | removal summary |
+| 53 | Admin | POST | `/admin/hashes/regenerate/chair` | `{name, hash}` |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.

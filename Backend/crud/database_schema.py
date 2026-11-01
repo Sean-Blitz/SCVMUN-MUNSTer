@@ -73,9 +73,24 @@ class School(Base):
     delegates = relationship("Delegates", backref="school", cascade="all, delete-orphan")
 
 class Committees(Base):
+    """One committee: its name, plus what it is about.
+
+    The name is the primary key because every other table points at a committee *by name*
+    (`delegates.committee`, `chairs.committee_name`, `broadcasts.committee_name`), which is
+    also why renaming one has to repoint those rows in a single transaction - nothing here
+    cascades on update.
+
+    `committee_type` and `topic` are optional: a committee is usable the moment it has a
+    name, but the admin needs somewhere to record whether it is a General Assembly body or a
+    crisis committee, and what it is debating. The legacy CLI sent a per-delegate
+    `committeeType` that had no column to land in; this is where that value belongs, once per
+    committee rather than once per delegate.
+    """
     __tablename__ = "committees"
 
     committee_name: Mapped[str] = mapped_column(String(100), primary_key=True)
+    committee_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    topic: Mapped[Optional[str]] = mapped_column(String(200), nullable=True)
     chairs = relationship("Chairs", backref="committee", cascade="all, delete-orphan")
     delegates = relationship("Delegates", backref="committee_record", cascade="all, delete-orphan")
 

@@ -116,6 +116,46 @@ class DelegateUpdateRequest(BaseModel):
     committee: Annotated[str | None, Field(max_length=100)] = None
 
 
+class CommitteeRequest(BaseModel):
+    """A new committee. Only the name is required; type and topic can be filled in later."""
+
+    committee_name: Annotated[str, Field(max_length=100)]
+    committee_type: Annotated[str | None, Field(max_length=50)] = None
+    topic: Annotated[str | None, Field(max_length=200)] = None
+
+
+class CommitteeUpdateRequest(BaseModel):
+    """Partial edit of a committee. `null` clears `committee_type` or `topic`."""
+
+    committee_name: Annotated[str | None, Field(max_length=100)] = None
+    committee_type: Annotated[str | None, Field(max_length=50)] = None
+    topic: Annotated[str | None, Field(max_length=200)] = None
+
+
+class ChairRequest(BaseModel):
+    """A new chair account for a committee.
+
+    No password: the account is created with `password_hash` NULL and the chair claims the
+    minted hash through "First-Time Register", exactly as an advisor does.
+    """
+
+    name: Annotated[str, Field(max_length=100)]
+    email: Annotated[str, Field(max_length=100)]
+
+
+class ChairUpdateRequest(BaseModel):
+    """Partial edit of a chair's profile."""
+
+    name: Annotated[str | None, Field(max_length=100)] = None
+    email: Annotated[str | None, Field(max_length=100)] = None
+
+
+class ChairHashRequest(BaseModel):
+    """Identify a chair whose hash should be reissued, by account id."""
+
+    account_id: int
+
+
 class NewHashRequest(BaseModel):
     """
     Delegates to create, keyed by a display name such as "1".

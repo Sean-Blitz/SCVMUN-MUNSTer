@@ -372,6 +372,46 @@ class SchoolDetailResponse(BaseModel):
     delegates: list[SchoolDelegateEntry] = []
 
 
+class CommitteeChairEntry(BaseModel):
+    """One chair of a committee, with the login hash the admin has to hand over."""
+
+    account_id: int
+    name: str
+    email: str
+    hash: str
+
+
+class CommitteeDelegateEntry(BaseModel):
+    """One delegate in a committee. `school_name` matters because a committee spans schools."""
+
+    account_id: int
+    name: str  # accounts.name, e.g. "Lincoln High - #1"
+    country: str
+    school_name: str
+    hash: str
+    paper_status: str
+    paper_grade: str | None = None
+    has_paper: bool = False
+
+
+class CommitteeDetailResponse(BaseModel):
+    """One committee: what it is, who chairs it, and who is in it."""
+
+    committee_name: str
+    committee_type: str | None = None
+    topic: str | None = None
+    chairs: list[CommitteeChairEntry] = []
+    delegates: list[CommitteeDelegateEntry] = []
+
+
+class DelegateRemovedResponse(BaseModel):
+    """What removing one delegate from a committee actually removed."""
+
+    delegate: str
+    school: str
+    files_deleted: int
+
+
 class SchoolDeletedResponse(BaseModel):
     """What a school deletion actually removed."""
 
