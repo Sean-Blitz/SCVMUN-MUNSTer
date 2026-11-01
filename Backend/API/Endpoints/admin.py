@@ -1874,7 +1874,11 @@ def _timeline_response(db: Session) -> TimelineListResponse:
     return TimelineListResponse(
         events=[
             TimelineEntry(
-                id=row.id, phase=row.phase, label=row.label, starts_at=row.starts_at
+                id=row.id,
+                phase=row.phase,
+                label=row.label,
+                starts_at=row.starts_at,
+                pinned=row.pinned,
             )
             for row in rows
         ]
@@ -1901,12 +1905,24 @@ def replace_timeline(
 
     Nothing else references an event, so this is a plain delete-then-insert in one
     transaction; the events come back sorted by time, not in the order they were sent.
+
+    The pinned "Conference Start" row is the exception: its time is the conference's start
+    and the target of the header countdown, so it can be re-dated but not removed or
+    renamed. Because the payload carries no ids - events have no identity to preserve - it
+    is matched by (phase, label), which is why the label is part of the rule.
     """
     if len(payload.events) > MAX_TIMELINE_EVENTS:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
             f"The timeline holds at most {MAX_TIMELINE_EVENTS} events.",
         )
+
+    pinned_existing = {
+        (row.phase, row.label)
+        for row in db.scalars(
+            select(TimelineEvent).where(TimelineEvent.pinned.is_(True))
+        ).all()
+    }
 
     events: list[TimelineEvent] = []
     for position, entry in enumerate(payload.events, start=1):
@@ -1934,7 +1950,23 @@ def replace_timeline(
             )
 
         events.append(
-            TimelineEvent(phase=entry.phase, label=label, starts_at=entry.starts_at)
+            TimelineEvent(
+                phase=entry.phase,
+                label=label,
+                starts_at=entry.starts_at,
+                pinned=(entry.phase, label) in pinned_existing,
+            )
+        )
+
+    # Refuse before deleting anything: a schedule that drops the pinned line would take the
+    # conference's start time (and the countdown) with it.
+    submitted = {(event.phase, event.label) for event in events}
+    if pinned_existing - submitted:
+        missing = ", ".join(sorted(label for _phase, label in pinned_existing - submitted))
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"'{missing}' is the conference's start and cannot be removed or renamed. "
+            "Change its time instead.",
         )
 
     db.execute(delete(TimelineEvent))

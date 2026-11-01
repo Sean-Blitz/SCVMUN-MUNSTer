@@ -421,6 +421,20 @@ class TimelineEntry(BaseModel):
     phase: str  # 'preConference' | 'duringConference'
     label: str
     starts_at: datetime  # naive UTC, as stored
+    # The conference's start line: re-datable, but not removable or renamable (§8.9).
+    pinned: bool = False
+
+
+class ConferenceStartResponse(BaseModel):
+    """The conference's start time, for the header countdown.
+
+    `starts_at` is an ISO-8601 instant with `+00:00`, so a browser parses it as UTC rather
+    than as local time - the stored column is naive UTC. Null when the pinned event is
+    missing, which lets the header hide the countdown instead of inventing a date.
+    """
+
+    label: str
+    starts_at: str | None = None
 
 
 class TimelineListResponse(BaseModel):

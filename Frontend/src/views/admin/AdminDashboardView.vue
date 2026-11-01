@@ -165,7 +165,7 @@
       </div>
     </template>
 
-    <!-- ============================ HASH MANAGEMENT ============================ -->
+    <!-- ======================= SCHOOLS MANAGEMENT ======================= -->
     <template v-if="activeTab === 'hashes'">
       <!-- CREATE A SCHOOL (and its advisor account) -->
       <div class="section-card">
@@ -277,7 +277,7 @@
         </div>
       </div>
 
-      <!-- CREATE + REGENERATE -->
+      <!-- GENERATE DELEGATE HASHES -->
       <div class="section-card">
         <h2>Generate Hashes for New Delegates</h2>
         <p class="section-desc">
@@ -1006,14 +1006,26 @@
           <strong>points in time</strong> — a chair's dashboard marks each one completed, in
           progress or upcoming by comparing it with the clock, so there is nothing to tick.
           Order does not matter here: the list is sorted by time when it is saved.
+          <br><br>
+          Take note that the first event is pinned to the conference start, and its time is what the header countdown reads. You cannot remove or change this event except the date.
         </p>
 
         <div v-if="!timelineEvents.length" class="empty-state">
           No events yet — add the first one below.
         </div>
 
-        <div v-for="(event, index) in timelineEvents" :key="index" class="timeline-editor-row">
-          <select v-model="event.phase" class="text-input" @change="timelineDirty = true">
+        <div
+          v-for="(event, index) in timelineEvents"
+          :key="index"
+          class="timeline-editor-row"
+          :class="{ 'is-pinned': event.pinned }"
+        >
+          <select
+            v-model="event.phase"
+            class="text-input"
+            :disabled="event.pinned"
+            @change="timelineDirty = true"
+          >
             <option v-for="phase in timelinePhases" :key="phase.value" :value="phase.value">
               {{ phase.label }}
             </option>
@@ -1022,6 +1034,7 @@
             v-model="event.label"
             class="text-input"
             type="text"
+            :disabled="event.pinned"
             placeholder="e.g. Opening Ceremony"
             @input="timelineDirty = true"
           />
@@ -1031,7 +1044,10 @@
             type="datetime-local"
             @input="timelineDirty = true"
           />
-          <button class="btn-icon" title="Remove event" @click="removeTimelineEvent(index)">✕</button>
+          <span v-if="event.pinned" class="pinned-note" title="The conference start: the header countdown reads it">
+            start
+          </span>
+          <button v-else class="btn-icon" title="Remove event" @click="removeTimelineEvent(index)">✕</button>
         </div>
 
         <div class="row-actions">
@@ -1958,7 +1974,8 @@ const loadTimeline = async () => {
       id: event.id,
       phase: event.phase,
       label: event.label,
-      starts_at: toLocalInput(event.starts_at)
+      starts_at: toLocalInput(event.starts_at),
+      pinned: Boolean(event.pinned)
     }))
     timelineDirty.value = false
   } catch (error) {
@@ -1973,12 +1990,21 @@ const addTimelineEvent = () => {
     id: null,
     phase: 'preConference',
     label: '',
-    starts_at: ''
+    starts_at: '',
+    pinned: false
   })
   timelineDirty.value = true
 }
 
 const removeTimelineEvent = (index) => {
+  if (timelineEvents.value[index]?.pinned) {
+    // Matches the server rule: the start line can be re-dated, never dropped.
+    toastStore.showToast(
+      'The Conference Start line sets the conference time and cannot be removed. Change its time instead.',
+      'error'
+    )
+    return
+  }
   timelineEvents.value.splice(index, 1)
   timelineDirty.value = true
 }
@@ -2007,7 +2033,8 @@ const saveTimeline = async () => {
       id: event.id,
       phase: event.phase,
       label: event.label,
-      starts_at: toLocalInput(event.starts_at)
+      starts_at: toLocalInput(event.starts_at),
+      pinned: Boolean(event.pinned)
     }))
     timelineDirty.value = false
     toastStore.showToast('Timeline saved.', 'success')
@@ -3103,6 +3130,19 @@ onMounted(async () => {
 }
 
 /* TIMELINE EDITOR */
+.timeline-editor-row.is-pinned {
+  border-left: 3px solid #e8c604;
+  padding-left: 8px;
+}
+
+.pinned-note {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a7500;
+  justify-self: end;
+}
+
 .timeline-editor-row {
   display: grid;
   grid-template-columns: 180px 1fr 220px auto;
@@ -3133,7 +3173,20 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 
-  .timeline-editor-row {
+  .timeline-editor-row.is-pinned {
+  border-left: 3px solid #e8c604;
+  padding-left: 8px;
+}
+
+.pinned-note {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #8a7500;
+  justify-self: end;
+}
+
+.timeline-editor-row {
     grid-template-columns: 1fr;
   }
 

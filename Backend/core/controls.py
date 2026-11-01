@@ -28,3 +28,8 @@ TIMELINE_PHASES = ("preConference", "duringConference")
 # a valid token could churn the disk. The old file is deleted on each re-upload
 # (see API/Endpoints/delegates.py), so the steady state is one stored paper per delegate.
 MAX_UPLOADS_PER_HOUR = 5
+
+# The one timeline event the admin cannot delete or rename: its `starts_at` is the
+# conference's start time, which the header countdown reads. Seeded by crud/seed.py and
+# protected in PUT /admin/timeline.
+CONFERENCE_START_LABEL = "Conference Start"

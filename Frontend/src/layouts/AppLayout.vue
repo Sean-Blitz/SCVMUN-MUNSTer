@@ -11,9 +11,12 @@
             class="app-logo"
             @error="handleImageError"
           />
-          <span class="brand-title">MUN Portal</span>
+          <span class="brand-title">MUNSTer</span>
         </router-link>
       </div>
+
+      <!-- CONFERENCE COUNTDOWN: the header's centre column -->
+      <ConferenceCountdown />
 
       <!-- CURRENT USER & SESSION INFO -->
       <div class="navbar-right">
@@ -40,6 +43,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import apiClient from '../api/client'
+import ConferenceCountdown from '../components/ConferenceCountdown.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -85,6 +89,9 @@ const handleLogout = async () => {
 .navbar-left {
   display: flex;
   align-items: center;
+  /* Left and right take equal share so the countdown sits in the true centre. */
+  flex: 1;
+  min-width: 0;
 }
 
 .logo-link {
@@ -111,6 +118,9 @@ const handleLogout = async () => {
 .navbar-right {
   display: flex;
   align-items: center;
+  justify-content: flex-end;
+  flex: 1;
+  min-width: 0;
   gap: 20px;
 }
 

@@ -46,7 +46,7 @@ import core.audit
 import crud.onboarding as onboarding
 from crud.database_schema import Account, School
 from crud.db import DATABASE_URL, SessionLocal, engine
-from crud.seed import ensure_schema
+from crud.seed import ensure_conference_start, ensure_schema
 
 # Shared with POST /admin/schools, so a school created here and a school created through the
 # API cannot differ. Named locally for the messages below.
@@ -150,6 +150,9 @@ def main() -> None:
 
     tables = ensure_schema(engine)
     print(f"Schema ready: {len(tables)} tables.")
+
+    if ensure_conference_start(engine):
+        print("Seeded the pinned 'Conference Start' timeline event (placeholder date).")
 
     schools = load_schools(args.schools) if args.schools else []
     if not schools:

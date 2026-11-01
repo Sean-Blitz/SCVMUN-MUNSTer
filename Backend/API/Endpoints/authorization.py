@@ -1,7 +1,7 @@
 """
 These are the only routes with no role gate: they are how a client obtains a token.
 """
-
+import re
 from datetime import timedelta
 from typing import Annotated
 
@@ -46,6 +46,13 @@ def _start_session(db: Session, user: Account) -> str:
 
     return token
 
+def _is_strong_password(password):
+    # Requires: Min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char
+    pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?\":{}|<>])[A-Za-z\d!@#$%^&*(),.?\":{}|<>]{8,}$"
+    
+    if re.fullmatch(pattern, password):
+        return True
+    return False
 
 @router.post("/login", response_model=LoginResponse, dependencies=[Depends(require_captcha)])
 def login(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginResponse:
@@ -114,6 +121,11 @@ def register(payload: LoginRequest, db: Session = Depends(get_db)) -> LoginRespo
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "This access code has already been registered. Log in instead.",
+        )
+    elif _is_strong_password(payload.password) is False:
+        raise HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Password must be at least 8 characters long and include at least one uppercase letter, one lowercase letter, one digit, and one special character.",
         )
 
     user.password_hash = core.security.hash_password(payload.password)

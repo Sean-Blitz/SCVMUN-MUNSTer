@@ -977,12 +977,19 @@ Limits: at most **30** events, each label 200 characters or fewer after trimming
 labels, and `starts_at` must be **naive UTC** — an aware value with a timezone suffix is
 rejected (`400`) rather than silently shifted by the database session's offset.
 
+**One row is pinned: `Conference Start`.** Its time *is* the conference's start, so the header
+countdown (§9) reads it, and it can be re-dated but **not removed or renamed** — `PUT` rejects
+an edit that drops it with `400`. Because the payload carries no ids, it is matched by
+`(phase, label)`. `crud/seed.py` inserts it (with a placeholder date) so every database has
+one; the placeholder is meant to be replaced from the Timeline tab.
+
 #### 8.8.1 `GET /admin/timeline`
 
 ```json
 {
   "events": [
-    { "id": 3, "phase": "preConference", "label": "Opening Ceremony", "starts_at": "2026-10-09T18:00:00" }
+    { "id": 3, "phase": "preConference", "label": "Conference Start", "starts_at": "2026-10-09T18:00:00", "pinned": true },
+    { "id": 4, "phase": "preConference", "label": "Opening Ceremony", "starts_at": "2026-10-09T19:30:00", "pinned": false }
   ]
 }
 ```
@@ -990,6 +997,8 @@ rejected (`400`) rather than silently shifted by the database session's offset.
 Field notes:
 - `starts_at` is naive UTC here, matching every other admin payload, so it round-trips through
   `PUT` unchanged. §5.1 is where it gains the explicit offset the browser needs.
+- `pinned` marks the one line the editor must not let you delete or rename. The view disables
+  its phase and label inputs and hides its ✕.
 
 #### 8.8.2 `PUT /admin/timeline`
 
@@ -1008,8 +1017,11 @@ Field notes:
 - `phase` is `preConference` or `duringConference`; `id` is not accepted (events have no
   identity to preserve).
 - Submission order is irrelevant — the response is sorted by time.
-- Response `200`: the saved events, as in §8.8.1. `{"events": []}` clears the schedule, which
-  every chair then sees as two empty lists.
+- The pinned `Conference Start` line must be present and keep its label and phase; omitting it
+  or renaming it is a `400` ("…is the conference's start and cannot be removed or renamed.
+  Change its time instead."), and **nothing is deleted** when that happens.
+- Response `200`: the saved events, as in §8.8.1. `{"events": []}` clears everything *except*
+  the pinned line, which is why an empty schedule is a `400` rather than a wipe.
 
 ### 8.9 Existing Schools — one school in detail
 
@@ -1199,6 +1211,28 @@ Response `200`: `{ "name": "Alex Chair", "hash": "<new>" }`. Mints a new hash, r
 chair's sessions, and the old hash stops working. Chairs are identified by account id because
 they have no committee+country pair; delegate reissue stays §8.4.2.
 
+### 9. Public meta — the header countdown
+
+#### 9.1 `GET /api/conference`
+
+**Unauthenticated** on purpose: the countdown sits in the global header, and the login page
+shows the same app chrome, so this cannot depend on a token. It exposes only a date the
+organisers publish anyway.
+
+```json
+{ "label": "Conference Start", "starts_at": "2026-12-01T06:00:00+00:00" }
+```
+
+Field notes:
+- `starts_at` is the pinned timeline event's time, as ISO-8601 **with `+00:00`** — unlike the
+  admin payloads, deliberately: the browser subtracts it from `Date.now()`, and a naive string
+  would be read as local time and be off by the client's offset.
+- `null` when the pinned event is missing; the header then renders no countdown rather than
+  inventing a date.
+- The countdown itself is client-side: `Frontend/src/components/ConferenceCountdown.vue` ticks
+  once a second and switches to **"Conference is Live!"** at zero. Units are days, hours,
+  minutes and seconds — months are not used, because a month has no fixed length.
+
 ---
 
 ## Quick Reference
@@ -1258,6 +1292,7 @@ they have no committee+country pair; delegate reissue stays §8.4.2.
 | 51 | Admin | DELETE | `/admin/committees/{name}/chairs/{aid}` | (204, no body) |
 | 52 | Admin | DELETE | `/admin/committees/{name}/delegates/{aid}` | removal summary |
 | 53 | Admin | POST | `/admin/hashes/regenerate/chair` | `{name, hash}` |
+| 54 | Public | GET | `/conference` | `{label, starts_at}` |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.

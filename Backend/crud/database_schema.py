@@ -1,7 +1,7 @@
 import os
 from dotenv import load_dotenv; load_dotenv()  # Load environment variables from .env file
 from typing import Optional, List, Dict, Any
-from sqlalchemy import String, Integer, Boolean, Float, ForeignKey, CheckConstraint, Index, create_engine, func
+from sqlalchemy import String, Integer, Boolean, Float, ForeignKey, CheckConstraint, Index, create_engine, false, func
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
@@ -253,3 +253,8 @@ class TimelineEvent(Base):
     phase: Mapped[str] = mapped_column(String(20), nullable=False)
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     starts_at: Mapped[datetime] = mapped_column(nullable=False)
+
+    # True for the single "Conference Start" row, whose time is the conference's start and
+    # therefore the target of the header countdown. It can be re-dated but not deleted or
+    # renamed; PUT /admin/timeline enforces that. Seeded by crud/seed.py.
+    pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
