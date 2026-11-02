@@ -29,7 +29,8 @@ const routes = [
         path: 'delegate/dashboard',
         name: 'delegate-dashboard',
         component: () => import('../views/delegate/DelegateDashboardView.vue'),
-        meta: { roles: ['delegate'] }
+        // This page carries its own header (the intro platform), so the shell hides its navbar.
+        meta: { roles: ['delegate'], hideNavbar: true }
       },
 
       // Advisor Routes

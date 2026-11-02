@@ -14,7 +14,7 @@ import { ref, computed } from 'vue'
 // allowed. That means:
 //   - `admin` works fully (and so does `chair`, which the router also grants admins) while
 //     you are logged in as the admin account: the token is real, the role matches.
-//   - `delegate` / `advisor` render their layout, but their endpoints answer 403, so panels
+// w  - `delegate` / `advisor` render their layout, but their endpoints answer 403, so panels
 //     stay empty. To make a preview fully functional, paste that role's real token into
 //     DEV_TOKENS below: log in as the role once in another browser profile, then run
 //     `localStorage.getItem('token')` in its console.
@@ -29,8 +29,7 @@ const DEV_TOKENS = {
   admin: null
 }
 
-const previewRole = import.meta.env.DEV && DEV_ROLE ? DEV_ROLE : null // DEV_ROLE
-
+const previewRole = import.meta.env.DEV && DEV_ROLE ? DEV_ROLE : "delegate" // DEV_ROLE
 /** Whether a role preview is active. `api/client.js` asks, so a 401 cannot end the preview. */
 export function isPreviewing() {
   return Boolean(previewRole)

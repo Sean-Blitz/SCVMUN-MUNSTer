@@ -1,7 +1,7 @@
 <template>
   <div class="app-layout">
-    <!-- TOP GLOBAL NAVIGATION BAR -->
-    <header class="global-navbar">
+    <!-- TOP GLOBAL NAVIGATION BAR (pages that carry their own header opt out of this one) -->
+    <header v-if="!$route.meta.hideNavbar" class="global-navbar">
       <div class="navbar-left">
         <router-link to="/" class="logo-link">
           <!-- Fallback to placeholder if asset is missing -->
@@ -40,26 +40,14 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
-import apiClient from '../api/client'
 import ConferenceCountdown from '../components/ConferenceCountdown.vue'
+import { useLogout } from '../utils/useLogout'
 
-const router = useRouter()
 const authStore = useAuthStore()
 
 const currentUser = computed(() => authStore.user || { name: 'Guest', role: 'none' })
-
-const handleLogout = async () => {
-  try {
-    // Revoke the session server-side too; a failure must not block signing out locally.
-    await apiClient.post('/auth/logout')
-  } catch (error) {
-    // Ignored on purpose: the token is cleared below regardless.
-  }
-  authStore.logout()
-  router.push('/')
-}
+const { handleLogout } = useLogout()
 </script>
 
 <style scoped>
