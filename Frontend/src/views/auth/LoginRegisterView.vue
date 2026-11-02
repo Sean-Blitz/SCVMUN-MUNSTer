@@ -14,7 +14,10 @@
           <span class="caret" aria-hidden="true"></span>
         </h1>
 
-        <span class="scroll-cue" aria-hidden="true"></span>
+        <div class="scroll-hint" aria-hidden="true">
+          <span class="scroll-hint-text">Scroll down</span>
+          <span class="scroll-cue"></span>
+        </div>
       </div>
     </section>
 
@@ -273,7 +276,7 @@ onBeforeUnmount(() => {
 // ---------- Intro animation (presentation only) ----------
 // The wordmark types itself in, then breaks apart as the page scrolls. Scroll progress is
 // written straight to a CSS custom property (`--p`) so the animation never re-renders Vue.
-const TITLE = 'SCVMUN Homepage'
+const TITLE = 'SCVMUN MUNSTer'
 const pageEl = ref(null)
 const typedCount = ref(0)
 
@@ -432,9 +435,19 @@ const handleRegister = async () => {
 /* GENERAL LAYOUT */
 .page-container {
   --p: 0; /* scroll progress 0 -> 1, written by the scroll handler */
+  /* One colour everywhere: the page, the rising sheet and the card are all this
+     value, so no area reads as a different shade. Every ink and rule derives from
+     it, making the whole palette a single value to retune. */
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --ink: #03045e;
+  --ink-soft: rgba(3, 4, 94, 0.6);
+  --ink-faint: rgba(3, 4, 94, 0.45);
+  --rule: rgba(3, 4, 94, 0.18);
+  --rule-faint: rgba(3, 4, 94, 0.1);
   min-height: 100vh;
-  background-color: #ffffff;
-  color: #03045e;
+  background-color: var(--surface);
+  color: var(--ink);
   font-family: Arial, Helvetica, sans-serif;
 }
 
@@ -462,12 +475,12 @@ const handleRegister = async () => {
   flex-wrap: wrap;
   justify-content: center;
   font-family: 'Special Elite', 'Courier New', monospace;
-  font-size: clamp(1.9rem, 6.2vw, 4.4rem);
+  font-size: clamp(2.05rem, 6.9vw, 4.9rem);
   font-weight: 400;
   line-height: 1.25;
   letter-spacing: 0.02em;
   text-align: center;
-  color: #03045e;
+  color: var(--ink);
 }
 
 /* Each character is its own piece: it drifts off, spins, blurs and fades with `--p`. */
@@ -492,7 +505,7 @@ const handleRegister = async () => {
   height: 1em;
   margin-left: 6px;
   vertical-align: -0.1em;
-  background-color: #03045e;
+  background-color: var(--ink);
   animation: caret-blink 1.05s steps(2, start) infinite;
   /* Fades with the title even though the blink animation owns `opacity`. */
   filter: opacity(calc(1 - var(--p) * 1.2));
@@ -547,18 +560,40 @@ const handleRegister = async () => {
   to { transform: rotate(360deg); }
 }
 
-.scroll-cue {
+/* The cue sits centred at the foot of the pinned stage and lifts away with the
+   title: the whole block shares one `--p` fade, so the words go with the arrow. */
+.scroll-hint {
   position: absolute;
-  bottom: 34px;
+  bottom: 32px;
   left: 50%;
-  width: 13px;
-  height: 13px;
-  margin-left: -6px;
-  border-right: 1.5px solid rgba(3, 4, 94, 0.35);
-  border-bottom: 1.5px solid rgba(3, 4, 94, 0.35);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  transform: translateX(-50%);
+  opacity: calc(0.95 - var(--p) * 3);
+  pointer-events: none;
+}
+
+.scroll-hint-text {
+  font-family: 'Special Elite', 'Courier New', monospace;
+  font-size: 0.78rem;
+  line-height: 1;
+  letter-spacing: 0.26em;
+  /* Trailing tracking would push the label off-centre against the arrow. */
+  text-indent: 0.26em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--ink-faint);
+}
+
+.scroll-cue {
+  width: 12px;
+  height: 12px;
+  border-right: 1.5px solid var(--ink-faint);
+  border-bottom: 1.5px solid var(--ink-faint);
   transform: rotate(45deg);
   animation: cue-bob 1.9s ease-in-out infinite;
-  opacity: calc(0.9 - var(--p) * 3);
 }
 
 @keyframes cue-bob {
@@ -571,9 +606,10 @@ const handleRegister = async () => {
   position: relative;
   z-index: 2;
   margin-top: -50vh;
-  min-height: 100vh;
-  padding: 72px 24px 56px;
-  background-color: #ffffff;
+  /* No `min-height: 100vh`: a full screen of forced height was pushing the foot
+     note below the fold. The sheet now ends with its content. */
+  padding: 84px 24px 56px;
+  background-color: var(--surface-raised);
   border-radius: 32px 32px 0 0;
   /* Neutral, barely-there edge: enough to read the sheet lifting, no colour on white. */
   box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.05);
@@ -587,9 +623,9 @@ const handleRegister = async () => {
   position: relative;
   z-index: 1;
   display: block;
-  width: 84px;
+  width: 104px;
   height: auto;
-  margin: 0 auto 26px;
+  margin: 0 auto 30px;
   filter: drop-shadow(0 6px 14px rgba(3, 4, 94, 0.18));
 }
 
@@ -598,8 +634,8 @@ const handleRegister = async () => {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 440px;
-  margin-bottom: 56px;
+  max-width: 520px;
+  margin-bottom: 0;
   background-color: transparent;
   padding: 0;
   border: none;
@@ -608,20 +644,20 @@ const handleRegister = async () => {
 }
 
 .auth-card h2 {
-  font-size: 0.78rem;
+  font-size: 0.87rem;
   font-weight: 600;
   text-transform: uppercase;
   text-align: center;
   letter-spacing: 0.2em;
-  margin: 0 0 34px;
-  color: rgba(3, 4, 94, 0.5);
+  margin: 0 0 38px;
+  color: var(--ink-faint);
 }
 
 /* FORMS & INPUTS */
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 26px;
+  gap: 30px;
 }
 
 /* Underline fields: no fill, no outline box, blue accent on focus. */
@@ -631,9 +667,9 @@ const handleRegister = async () => {
   gap: 12px;
   background-color: transparent;
   border: none;
-  border-bottom: 1px solid rgba(3, 4, 94, 0.18);
+  border-bottom: 1px solid var(--rule);
   border-radius: 0;
-  padding: 10px 2px;
+  padding: 13px 2px;
   transition: border-color 0.2s ease;
 }
 
@@ -645,9 +681,9 @@ const handleRegister = async () => {
   flex: 1;
   background: transparent;
   border: none;
-  color: #03045e;
+  color: var(--ink);
   padding-left: 0;
-  font-size: 1.02rem;
+  font-size: 1.12rem;
   letter-spacing: 0.01em;
 }
 
@@ -656,7 +692,7 @@ const handleRegister = async () => {
 }
 
 .input-group input::placeholder {
-  color: rgba(3, 4, 94, 0.4);
+  color: var(--ink-faint);
 }
 
 /* Field marks are drawn, not typed: one line-icon family, currentColor. */
@@ -664,14 +700,16 @@ const handleRegister = async () => {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 17px;
-  height: 17px;
-  color: rgba(3, 4, 94, 0.42);
+  width: 19px;
+  height: 19px;
+  color: var(--ink-faint);
   transition: color 0.2s ease;
 }
 
 .icon svg {
   display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .input-group:focus-within .icon {
@@ -681,19 +719,19 @@ const handleRegister = async () => {
 /* BUTTON GROUP (SIDE-BY-SIDE) */
 .button-group {
   display: flex;
-  gap: 12px;
-  margin-top: 10px;
+  gap: 14px;
+  margin-top: 12px;
 }
 
 /* Bubble buttons: layout and label only. The film, its wobble and its press
    squash are drawn by the soap-bubble renderer on the button's own canvas. */
 .btn-glass {
   flex: 1;
-  min-height: 52px;
-  padding: 0 22px;
-  font-size: 0.95rem;
+  min-height: 60px;
+  padding: 0 26px;
+  font-size: 1.03rem;
   letter-spacing: 0.02em;
-  color: #03045e;
+  color: var(--ink);
 }
 
 .btn-glass-primary {
@@ -716,22 +754,22 @@ const handleRegister = async () => {
 
 /* CONTEXT TEXT */
 .registration-note {
-  margin-top: 30px;
-  font-size: 0.85rem;
-  color: rgba(3, 4, 94, 0.6);
+  margin-top: 34px;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
   text-align: center;
   line-height: 1.6;
 }
 
 .registration-note strong {
-  color: #03045e;
+  color: var(--ink);
 }
 
 .forgot-password {
   margin-top: 14px;
   text-align: center;
-  font-size: 0.85rem;
-  color: rgba(3, 4, 94, 0.45);
+  font-size: 0.92rem;
+  color: var(--ink-faint);
 }
 
 /* NOTE AT THE FOOT OF THE PANEL */
@@ -739,15 +777,16 @@ const handleRegister = async () => {
   position: relative;
   z-index: 1;
   width: 100%;
-  max-width: 560px;
-  /* `auto` keeps the note at the foot of the panel on tall screens. */
-  margin: auto auto 0;
-  padding-top: 26px;
-  border-top: 1px solid rgba(3, 4, 94, 0.1);
-  font-size: 0.82rem;
+  max-width: 640px;
+  /* A fixed gap instead of `auto auto 0`: the note reads as the end of the form
+     rather than sitting a screen away from it. */
+  margin: 36px auto 0;
+  padding-top: 30px;
+  border-top: 1px solid var(--rule-faint);
+  font-size: 0.9rem;
   line-height: 1.75;
   text-align: center;
-  color: rgba(3, 4, 94, 0.62);
+  color: var(--ink-soft);
 }
 
 /* Responsive adjustment for small screens */
@@ -762,11 +801,20 @@ const handleRegister = async () => {
   }
 
   .panel-logo {
-    width: 68px;
+    width: 82px;
   }
 
   .typed-title {
-    font-size: clamp(1.55rem, 8.6vw, 2.4rem);
+    font-size: clamp(1.7rem, 9.2vw, 2.7rem);
+  }
+
+  .auth-card h2 {
+    margin-bottom: 30px;
+  }
+
+  .btn-glass {
+    min-height: 56px;
+    font-size: 1rem;
   }
 }
 
@@ -791,7 +839,7 @@ const handleRegister = async () => {
   }
 
   .speck,
-  .scroll-cue {
+  .scroll-hint {
     display: none;
   }
 
