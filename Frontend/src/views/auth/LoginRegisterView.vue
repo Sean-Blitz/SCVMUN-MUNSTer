@@ -1,15 +1,30 @@
 <template>
-  <div class="page-container">
-    <header class="app-header">
-      <img 
-    src="@/assets/logo.png" 
-    alt="SCVMUN Logo" 
-    class="header-logo"
-  />
-    </header>
+  <div class="page-container" ref="pageEl">
+    <!-- INTRO: the typed wordmark, pinned while the page scrolls -->
+    <section class="intro-stage">
+      <div class="intro-pin">
+        <h1 class="typed-title" aria-label="SCVMUN Homepage">
+          <span
+            v-for="(glyph, index) in typedGlyphs"
+            :key="index"
+            class="glyph"
+            :style="glyph.style"
+            aria-hidden="true"
+          >{{ glyph.char }}</span>
+          <span class="caret" aria-hidden="true"></span>
+        </h1>
 
-    <main class="forms-wrapper">
+        <span class="scroll-cue" aria-hidden="true"></span>
+      </div>
+    </section>
+
+    <main class="panel">
       <div class="auth-card">
+        <img
+          src="@/assets/logo-mark.png"
+          alt="SCVMUN Logo"
+          class="panel-logo"
+        />
         <h2>Account Access</h2>
         
         <form @submit.prevent class="auth-form">
@@ -39,23 +54,25 @@
           </div>
 
           <div class="button-group">
-            <button 
-              type="button" 
-              @click="handleLogin" 
+            <SoapBubbleButton
+              class="btn-glass btn-glass-primary"
               :disabled="isLoading || captchaPending"
-              class="btn btn-login"
+              :material="loginMaterial"
+              :backdrop="pageEl"
+              @click="handleLogin"
             >
               Log In
-            </button>
-            
-            <button 
-              type="button" 
-              @click="handleRegister" 
+            </SoapBubbleButton>
+
+            <SoapBubbleButton
+              class="btn-glass"
               :disabled="isLoading || captchaPending"
-              class="btn btn-register"
+              :material="registerMaterial"
+              :backdrop="pageEl"
+              @click="handleRegister"
             >
               First-Time Register
-            </button>
+            </SoapBubbleButton>
           </div>
         </form>
 
@@ -67,15 +84,26 @@
           Forgot Password? Email sg@scvmun.com to reset it.
         </p>
       </div>
+
+      <p class="page-note">
+        Your access code/hash is confidential. Do not share it with other delegates!
+        If you do not yet have your access code, talk with your advisor.
+        Good luck on conference day!
+      </p>
     </main>
 
-    <footer class="bottom-notes-section">
-      <div class="notes-container">
-        <p><strong>Note: </strong>Your access code/hash is confidential. Do not share it with other delegates!</p>
-        <p>If you do not yet have your access code, talk with your advisor.</p>
-        <p>Good luck on conference day!</p>
-      </div>
-    </footer>
+    <!-- Black specks: fixed above everything, so they cross onto the panel as it rises
+         and fade out instead of disappearing behind it. -->
+    <div class="specks" aria-hidden="true">
+      <span
+        v-for="(speck, index) in specks"
+        :key="index"
+        class="speck"
+        :style="speck.orbit"
+      >
+        <span class="speck-dot"></span>
+      </span>
+    </div>
   </div>
 </template>
 
@@ -85,6 +113,7 @@ import { useRouter } from 'vue-router'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
+import SoapBubbleButton from '@/components/soap-bubble/SoapBubbleButton.vue'
 
 const router = useRouter()
 const authStore = useAuthStore()
@@ -94,6 +123,47 @@ const toastStore = useToastStore()
 const userHash = ref('')
 const userPassword = ref('')
 const isLoading = ref(false)
+
+// Soap-bubble material: the approved light-glass preset (the page is white) plus the
+// catalogue preview's lighting and reflection settings.
+const bubbleGlass = {
+  glass: 0.95,
+  iridescence: 0.5,
+  filmScale: 4.85,
+  oilOpacity: 1,
+  oilCoverage: 0.73,
+  oilEdge: 18,
+  oilEdgeFade: 2.33,
+  clearCenter: 0.57,
+  thickness: 480,
+  drainage: 0.35,
+  swirl: 0.5,
+  reflectivity: 1.3,
+  refraction: 0.15,
+  dispersion: 1,
+  bevel: 14,
+  environment: 'soft',
+  // Upright outer window, inverted inner reflection, no glint, no twin window.
+  windowLength: 1.3,
+  windowMargin: 0.85,
+  windowBend: 0.75,
+  windowSize: 0.75,
+  windowWidth: 0.8,
+  windowGradient: 0.96,
+  windowHead: 0.7,
+  windowTail: 0.6,
+  glintSize: 1.65,
+  glintIntensity: 0,
+  glintDistance: -0.45,
+  glintHeight: 0.65,
+  windowIntensity: 0.85,
+  windowTwin: false,
+  bottomShadeColor: '#ffffff'
+}
+
+// Log In carries the primary weight by tinting the same film navy; Register stays clear.
+const loginMaterial = { ...bubbleGlass, tint: '#03045e', opacity: 0.82 }
+const registerMaterial = { ...bubbleGlass }
 
 // ---------- Human check (Cloudflare Turnstile) ----------
 // The site key is public and baked in at build time, so leaving it unset disables the
@@ -185,6 +255,90 @@ onBeforeUnmount(() => {
   }
 })
 
+// ---------- Intro animation (presentation only) ----------
+// The wordmark types itself in, then breaks apart as the page scrolls. Scroll progress is
+// written straight to a CSS custom property (`--p`) so the animation never re-renders Vue.
+const TITLE = 'SCVMUN Homepage'
+const pageEl = ref(null)
+const typedCount = ref(0)
+
+const prefersReducedMotion = () =>
+  typeof window !== 'undefined' &&
+  !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
+
+// Each glyph gets its own drift, so the word shatters into uneven pieces rather than
+// sliding away as one block.
+const glyphs = TITLE.split('').map((char) => ({
+  char: char === ' ' ? '\u00A0' : char,
+  style: {
+    '--dx': `${((Math.random() - 0.5) * 280).toFixed(1)}px`,
+    '--dy': `${((Math.random() - 0.15) * 240).toFixed(1)}px`,
+    '--rot': `${((Math.random() - 0.5) * 110).toFixed(1)}deg`,
+    '--lag': (0.6 + Math.random() * 0.7).toFixed(2),
+    '--blur': (1 + Math.random() * 3).toFixed(2)
+  }
+}))
+
+const specks = Array.from({ length: 26 }, (_, index) => {
+  const angle = (index / 26) * Math.PI * 2 + Math.random() * 0.35
+  const radius = 70 + Math.random() * 210
+  return {
+    orbit: {
+      '--sx': `${(Math.cos(angle) * radius).toFixed(1)}px`,
+      '--sy': `${(Math.sin(angle) * radius).toFixed(1)}px`,
+      '--size': `${(2 + Math.random() * 4).toFixed(1)}px`,
+      '--dur': `${(7 + Math.random() * 9).toFixed(2)}s`,
+      '--delay': `${(-Math.random() * 9).toFixed(2)}s`
+    }
+  }
+})
+
+const typedGlyphs = computed(() => glyphs.slice(0, typedCount.value))
+
+let typeTimer = null
+let scrollFrame = 0
+
+const paintProgress = () => {
+  scrollFrame = 0
+  const page = pageEl.value
+  if (!page) return
+  const viewport = window.innerHeight || 1
+  const progress = Math.min(1, Math.max(0, window.scrollY / (viewport * 0.55)))
+  page.style.setProperty('--p', progress.toFixed(4))
+}
+
+// One rAF-coalesced handler: scroll fires far more often than frames.
+const onScroll = () => {
+  if (!scrollFrame) scrollFrame = requestAnimationFrame(paintProgress)
+}
+
+onMounted(() => {
+  if (prefersReducedMotion()) {
+    typedCount.value = glyphs.length
+    return
+  }
+
+  // Uneven keystroke rhythm, the way a real typewriter sounds.
+  const type = () => {
+    typedCount.value += 1
+    if (typedCount.value < glyphs.length) {
+      typeTimer = setTimeout(type, 70 + Math.random() * 90)
+    }
+  }
+  typeTimer = setTimeout(type, 320)
+
+  paintProgress()
+  window.addEventListener('scroll', onScroll, { passive: true })
+  window.addEventListener('resize', onScroll)
+})
+
+onBeforeUnmount(() => {
+  clearTimeout(typeTimer)
+  if (scrollFrame) cancelAnimationFrame(scrollFrame)
+  window.removeEventListener('scroll', onScroll)
+  window.removeEventListener('resize', onScroll)
+})
+
 const handleLogin = async () => {
   if (!userHash.value || !userPassword.value) {
     toastStore.showToast('Please enter both your hash and password.', 'error')
@@ -262,96 +416,224 @@ const handleRegister = async () => {
 <style scoped>
 /* GENERAL LAYOUT */
 .page-container {
+  --p: 0; /* scroll progress 0 -> 1, written by the scroll handler */
   min-height: 100vh;
-  background: 
-    /* Subtle geometric angled lines */
-    repeating-linear-gradient(
-      225deg,
-      rgba(255, 255, 255, 0) 10px,
-      rgba(246, 246, 246, 0.076) 10px,
-      transparent 20px,
-      transparent 40px
-    ),
-    /* Main color gradient: Top-Right to Bottom-Left */
-    linear-gradient(225deg, #009ddbda 20%,#00007e93 80%);
-  color: #ffffff;
+  background-color: #ffffff;
+  color: #03045e;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ---------- INTRO: the pinned typing stage ---------- */
+.intro-stage {
+  position: relative;
+  height: 160vh;
+}
+
+.intro-pin {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 100vh;
+  height: 100svh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  padding: 0 24px;
+}
+
+.typed-title {
+  margin: 0;
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  font-family: 'Special Elite', 'Courier New', monospace;
+  font-size: clamp(1.9rem, 6.2vw, 4.4rem);
+  font-weight: 400;
+  line-height: 1.25;
+  letter-spacing: 0.02em;
+  text-align: center;
+  color: #03045e;
+}
+
+/* Each character is its own piece: it drifts off, spins, blurs and fades with `--p`. */
+.glyph {
+  display: inline-block;
+  will-change: transform, opacity, filter;
+  transform:
+    translate3d(
+      calc(var(--dx) * var(--p) * var(--lag)),
+      calc(var(--dy) * var(--p) * var(--lag)),
+      0
+    )
+    rotate(calc(var(--rot) * var(--p) * var(--lag)))
+    scale(calc(1 - 0.18 * var(--p)));
+  opacity: calc(1 - var(--p) * 1.2);
+  filter: blur(calc(var(--p) * var(--blur) * 1px));
+}
+
+.caret {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  margin-left: 6px;
+  vertical-align: -0.1em;
+  background-color: #03045e;
+  animation: caret-blink 1.05s steps(2, start) infinite;
+  /* Fades with the title even though the blink animation owns `opacity`. */
+  filter: opacity(calc(1 - var(--p) * 1.2));
+}
+
+@keyframes caret-blink {
+  0%, 49% { opacity: 1; }
+  50%, 100% { opacity: 0; }
+}
+
+/* Black specks orbiting the wordmark. Fixed and above the panel (z-index 3), so they
+   travel over the rising sheet rather than being painted out by it. */
+.specks {
+  position: fixed;
+  inset: 0;
+  z-index: 3;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.speck {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 0;
+  height: 0;
+  animation: orbit var(--dur) linear infinite;
+  animation-delay: var(--delay);
+  will-change: transform;
+}
+
+.speck-dot {
+  position: absolute;
+  width: var(--size);
+  height: var(--size);
+  border-radius: 50%;
+  background-color: #0b0b0b;
+  transform:
+    translate3d(
+      calc(var(--sx) * (0.35 + var(--p) * 0.9)),
+      calc(var(--sy) * (0.35 + var(--p) * 0.9)),
+      0
+    )
+    scale(calc(0.5 + var(--p) * 1.1));
+  /* Fade in as the title starts to break, then fade back out over the last 60% of the
+     scroll, so the specks dissolve instead of lingering over the form. */
+  opacity: calc(min(1, var(--p) * 2.6) * (1 - max(0, var(--p) - 0.4) * 1.6667));
+}
+
+@keyframes orbit {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.scroll-cue {
+  position: absolute;
+  bottom: 34px;
+  left: 50%;
+  width: 13px;
+  height: 13px;
+  margin-left: -6px;
+  border-right: 1.5px solid rgba(3, 4, 94, 0.35);
+  border-bottom: 1.5px solid rgba(3, 4, 94, 0.35);
+  transform: rotate(45deg);
+  animation: cue-bob 1.9s ease-in-out infinite;
+  opacity: calc(0.9 - var(--p) * 3);
+}
+
+@keyframes cue-bob {
+  0%, 100% { transform: rotate(45deg) translate(0, 0); }
+  50% { transform: rotate(45deg) translate(4px, 4px); }
+}
+
+/* ---------- PANEL: the account access card, rising over the intro ---------- */
+.panel {
+  position: relative;
+  z-index: 2;
+  margin-top: -50vh;
+  min-height: 100vh;
+  padding: 72px 24px 56px;
+  background-color: #ffffff;
+  border-radius: 32px 32px 0 0;
+  /* Neutral, barely-there edge: enough to read the sheet lifting, no colour on white. */
+  box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
   display: flex;
   flex-direction: column;
-  font-family: Arial, sans-serif;
-  padding: 0 20px;
-}
-
-.app-header {
-  padding: 20px 0;
-  display: flex;
-  justify-content: flex-start; /* Aligns content to the top right */
   align-items: center;
 }
 
-.header-logo {
-  height: 175px; /* Adjust height as needed */
-  width: auto;  /* Maintains aspect ratio */
-  object-fit: contain;
+.panel-logo {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 84px;
+  height: auto;
+  margin: 0 auto 26px;
+  filter: drop-shadow(0 6px 14px rgba(3, 4, 94, 0.18));
 }
 
-.app-header h1 {
-  font-size: 1.5rem;
-  font-weight: bold;
-  color: #FFFFFF;
-  margin: 0;
-}
-
-/* FORMS SECTION */
-.forms-wrapper {
-  flex: 1;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 40px 0;
-}
-
-/* CARD LAYOUT - Centered Single Box */
+/* FORM COLUMN - borderless, so it floats on the panel */
 .auth-card {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  max-width: 480px;
-  background-color: #009ddbda;
-  padding: 40px;
-  border-radius: 8px;
-  border: 3px solid #e8c604;
-  box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+  max-width: 440px;
+  margin-bottom: 56px;
+  background-color: transparent;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
 }
 
 .auth-card h2 {
-  font-size: 1.25rem;
-  font-weight: bold;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
   text-align: center;
-  margin-bottom: 30px;
-  color: #00007e;
+  letter-spacing: 0.2em;
+  margin: 0 0 34px;
+  color: rgba(3, 4, 94, 0.5);
 }
 
 /* FORMS & INPUTS */
 .auth-form {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 26px;
 }
 
+/* Underline fields: no fill, no outline box, blue accent on focus. */
 .input-group {
   display: flex;
   align-items: center;
-  background-color: #FFFFFF;
-  border: 2px solid #e8c604;
-  border-radius: 4px;
-  padding: 10px 15px;
+  gap: 12px;
+  background-color: transparent;
+  border: none;
+  border-bottom: 1px solid rgba(3, 4, 94, 0.18);
+  border-radius: 0;
+  padding: 10px 2px;
+  transition: border-color 0.2s ease;
+}
+
+.input-group:focus-within {
+  border-bottom-color: #023e8a;
 }
 
 .input-group input {
   flex: 1;
   background: transparent;
   border: none;
-  color: #00007e;
-  padding-left: 10px;
-  font-size: 1rem;
+  color: #03045e;
+  padding-left: 0;
+  font-size: 1.02rem;
+  letter-spacing: 0.01em;
 }
 
 .input-group input:focus {
@@ -359,29 +641,34 @@ const handleRegister = async () => {
 }
 
 .input-group input::placeholder {
-  color: #00007e;
+  color: rgba(3, 4, 94, 0.4);
 }
 
 .icon {
-  color: #aaaaaa;
+  color: rgba(3, 4, 94, 0.45);
+  font-size: 0.95rem;
 }
 
 /* BUTTON GROUP (SIDE-BY-SIDE) */
 .button-group {
   display: flex;
   gap: 12px;
-  margin-top: 15px;
+  margin-top: 10px;
 }
 
-.btn {
+/* Bubble buttons: layout and label only. The film, its wobble and its press
+   squash are drawn by the soap-bubble renderer on the button's own canvas. */
+.btn-glass {
   flex: 1;
-  padding: 12px;
-  border: none;
-  border-radius: 8px;
-  font-weight: bold;
-  cursor: pointer;
+  min-height: 52px;
+  padding: 0 22px;
   font-size: 0.95rem;
-  transition: background-color 0.2s ease;
+  letter-spacing: 0.02em;
+  color: #03045e;
+}
+
+.btn-glass-primary {
+  color: #ffffff;
 }
 
 .captcha-group {
@@ -393,82 +680,105 @@ const handleRegister = async () => {
 
 .captcha-error {
   margin: 0;
-  color: #b33;
+  color: #b42318;
   font-size: 0.85rem;
   text-align: center;
-}
-
-.btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
-.btn-login {
-  background-color: #00007e;
-  color: #ffffff;
-}
-
-.btn-login:hover {
-  background-color: #e8c604;
-}
-
-.btn-register {
-  background-color: #FFFFFF;
-  color: #00007e;
-}
-
-.btn-register:hover {
-  background-color: #e8c604;
 }
 
 /* CONTEXT TEXT */
 .registration-note {
-  margin-top: 25px;
+  margin-top: 30px;
   font-size: 0.85rem;
-  color: #00007e;
+  color: rgba(3, 4, 94, 0.6);
   text-align: center;
-  line-height: 1.4;
+  line-height: 1.6;
 }
 
 .registration-note strong {
-  color: #00007e;
+  color: #03045e;
 }
 
 .forgot-password {
-  margin-top: 15px;
+  margin-top: 14px;
   text-align: center;
   font-size: 0.85rem;
-  color: #00007e;
+  color: rgba(3, 4, 94, 0.45);
 }
 
-/* FOOTER NOTES */
-.bottom-notes-section {
-  padding: 30px 0;
-  display: flex;
-  justify-content: center;
-}
-
-.notes-container {
-  background-color: #009ddbda;
-  border: 3px solid #e8c604;
-  border-radius: 8px;
-  padding: 20px 30px;
-  text-align: center;
+/* NOTE AT THE FOOT OF THE PANEL */
+.page-note {
+  position: relative;
+  z-index: 1;
   width: 100%;
-  max-width: 800px;
-}
-
-.notes-container p {
-  margin: 5px 0;
-  font-size: 0.9rem;
-  color: #00007e;
-  line-height: 1.5;
+  max-width: 560px;
+  /* `auto` keeps the note at the foot of the panel on tall screens. */
+  margin: auto auto 0;
+  padding-top: 26px;
+  border-top: 1px solid rgba(3, 4, 94, 0.1);
+  font-size: 0.82rem;
+  line-height: 1.75;
+  text-align: center;
+  color: rgba(3, 4, 94, 0.62);
 }
 
 /* Responsive adjustment for small screens */
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .button-group {
     flex-direction: column;
   }
+
+  .panel {
+    padding: 48px 20px 44px;
+    border-radius: 24px 24px 0 0;
+  }
+
+  .panel-logo {
+    width: 68px;
+  }
+
+  .typed-title {
+    font-size: clamp(1.55rem, 8.6vw, 2.4rem);
+  }
+}
+
+/* Motion is decoration here: drop to the static layout when it is not wanted. */
+@media (prefers-reduced-motion: reduce) {
+  .intro-stage {
+    height: 100vh;
+  }
+
+  .intro-pin {
+    position: relative;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .glyph,
+  .caret {
+    animation: none;
+    opacity: 1;
+    filter: none;
+    transform: none;
+  }
+
+  .speck,
+  .scroll-cue {
+    display: none;
+  }
+
+  .panel {
+    margin-top: 0;
+  }
+}
+</style>
+
+<style>
+/* Self-hosted typewriter face, so the title needs no external font request. */
+@font-face {
+  font-family: 'Special Elite';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('@/assets/fonts/special-elite-400.woff2') format('woff2');
 }
 </style>

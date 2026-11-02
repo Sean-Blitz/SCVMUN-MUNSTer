@@ -29,7 +29,7 @@ const DEV_TOKENS = {
   admin: null
 }
 
-const previewRole = import.meta.env.DEV && DEV_ROLE ? DEV_ROLE : "delegate"
+const previewRole = import.meta.env.DEV && DEV_ROLE ? DEV_ROLE : null    // DEV_ROLE
 
 /** Whether a role preview is active. `api/client.js` asks, so a 401 cannot end the preview. */
 export function isPreviewing() {

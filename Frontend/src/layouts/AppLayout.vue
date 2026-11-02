@@ -74,7 +74,7 @@ const handleLogout = async () => {
 
 /* TOP NAVBAR */
 .global-navbar {
-  height: 60px;
+  height: 76px;
   background-color: #ffffff;
   border-bottom: 1px solid #e8c604;
   padding: 0 24px;
@@ -103,15 +103,16 @@ const handleLogout = async () => {
 }
 
 .app-logo {
-  height: 36px;
+  height: 54px;
   width: auto;
   object-fit: contain;
 }
 
 .brand-title {
-  font-size: 1.1rem;
+  font-size: 1.35rem;
   font-weight: bold;
   letter-spacing: 0.5px;
+  color: #00007e;
 }
 
 /* USER INFO & LOGOUT */
