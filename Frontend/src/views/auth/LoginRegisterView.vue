@@ -29,7 +29,15 @@
         
         <form @submit.prevent class="auth-form">
           <div class="input-group">
-            <span class="icon">#</span> 
+            <span class="icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+                   stroke-width="1.6" stroke-linecap="round">
+                <path d="M9.2 4.6 7.7 19.4" />
+                <path d="M16.3 4.6 14.8 19.4" />
+                <path d="M4.7 9.2h14.6" />
+                <path d="M4.4 14.8h14.6" />
+              </svg>
+            </span>
             <input 
               type="text" 
               v-model="userHash" 
@@ -39,7 +47,14 @@
           </div>
 
           <div class="input-group">
-            <span class="icon">🔒</span> 
+            <span class="icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor"
+                   stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="5" y="10.6" width="14" height="9.4" rx="2.6" />
+                <path d="M8.6 10.6V8.2a3.4 3.4 0 0 1 6.8 0v2.4" />
+                <path d="M12 14.2 13.3 15.8 12 17.4 10.7 15.8Z" fill="currentColor" stroke="none" />
+              </svg>
+            </span>
             <input 
               type="password" 
               v-model="userPassword" 
@@ -644,9 +659,23 @@ const handleRegister = async () => {
   color: rgba(3, 4, 94, 0.4);
 }
 
+/* Field marks are drawn, not typed: one line-icon family, currentColor. */
 .icon {
-  color: rgba(3, 4, 94, 0.45);
-  font-size: 0.95rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  color: rgba(3, 4, 94, 0.42);
+  transition: color 0.2s ease;
+}
+
+.icon svg {
+  display: block;
+}
+
+.input-group:focus-within .icon {
+  color: #023e8a;
 }
 
 /* BUTTON GROUP (SIDE-BY-SIDE) */
