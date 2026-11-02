@@ -297,14 +297,19 @@ const glyphs = TITLE.split('').map((char) => ({
   }
 }))
 
-const specks = Array.from({ length: 26 }, (_, index) => {
-  const angle = (index / 26) * Math.PI * 2 + Math.random() * 0.35
-  const radius = 70 + Math.random() * 210
+// 56 specks in two loose bands: the inner ring reads as grit breaking off the title,
+// the outer one widens the burst across the screen. Radii are in `vmin` so the ring
+// closes on any window: the furthest speck sits at 36vmin, which even after the
+// 1.25x spread at full progress stays inside half the viewport and never clips.
+const SPECK_COUNT = 56
+const specks = Array.from({ length: SPECK_COUNT }, (_, index) => {
+  const angle = (index / SPECK_COUNT) * Math.PI * 2 + Math.random() * 0.4
+  const radius = index % 3 === 0 ? 24 + Math.random() * 12 : 8 + Math.random() * 14
   return {
     orbit: {
-      '--sx': `${(Math.cos(angle) * radius).toFixed(1)}px`,
-      '--sy': `${(Math.sin(angle) * radius).toFixed(1)}px`,
-      '--size': `${(2 + Math.random() * 4).toFixed(1)}px`,
+      '--sx': `${(Math.cos(angle) * radius).toFixed(2)}vmin`,
+      '--sy': `${(Math.sin(angle) * radius).toFixed(2)}vmin`,
+      '--size': `${(2 + Math.random() * 4.5).toFixed(1)}px`,
       '--dur': `${(7 + Math.random() * 9).toFixed(2)}s`,
       '--delay': `${(-Math.random() * 9).toFixed(2)}s`
     }
