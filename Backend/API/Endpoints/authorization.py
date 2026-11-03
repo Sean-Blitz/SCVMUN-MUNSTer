@@ -47,8 +47,10 @@ def _start_session(db: Session, user: Account) -> str:
     return token
 
 def _is_strong_password(password):
-    # Requires: Min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char
-    pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?\":{}|<>])[A-Za-z\d!@#$%^&*(),.?\":{}|<>]{8,}$"
+    # Requires: Min 8 chars, 1 uppercase, 1 lowercase, 1 digit, 1 special char.
+    # `-` and `_` count as specials: they are in the class below in both places (the
+    # lookahead and the body), so add any future character to both.
+    pattern = r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[!@#$%^&*(),.?\":{}|<>_\-])[A-Za-z\d!@#$%^&*(),.?\":{}|<>_\-]{8,}$"
     
     if re.fullmatch(pattern, password):
         return True

@@ -7,4 +7,6 @@
 
 pytest==9.2.0
 # Required by starlette.testclient.TestClient, which the API tests drive the app with.
-httpx==0.28.1
+# This starlette imports `httpx2 as httpx` and only falls back to the old client with a
+# deprecation warning, so the next-generation client is the one to pin.
+httpx2==2.16.0
