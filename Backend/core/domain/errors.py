@@ -15,6 +15,9 @@ class DomainError(Exception):
     """Base class for every failure a use case reports."""
 
 
+# --- delegate use cases ----------------------------------------------------------------
+
+
 class DelegateNotFound(DomainError):
     """No delegate profile is attached to the account."""
 
@@ -54,3 +57,65 @@ class PaperTooLarge(DomainError):
 
 class PaperStorageFailed(DomainError):
     """The file could not be written to the upload directory."""
+
+
+# --- chair use cases -------------------------------------------------------------------
+
+
+class ChairNotFound(DomainError):
+    """No chair profile is attached to the account.
+
+    Admins can reach the chair routes but have no `chairs` row, so there is no committee to
+    scope a roster, a grade or an award to.
+    """
+
+
+class DelegateNotInCommittee(DomainError):
+    """The delegate id does not belong to the caller's committee."""
+
+
+class RubricNotConfigured(DomainError):
+    """The rubric is empty, so grading would store a meaningless 0/0."""
+
+
+class ScoreCriterionUnknown(DomainError):
+    """A submitted mark names a criterion the published rubric does not contain."""
+
+    def __init__(self, criteria: tuple[str, ...]) -> None:
+        super().__init__(f"unknown criteria: {', '.join(criteria)}")
+        self.criteria = criteria
+
+
+class ScoreOutOfRange(DomainError):
+    """A mark sits outside 0..the criterion's maximum."""
+
+    def __init__(self, label: str, maximum: str, got: str) -> None:
+        super().__init__(f"{label} out of range: {got} of {maximum}")
+        self.label = label
+        self.maximum = maximum
+        self.got = got
+
+
+class CommentsTooLong(DomainError):
+    """The grade comments exceed the column's width."""
+
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"comments longer than {limit}")
+        self.limit = limit
+
+
+class AwardNotAssignable(DomainError):
+    """The requested award is not one a chair may hand out."""
+
+    def __init__(self, allowed: tuple[str, ...]) -> None:
+        super().__init__(f"not an assignable award; allowed: {', '.join(allowed)}")
+        self.allowed = allowed
+
+
+class AwardCriteriaUnscored(DomainError):
+    """An official award needs every rubric criterion scored first."""
+
+    def __init__(self, award: str, missing: tuple[str, ...]) -> None:
+        super().__init__(f"{award} needs {', '.join(missing)}")
+        self.award = award
+        self.missing = missing

@@ -1,30 +1,21 @@
 """
 Chair endpoints (/chair/*) — Frontend-API-Contract.md §5, §6 and §7.
 
-Split across three frontend views (committee overview, paper grading, awards) but kept
-in one module because they share the committee scope, the rubric concept, and the
-delegate roster. If this file grows past comfortable, split it by resource:
-chairs_committee.py / chairs_papers.py / chairs_awards.py.
+Transport only: resolve the caller, call one use case from `core.domain.chairs`, map the
+result to a response, and translate domain failures with `_http_error`. The committee
+scope, the grading rules and the award rules all live in the domain module.
 """
 
-from typing import Annotated, Any
+from typing import Annotated
 
-from datetime import timezone
-
-from fastapi import APIRouter, Depends, HTTPException, Response, status
-from sqlalchemy import func, select
+from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
-from API.dependencies import CurrentUser, get_current_user, require_roles
-from API import papers
 import core.audit
-from core.controls import (
-    TIMELINE_PHASES,
-    award_options,
-    awards_rubric,
-    paper_rubric_data,
-)
-from crud.database_schema import Account, Chairs, Delegates, TimelineEvent, Uploads
+from API.dependencies import CurrentUser, get_current_user, require_roles
+from core.domain import chairs as chairs_domain
+from core.domain import errors as domain_errors
 from crud.db import get_db
 from schemas.request_models import AwardAssignmentRequest, GradeSubmissionRequest
 from schemas.response_models import (
@@ -33,9 +24,6 @@ from schemas.response_models import (
     CommitteeOverviewResponse,
     GradingDelegate,
     GradingRubricCriterion,
-    RubricLevel,
-    Timeline,
-    TimelineEvent as TimelineEventModel,
 )
 
 # Chair views are also reachable by admins, matching the Vue router's meta.roles.
@@ -46,38 +34,81 @@ router = APIRouter(
 )
 
 
-# --- Committee overview (§5) ---
-
-
-def _get_chair(db: Session, account_id: int) -> Chairs:
-    """The chair's own profile, or a 404 naming what is missing.
-
-    Admins can reach these routes (the router allows the role) but have no Chairs row, and
-    without one there is no committee to scope a roster or an award to.
-    """
-    chair = db.scalars(select(Chairs).where(Chairs.account_id == account_id)).first()
-    if chair is None:
-        raise HTTPException(
+def _http_error(exc: domain_errors.DomainError) -> HTTPException:
+    """Translate a chair domain failure into the status code and body the contract documents."""
+    if isinstance(exc, domain_errors.ChairNotFound):
+        return HTTPException(
             status.HTTP_404_NOT_FOUND,
             "No chair profile is attached to this account.",
         )
-    return chair
+    if isinstance(exc, domain_errors.DelegateNotInCommittee):
+        return HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No such delegate in your committee.",
+        )
+    if isinstance(exc, domain_errors.PaperNotSubmitted):
+        return HTTPException(
+            status.HTTP_409_CONFLICT,
+            "This delegate has not submitted a position paper yet.",
+        )
+    if isinstance(exc, domain_errors.PaperFileMissing):
+        return HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "The stored file is missing. The paper has to be uploaded again.",
+        )
+    if isinstance(exc, domain_errors.RubricNotConfigured):
+        return HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "The grading rubric has no criteria configured yet.",
+        )
+    if isinstance(exc, domain_errors.ScoreCriterionUnknown):
+        return HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "scores contains criteria that are not in the rubric: "
+            + ", ".join(exc.criteria)
+            + ".",
+        )
+    if isinstance(exc, domain_errors.ScoreOutOfRange):
+        return HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"{exc.label} must be between 0 and {exc.maximum}; got {exc.got}.",
+        )
+    if isinstance(exc, domain_errors.CommentsTooLong):
+        return HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Comments are limited to {exc.limit} characters.",
+        )
+    if isinstance(exc, domain_errors.AwardNotAssignable):
+        return HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"assignedAward must be one of: {', '.join(sorted(exc.allowed))}.",
+        )
+    if isinstance(exc, domain_errors.AwardCriteriaUnscored):
+        return HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            f"Every rubric criterion must be scored before assigning {exc.award}. "
+            f"Missing: {', '.join(exc.missing)}.",
+        )
+    return HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error.")
 
 
-def _iso_utc(moment) -> str:
-    """Render a naive-UTC column value as an ISO-8601 string that says so.
+def _download_error(exc: domain_errors.DomainError) -> HTTPException:
+    """The download route's view of a domain failure.
 
-    The database stores naive UTC, but `new Date("2026-10-04T09:00:00")` in a browser
-    reads that as *local* time - which would shift every timeline event by the viewer's
-    offset and make the completed/active/upcoming derivation wrong. Attaching +00:00
-    keeps the instant unambiguous for the client.
+    "This delegate has not submitted a paper yet" is a 409 when a chair tries to *grade*
+    one, but a plain 404 when they try to *fetch* one - there is simply nothing there. Same
+    domain condition, two contract messages, so this specialises the shared mapping instead
+    of duplicating it.
     """
-    return moment.replace(tzinfo=timezone.utc).isoformat()
+    if isinstance(exc, domain_errors.PaperNotSubmitted):
+        return HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            "No position paper has been submitted yet.",
+        )
+    return _http_error(exc)
 
 
-def _format_number(value: float) -> str:
-    """Render a mark for the display string: 18.0 -> "18", 8.5 -> "8.5"."""
-    return f"{value:g}"
+# --- Committee overview (§5) ---
 
 
 @router.get("/committee/overview", response_model=CommitteeOverviewResponse)
@@ -88,104 +119,19 @@ def get_committee_overview(
     """
     Return the chair's committee metrics and the conference timeline.
 
-    Counts are scoped to the chair's own committee; the timeline is conference-wide
-    (timeline_events), because every committee runs on the same schedule. Each event is
-    a point in time rather than a flag - the frontend compares it with the clock, which
-    is why the lists come back in ascending time order and why each timestamp carries an
-    explicit UTC offset.
+    Counts are scoped to the chair's own committee; the timeline is conference-wide,
+    because every committee runs on the same schedule. Each event is a point in time
+    rather than a flag - the frontend compares it with the clock, which is why the lists
+    come back in ascending time order and why each timestamp carries an explicit UTC
+    offset.
     """
-    chair = _get_chair(db, user.id)
-    committee = chair.committee_name
-
-    total_delegates = db.scalar(
-        select(func.count()).select_from(Delegates).where(Delegates.committee == committee)
-    )
-    delegates_registered = db.scalar(
-        select(func.count())
-        .select_from(Delegates)
-        .join(Account, Account.id == Delegates.account_id)
-        .where(Delegates.committee == committee, Account.password_hash.is_not(None))
-    )
-    papers_graded = db.scalar(
-        select(func.count())
-        .select_from(Delegates)
-        .where(Delegates.committee == committee, Delegates.paper_status == "graded")
-    )
-    # "Submitted" means anything a chair can mark, graded papers included: the dashboard
-    # renders this as `papersGraded / totalPapersSubmitted`.
-    papers_submitted = db.scalar(
-        select(func.count())
-        .select_from(Delegates)
-        .where(
-            Delegates.committee == committee,
-            Delegates.paper_status.in_(("submitted", "graded")),
-        )
-    )
-
-    events = db.scalars(
-        select(TimelineEvent).order_by(TimelineEvent.starts_at, TimelineEvent.id)
-    ).all()
-
-    # Both keys are always present, even when empty - the template iterates them directly.
-    timeline = Timeline(
-        **{
-            phase: [
-                TimelineEventModel(label=event.label, timestamp=_iso_utc(event.starts_at))
-                for event in events
-                if event.phase == phase
-            ]
-            for phase in TIMELINE_PHASES
-        }
-    )
-
-    return CommitteeOverviewResponse(
-        chairName=chair.name,
-        committeeName=committee,
-        delegatesRegistered=delegates_registered or 0,
-        totalDelegates=total_delegates or 0,
-        papersGraded=papers_graded or 0,
-        totalPapersSubmitted=papers_submitted or 0,
-        timeline=timeline,
-    )
+    try:
+        return chairs_domain.get_committee_overview(db, user.id)
+    except domain_errors.DomainError as exc:
+        raise _http_error(exc) from exc
 
 
 # --- Paper grading (§6) ---
-# NOTE: this rubric is flat ({id, label, maxScore}). The awards rubric below is a
-# different endpoint with a different shape - do not merge them.
-
-
-def _build_paper_rubric() -> list[GradingRubricCriterion]:
-    """
-    The position-paper grading rubric, built from `core.controls.paper_rubric_data`.
-
-    A static list, not a table: the criteria are the same for every chair and every
-    delegate, so there is nothing per-committee to store and no database session is needed
-    to read it.
-
-    A function rather than an inline body because grade_position_paper validates marks
-    against exactly the criteria this publishes: if the two drifted, a chair could be
-    blocked from saving a mark for a criterion the screen had just shown them.
-
-    The same list is the source the delegate's graded breakdown is joined against
-    (/delegate/my-assignment), which is what keeps both views showing the same labels and
-    the same maximum marks.
-
-    An entry with no `id` is skipped: `id` is the key a mark is stored under, so such an
-    entry could never be graded - the delegate-side join skips it for the same reason.
-    """
-    rubric: list[GradingRubricCriterion] = []
-    for criterion in paper_rubric_data:
-        criterion_id = criterion.get("id")
-        if criterion_id is None:
-            continue
-        rubric.append(
-            GradingRubricCriterion(
-                id=criterion_id,
-                label=criterion.get("label") or str(criterion_id),
-                maxScore=float(criterion.get("maxScore", 0)),
-            )
-        )
-    return rubric
 
 
 @router.get("/rubric", response_model=list[GradingRubricCriterion])
@@ -198,7 +144,7 @@ def get_position_paper_grading_rubric(
     The endpoint exists so the frontend has one place to read the labels and maxima from;
     the marks themselves are stored per delegate by POST /chair/papers/{id}/grade.
     """
-    return _build_paper_rubric()
+    return chairs_domain.get_position_paper_grading_rubric()
 
 
 @router.get("/delegates", response_model=list[GradingDelegate])
@@ -209,10 +155,6 @@ def list_committee_delegates(
     """
     Return the committee roster with each delegate's paper status and grading state.
 
-    Two queries, not one per row: the roster, then every paper belonging to those
-    delegates newest-first, reduced to the current one per delegate. A committee can hold
-    80 delegates, and a query each would be 81 round trips for a page that shows a grid.
-
     `submissionDate` is the newest upload's time as an ISO-8601 instant carrying a UTC
     offset - the column is naive UTC, and the view localises it for display. It is empty
     for a delegate who has never uploaded.
@@ -221,53 +163,10 @@ def list_committee_delegates(
     the view fetches /chair/papers/{id}/download as a blob through the API client instead
     and previews that.
     """
-    chair = _get_chair(db, user.id)
-
-    delegates = db.scalars(
-        select(Delegates)
-        .where(Delegates.committee == chair.committee_name)
-        .order_by(Delegates.country)
-    ).all()
-    if not delegates:
-        return []
-
-    uploads = db.scalars(
-        select(Uploads)
-        .where(Uploads.delegate_id.in_([delegate.account_id for delegate in delegates]))
-        .order_by(
-            Uploads.delegate_id,
-            Uploads.upload_time.desc(),
-            Uploads.upload_id.desc(),
-        )
-    ).all()
-
-    # Uploads are append-only, so the first row seen per delegate is the paper in force.
-    newest: dict[int, Uploads] = {}
-    for upload in uploads:
-        newest.setdefault(upload.delegate_id, upload)
-
-    return [
-        GradingDelegate(
-            id=delegate.account_id,
-            country=delegate.country,
-            committee=delegate.committee,
-            status=delegate.paper_status,
-            submissionDate=(
-                _iso_utc(newest[delegate.account_id].upload_time)
-                if delegate.account_id in newest
-                else ""
-            ),
-            totalScore=delegate.paper_grade or "",
-            scores=_stored_scores(delegate.paper_rubric_grade),
-            comments=delegate.paper_comments or "",
-        )
-        for delegate in delegates
-    ]
-
-
-# The comments column is String(500); reject a longer comment here so it surfaces as a 400
-# instead of a database error.
-MAX_GRADE_COMMENTS = 500
+    try:
+        return chairs_domain.list_committee_delegates(db, user.id)
+    except domain_errors.DomainError as exc:
+        raise _http_error(exc) from exc
 
 
 @router.post("/papers/{delegate_id}/grade")
@@ -280,99 +179,24 @@ def grade_position_paper(
     """
     Store a delegate's rubric scores and chair comments, and mark the paper graded.
 
-    Checks, because the score line a delegate sees is assembled here:
-
-    - the delegate must be in the chair's own committee, and must have submitted a paper -
-      grading one that was never uploaded would flip the dashboard to "graded" with nothing
-      to read;
-    - every mark has to name a criterion from the rubric the view was given, and sit
-      between 0 and that criterion's maximum (the input's `max` attribute is only a hint);
-    - comments are capped at the column's 500 characters.
-
-    The stored total is **recomputed** as `<sum of marks>/<sum of rubric maxima>` rather than
-    taken from `payload.totalScore`, so a client cannot submit a score line that disagrees
-    with the rubric. `delegate_id` comes from the path; the copy in the body is ignored.
-    Re-grading is allowed - a chair correcting a mistake overwrites the previous marks.
+    The scope, the rubric checks and the recomputed total live in
+    `core.domain.chairs.grade_paper`; `delegate_id` comes from the path, and the copy in
+    the body is ignored. Re-grading is allowed - a chair correcting a mistake overwrites
+    the previous marks.
     """
-    chair = _get_chair(db, user.id)
-
-    delegate = db.scalars(
-        select(Delegates).where(
-            Delegates.account_id == delegate_id,
-            Delegates.committee == chair.committee_name,
+    try:
+        outcome = chairs_domain.grade_paper(
+            db,
+            user.id,
+            delegate_id,
+            scores=payload.scores,
+            comments=payload.comments,
+            actor=core.audit.actor(user),
         )
-    ).first()
-    if delegate is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "No such delegate in your committee.",
-        )
+    except domain_errors.DomainError as exc:
+        raise _http_error(exc) from exc
 
-    if delegate.paper_status == "unsubmitted":
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            "This delegate has not submitted a position paper yet.",
-        )
-
-    rubric = {str(criterion.id): criterion for criterion in _build_paper_rubric()}
-    if not rubric:
-        # Grading against no criteria would store a meaningless "0/0".
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            "The grading rubric has no criteria configured yet.",
-        )
-
-    scores: dict[str, float] = {}
-    for criterion_id, submitted in payload.scores.items():
-        key = str(criterion_id)
-        criterion = rubric.get(key)
-        if criterion is None:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"scores contains criteria that are not in the rubric: {key}.",
-            )
-
-        mark = float(submitted)
-        # A hair of tolerance, so a mark that equals the maximum is never rejected by
-        # floating-point representation.
-        if mark < 0 or mark > criterion.maxScore + 1e-9:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"{criterion.label} must be between 0 and {_format_number(criterion.maxScore)}; "
-                f"got {_format_number(mark)}.",
-            )
-        scores[key] = mark
-
-    comments = payload.comments.strip()
-    if len(comments) > MAX_GRADE_COMMENTS:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"Comments are limited to {MAX_GRADE_COMMENTS} characters.",
-        )
-
-    already_graded = delegate.paper_status == "graded"
-
-    earned = sum(scores.values())
-    possible = sum(criterion.maxScore for criterion in rubric.values())
-
-    delegate.paper_rubric_grade = scores
-    delegate.paper_comments = comments or None
-
-    delegate.paper_grade = f"{_format_number(earned)}/{_format_number(possible)}"
-    delegate.paper_status = "graded"
-    db.commit()
-
-    core.audit.business(
-        "grade.saved",
-        actor=core.audit.actor(user),
-        delegate=delegate.account_id,
-        country=delegate.country,
-        committee=delegate.committee,
-        total=delegate.paper_grade,
-        criteria=len(scores),
-        regrade=already_graded,
-    )
-    return {"message": "Grade saved.", "totalScore": delegate.paper_grade} # type: ignore[return-value]
+    return {"message": "Grade saved.", "totalScore": outcome.total}
 
 
 @router.get("/papers/{delegate_id}/download")
@@ -380,57 +204,27 @@ def download_position_paper(
     delegate_id: int,
     user: Annotated[CurrentUser, Depends(get_current_user)],
     db: Session = Depends(get_db),
-) -> Response:
+) -> FileResponse:
     """
     Return a delegate's position paper as a PDF blob.
 
     Scoped to the chair's own committee, so an id from another committee answers 404
     exactly as an unknown one does. The paper served is the newest upload, matching what
-    /chair/delegates reports as submitted, and the file is located from the database row
-    rather than from anything the client sends.
+    /chair/delegates reports as submitted.
     """
-    chair = _get_chair(db, user.id)
+    try:
+        paper = chairs_domain.get_paper_file(db, user.id, delegate_id)
+    except domain_errors.DomainError as exc:
+        raise _download_error(exc) from exc
 
-    delegate = db.scalars(
-        select(Delegates).where(
-            Delegates.account_id == delegate_id,
-            Delegates.committee == chair.committee_name,
-        )
-    ).first()
-    if delegate is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "No such delegate in your committee.",
-        )
-
-    # The frontend saves the blob under its own name; this is the fallback for a direct
-    # API call.
-    return papers.paper_response(
-        db,
-        delegate.account_id,
-        download_name=f"{delegate.country}_Position_Paper.pdf",
+    return FileResponse(
+        paper.path,
+        media_type="application/pdf",
+        filename=paper.download_name or "position-paper.pdf",
     )
 
 
 # --- Awards (§7) ---
-# NOTE: this rubric is nested ({id, label, levels[]}) and is distinct from
-# /chair/rubric above.
-
-
-# "None" and "Candidate" are the template's own two options (no award / shortlist), so the
-# API must never send them back or the dropdown would list them twice. Compared
-# case-insensitively and filtered here rather than trusted, so that adding one of them to
-# core.controls cannot quietly break the view.
-RESERVED_AWARD_OPTIONS = {"none", "candidate"}
-
-
-def _assignable_awards() -> list[str]:
-    """The award names a chair may hand out, in the order core.controls lists them."""
-    return [
-        name.strip()
-        for name in award_options
-        if name.strip() and name.strip().casefold() not in RESERVED_AWARD_OPTIONS
-    ]
 
 
 @router.get("/awards/options", response_model=list[str])
@@ -442,52 +236,7 @@ def list_award_options(
 
     Static, like the grading rubric: the same awards are on offer in every committee.
     """
-    return _assignable_awards()
-
-
-def _build_awards_rubric() -> list[AwardsRubricCriterion]:
-    """
-    The awards rubric, built from core.controls.awards_rubric.
-
-    Kept as a function rather than inlined in the endpoint because assign_award validates
-    incoming marks against exactly the criteria this publishes - if the two ever drifted,
-    a chair could be blocked from saving an award the screen had just asked them to score.
-    """
-    rubric: list[AwardsRubricCriterion] = []
-
-    for criterion in awards_rubric:
-        criterion_id = criterion.get("id")
-        if criterion_id is None:
-            # `id` keys the scores map, so a criterion without one could never be stored.
-            continue
-
-        levels: list[RubricLevel] = []
-        for level in criterion.get("levels") or []:
-            if not isinstance(level, dict):
-                continue
-            label = str(level.get("label") or "").strip()
-            if not label:
-                continue
-            levels.append(
-                RubricLevel(
-                    score=float(level.get("score", 0)),
-                    label=label,
-                    description=str(level.get("description") or ""),
-                )
-            )
-
-        if not levels:
-            continue
-
-        rubric.append(
-            AwardsRubricCriterion(
-                id=criterion_id,
-                label=str(criterion.get("label") or criterion_id),
-                levels=levels,
-            )
-        )
-
-    return rubric
+    return chairs_domain.list_award_options()
 
 
 @router.get("/awards/rubric", response_model=list[AwardsRubricCriterion])
@@ -500,32 +249,8 @@ def get_awards_rubric(
     Static and shared, from core.controls.awards_rubric - one score per criterion is
     stored per delegate, chosen from that criterion's levels. Levels keep the order they
     are written in, which is the order the view renders as score cells.
-
-    Nothing here is derived: the view works out each criterion's maximum itself, as the
-    highest `level.score`. That is why a criterion with no usable levels is skipped
-    entirely - sending one would leave the client taking `Math.max()` of an empty list,
-    i.e. -Infinity as its maximum. A level with no label is skipped for the same reason a
-    label-less checklist line is: there would be nothing to render in the cell.
     """
-    return _build_awards_rubric()
-
-
-def _stored_scores(raw: Any) -> dict[str, float]:
-    """Coerce a stored `overall_rubric_scores` map into {criterion id: mark}.
-
-    The column is JSONB, so it could hold anything if it were ever edited by hand; a value
-    that is not a number is dropped rather than failing the whole roster.
-    """
-    if not isinstance(raw, dict):
-        return {}
-
-    scores: dict[str, float] = {}
-    for criterion_id, mark in raw.items():
-        try:
-            scores[str(criterion_id)] = float(mark)
-        except (TypeError, ValueError):
-            continue
-    return scores
+    return chairs_domain.get_awards_rubric()
 
 
 @router.get("/awards/delegates", response_model=list[AwardDelegate])
@@ -536,34 +261,14 @@ def list_award_delegates(
     """
     Return the committee roster with each delegate's current award assignments and scores.
 
-    `assignedAward` is one of the names returned by /chair/awards/options, or "None" /
-    "Candidate". `scores` is the stored {criterion id: mark} map, and `totalScore` is null
-    until a chair has saved something for that delegate - the view hides the "n pts" badge
-    in that case rather than showing a zero.
+    `assignedAward` is one of the names from /chair/awards/options, or "None" /
+    "Candidate". `totalScore` is null until a chair has saved something for that delegate -
+    the view hides the "n pts" badge in that case rather than showing a zero.
     """
-    chair = _get_chair(db, user.id)
-
-    delegates = db.scalars(
-        select(Delegates)
-        .where(Delegates.committee == chair.committee_name)
-        .order_by(Delegates.country)
-    ).all()
-
-    return [
-        AwardDelegate(
-            id=delegate.account_id,
-            country=delegate.country,
-            committee=delegate.committee,
-            assignedAward=delegate.assigned_award or "None",
-            scores=_stored_scores(delegate.overall_rubric_scores),
-            totalScore=(
-                float(delegate.overall_total_score)
-                if delegate.overall_total_score is not None
-                else None
-            ),
-        )
-        for delegate in delegates
-    ]
+    try:
+        return chairs_domain.list_award_delegates(db, user.id)
+    except domain_errors.DomainError as exc:
+        raise _http_error(exc) from exc
 
 
 @router.post("/awards/{delegate_id}")
@@ -576,79 +281,20 @@ def assign_award(
     """
     Assign an award and rubric scores to a delegate.
 
-    The delegate is looked up within the chair's own committee, so an id from another
-    committee answers 404 rather than being written to. `delegate_id` comes from the path;
-    the copy in the body is ignored.
-
-    The frontend already refuses to give an official award until every rubric criterion has
-    been scored; the same rule is enforced here, because a script would otherwise be able
-    to store an award that was never evaluated. Marks are also checked against the rubric
-    the view was given, so a stale criterion id cannot be parked in the database.
-
-    The stored total is **recomputed** as the sum of the marks rather than taken from
-    `payload.totalScore`: the total is a derived value (the view computes it the same way),
-    and a client that disagreed would put a wrong number in front of the chair.
+    The committee scope, the allowed award names and the "every criterion must be scored
+    before an official award" rule live in `core.domain.chairs.assign_award`. The stored
+    total is recomputed from the marks rather than taken from the body.
     """
-    chair = _get_chair(db, user.id)
-
-    delegate = db.scalars(
-        select(Delegates).where(
-            Delegates.account_id == delegate_id,
-            Delegates.committee == chair.committee_name,
+    try:
+        outcome = chairs_domain.assign_award(
+            db,
+            user.id,
+            delegate_id,
+            award=payload.assignedAward,
+            scores=payload.scores,
+            actor=core.audit.actor(user),
         )
-    ).first()
-    if delegate is None:
-        raise HTTPException(
-            status.HTTP_404_NOT_FOUND,
-            "No such delegate in your committee.",
-        )
+    except domain_errors.DomainError as exc:
+        raise _http_error(exc) from exc
 
-    award = payload.assignedAward.strip()
-    # "None" (no award) and "Candidate" (shortlist) are the template's own two options and
-    # are legitimately assignable, even though they are not in /chair/awards/options.
-    allowed = {"None", "Candidate", *_assignable_awards()}
-    if award not in allowed:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"assignedAward must be one of: {', '.join(sorted(allowed))}.",
-        )
-
-    scores = {str(criterion_id): float(mark) for criterion_id, mark in payload.scores.items()}
-
-    rubric = _build_awards_rubric()
-    labels = {str(criterion.id): criterion.label for criterion in rubric}
-
-    unknown = sorted(set(scores) - set(labels))
-    if unknown:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST,
-            f"scores contains criteria that are not in the rubric: {', '.join(unknown)}.",
-        )
-
-    if award not in ("None", "Candidate"):
-        missing = [labels[criterion_id] for criterion_id in labels if criterion_id not in scores]
-        if missing:
-            raise HTTPException(
-                status.HTTP_400_BAD_REQUEST,
-                f"Every rubric criterion must be scored before assigning {award}. "
-                f"Missing: {', '.join(missing)}.",
-            )
-
-    delegate.assigned_award = award
-    delegate.overall_rubric_scores = scores
-    # NULL rather than 0.0 when nothing was scored, so the badge stays hidden.
-    delegate.overall_total_score = sum(scores.values()) if scores else None
-    db.commit()
-
-    core.audit.business(
-        "award.assigned",
-        actor=core.audit.actor(user),
-        delegate=delegate.account_id,
-        country=delegate.country,
-        committee=delegate.committee,
-        award=award,
-        total=delegate.overall_total_score,
-        criteria=len(scores),
-    )
-
-    return {"message": "Award saved.", "assignedAward": award}
+    return {"message": "Award saved.", "assignedAward": outcome.award}
