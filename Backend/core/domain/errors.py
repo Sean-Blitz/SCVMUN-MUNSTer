@@ -138,3 +138,300 @@ class AccountMissing(DomainError):
 
 class PasswordRejected(DomainError):
     """The re-authentication password for a credential reveal was wrong."""
+
+
+# --- shared admin reference data -------------------------------------------------------
+
+
+class UnknownSchool(DomainError):
+    """A request named a school that does not exist."""
+
+    def __init__(self, school_name: str) -> None:
+        super().__init__(f"unknown school: {school_name}")
+        self.school_name = school_name
+
+
+class UnknownCommittee(DomainError):
+    """A request named a committee that does not exist.
+
+    Committees are never created on the fly: a typo used to produce a phantom committee with
+    no chair, so the list is authoritative and the admin creates rows explicitly.
+    """
+
+    def __init__(self, committee_name: str) -> None:
+        super().__init__(f"unknown committee: {committee_name}")
+        self.committee_name = committee_name
+
+
+class DelegateAssignmentNotFound(DomainError):
+    """No delegate holds the requested committee + country pairing."""
+
+    def __init__(self, country: str, committee: str) -> None:
+        super().__init__(f"no delegate for {country} ({committee})")
+        self.country = country
+        self.committee = committee
+
+
+class DelegateAccountMissing(DomainError):
+    """A delegate profile exists but its account row does not, so nothing can log in."""
+
+    def __init__(self, country: str, committee: str) -> None:
+        super().__init__(f"no account for {country} ({committee})")
+        self.country = country
+        self.committee = committee
+
+
+class NoAssignments(DomainError):
+    """A hash request carried no delegates to mint."""
+
+
+class BadAssignmentShape(DomainError):
+    """One delegate entry was not [committee, committeeType, country]."""
+
+    def __init__(self, key: str) -> None:
+        super().__init__(f"bad assignment shape for {key!r}")
+        self.key = key
+
+
+class BadAssignmentValue(DomainError):
+    """One delegate entry had a blank committee or country."""
+
+    def __init__(self, key: str) -> None:
+        super().__init__(f"blank committee or country for {key!r}")
+        self.key = key
+
+
+class DelegationAlreadyHasHash(DomainError):
+    """That committee + country already has an account; reissue instead of minting."""
+
+    def __init__(self, country: str, committee: str) -> None:
+        super().__init__(f"{country} ({committee}) already has a hash")
+        self.country = country
+        self.committee = committee
+
+
+# --- awards report ---------------------------------------------------------------------
+
+
+class UnknownSchoolId(DomainError):
+    """A request named a school id that does not exist."""
+
+    def __init__(self, school_id: int) -> None:
+        super().__init__(f"unknown school id: {school_id}")
+        self.school_id = school_id
+
+
+# --- broadcasts ------------------------------------------------------------------------
+
+
+class InvalidBroadcastKind(DomainError):
+    """The requested kind is not one of the configured broadcast kinds."""
+
+    def __init__(self, kinds: tuple[str, ...]) -> None:
+        super().__init__(f"not a broadcast kind: {', '.join(kinds)}")
+        self.kinds = kinds
+
+
+class EmptyBroadcastBody(DomainError):
+    """The line's text is blank."""
+
+
+class LinkNeedsUrl(DomainError):
+    """A conference link was submitted without a url."""
+
+
+class AnnouncementHasUrl(DomainError):
+    """An announcement was submitted with a url; only links carry one."""
+
+
+class InvertedWindow(DomainError):
+    """A broadcast was scheduled to end at or before it starts."""
+
+
+class BroadcastCapReached(DomainError):
+    """The target already holds as many live lines as it may show at once."""
+
+    def __init__(self, kind: str, cap: int, audience: str) -> None:
+        super().__init__(f"{cap} live {kind}s already for {audience}")
+        self.kind = kind
+        self.cap = cap
+        self.audience = audience
+
+
+class BroadcastNotFound(DomainError):
+    """No broadcast row with that id."""
+
+    def __init__(self, broadcast_id: int) -> None:
+        super().__init__(f"no broadcast {broadcast_id}")
+        self.broadcast_id = broadcast_id
+
+
+# --- checklist -------------------------------------------------------------------------
+
+
+class TooManyChecklistItems(DomainError):
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"more than {limit} checklist items")
+        self.limit = limit
+
+
+class ChecklistPosition(DomainError):
+    """A checklist line failed validation; `position` is its 1-based place in the request."""
+
+    def __init__(self, position: int) -> None:
+        super().__init__(f"checklist item {position}")
+        self.position = position
+
+
+class ChecklistLabelMissing(ChecklistPosition):
+    """A line arrived with a blank label."""
+
+
+class ChecklistLabelTooLong(ChecklistPosition):
+    def __init__(self, position: int, limit: int) -> None:
+        super().__init__(position)
+        self.limit = limit
+
+
+class ChecklistLabelRepeated(ChecklistPosition):
+    def __init__(self, position: int, label: str) -> None:
+        super().__init__(position)
+        self.label = label
+
+
+class ChecklistItemNeedsOneIdentifier(ChecklistPosition):
+    """A progress entry gave both an id and a label, or neither."""
+
+
+class ChecklistItemNotFound(DomainError):
+    def __init__(self, item_id: int) -> None:
+        super().__init__(f"no checklist item {item_id}")
+        self.item_id = item_id
+
+
+class ChecklistItemSentTwice(DomainError):
+    def __init__(self, item_id: int) -> None:
+        super().__init__(f"checklist item {item_id} sent twice")
+        self.item_id = item_id
+
+
+class ChecklistLabelNotFound(DomainError):
+    def __init__(self, label: str) -> None:
+        super().__init__(f"no checklist item labelled {label!r}")
+        self.label = label
+
+
+# --- timeline --------------------------------------------------------------------------
+
+
+class TooManyTimelineEvents(DomainError):
+    def __init__(self, limit: int) -> None:
+        super().__init__(f"more than {limit} timeline events")
+        self.limit = limit
+
+
+class TimelinePosition(DomainError):
+    """A timeline event failed validation; `position` is its 1-based place in the request."""
+
+    def __init__(self, position: int) -> None:
+        super().__init__(f"timeline event {position}")
+        self.position = position
+
+
+class TimelineLabelMissing(TimelinePosition):
+    """An event arrived with a blank label."""
+
+
+class TimelineLabelTooLong(TimelinePosition):
+    def __init__(self, position: int, limit: int) -> None:
+        super().__init__(position)
+        self.limit = limit
+
+
+class TimelinePhaseInvalid(TimelinePosition):
+    def __init__(self, position: int, phases: tuple[str, ...]) -> None:
+        super().__init__(position)
+        self.phases = phases
+
+
+class TimelineTimestampAware(TimelinePosition):
+    """The timestamp carried a timezone; the column is naive UTC."""
+
+
+class PinnedEventRemoved(DomainError):
+    """The submitted schedule dropped or renamed the conference-start line."""
+
+    def __init__(self, label: str) -> None:
+        super().__init__(f"pinned event removed: {label}")
+        self.label = label
+
+
+# --- shared admin form errors ----------------------------------------------------------
+
+
+class BlankField(DomainError):
+    """A field that must carry a value arrived blank."""
+
+    def __init__(self, field: str) -> None:
+        super().__init__(f"blank field: {field}")
+        self.field = field
+
+
+class NoChanges(DomainError):
+    """A PATCH carried no fields at all."""
+
+
+class CommitteeExists(DomainError):
+    """A committee with that name already exists; names are the primary key."""
+
+    def __init__(self, committee_name: str) -> None:
+        super().__init__(f"committee exists: {committee_name}")
+        self.committee_name = committee_name
+
+
+class ChairNotInCommittee(DomainError):
+    """The chair id does not belong to the committee in the path."""
+
+
+# --- school form errors ----------------------------------------------------------------
+
+
+class MissingSchoolFields(DomainError):
+    """The create-school payload is missing required fields."""
+
+    def __init__(self, fields: tuple[str, ...]) -> None:
+        super().__init__(f"missing school fields: {', '.join(fields)}")
+        self.fields = fields
+
+
+class InvalidPaymentStatus(DomainError):
+    """`payment_status` is not one of the statuses the onboarding flow accepts."""
+
+    def __init__(self, options: tuple[str, ...]) -> None:
+        super().__init__(f"invalid payment status: {', '.join(options)}")
+        self.options = options
+
+
+class SchoolExists(DomainError):
+    """A school with that name already exists."""
+
+    def __init__(self, school_name: str) -> None:
+        super().__init__(f"school exists: {school_name}")
+        self.school_name = school_name
+
+
+class DelegateLabelsTooLong(DomainError):
+    """Renaming the school would push a delegate label past the column's 100 characters."""
+
+
+class ConfirmationMismatch(DomainError):
+    """The `confirm` parameter did not repeat the school's name."""
+
+
+class DelegatePairTaken(DomainError):
+    """Another delegate already holds that committee + country pairing."""
+
+    def __init__(self, country: str, committee: str) -> None:
+        super().__init__(f"{country} ({committee}) already has a delegate")
+        self.country = country
+        self.committee = committee

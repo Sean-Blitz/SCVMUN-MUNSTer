@@ -88,3 +88,19 @@ def prune_superseded_files(db: Session, delegate_account_id: int) -> int:
         core.storage.delete_paper(stale)
 
     return len(superseded)
+
+
+def has_file(db: Session, delegate_account_id: int) -> bool:
+    """True when the delegate's live paper row still has bytes behind it.
+
+    A row without bytes is what an interrupted restore leaves behind, so the admin views ask
+    this rather than trusting the row - and they show "missing" instead of failing.
+    """
+    upload = latest_paper(db, delegate_account_id)
+    if upload is None:
+        return False
+    try:
+        return core.storage.paper_path(upload.file_path).is_file()
+    except ValueError:
+        # A path that escapes the upload directory is missing, not a reason to fail the view.
+        return False
