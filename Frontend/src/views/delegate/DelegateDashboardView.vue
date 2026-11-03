@@ -540,46 +540,9 @@ onMounted(async () => {
   letter-spacing: 0.005em;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background:
-    radial-gradient(120% 90% at 8% -10%, rgba(0, 157, 219, 0.1), transparent 55%),
-    radial-gradient(90% 80% at 100% 0%, rgba(232, 198, 4, 0.09), transparent 60%),
-    linear-gradient(180deg, #fbfdff 0%, #f4f8fc 55%, #eef4fa 100%);
-}
-
-/* AMBIENT LIGHT: two very soft bodies of colour that drift, so the flat page breathes.
-   They sit behind everything and take no pointer. */
-.delegate-page::before,
-.delegate-page::after {
-  content: '';
-  position: absolute;
-  z-index: -1;
-  width: min(46vw, 520px);
-  aspect-ratio: 1;
-  border-radius: 50%;
-  filter: blur(70px);
-  pointer-events: none;
-}
-
-.delegate-page::before {
-  top: -18%;
-  left: -10%;
-  background: radial-gradient(circle, rgba(0, 157, 219, 0.28), transparent 68%);
-  animation: drift-a 24s ease-in-out infinite alternate;
-}
-
-.delegate-page::after {
-  right: -12%;
-  bottom: -24%;
-  background: radial-gradient(circle, rgba(232, 198, 4, 0.24), transparent 68%);
-  animation: drift-b 28s ease-in-out infinite alternate;
-}
-
-@keyframes drift-a {
-  to { transform: translate3d(60px, 36px, 0) scale(1.12); }
-}
-
-@keyframes drift-b {
-  to { transform: translate3d(-54px, -30px, 0) scale(1.08); }
+  /* PLAIN WHITE: the page matches the rest of the app's white surfaces. The cards carry
+     their own hairline borders and shadows, so separation does not need a tinted wash. */
+  background: #ffffff;
 }
 
 /* ========================================================== PLATFORM ==== */
@@ -1475,9 +1438,7 @@ onMounted(async () => {
   .announcement-bar,
   .panel,
   .criterion-bar-fill,
-  .grade-empty-icon,
-  .delegate-page::before,
-  .delegate-page::after {
+  .grade-empty-icon {
     animation: none;
   }
 
