@@ -119,3 +119,22 @@ class AwardCriteriaUnscored(DomainError):
         super().__init__(f"{award} needs {', '.join(missing)}")
         self.award = award
         self.missing = missing
+
+
+# --- advisor use cases -----------------------------------------------------------------
+
+
+class SchoolNotFound(DomainError):
+    """No school profile is attached to the account."""
+
+
+class DelegateNotInSchool(DomainError):
+    """The delegate id does not belong to the caller's school."""
+
+
+class AccountMissing(DomainError):
+    """The session names an account that no longer exists."""
+
+
+class PasswordRejected(DomainError):
+    """The re-authentication password for a credential reveal was wrong."""
