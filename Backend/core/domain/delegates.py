@@ -23,7 +23,7 @@ from sqlalchemy.orm import Session
 
 import core.audit
 import core.storage
-from core.controls import MAX_UPLOADS_PER_HOUR, paper_rubric_data
+from core import controls
 from core.domain import papers
 from core.domain.errors import (
     DelegateNotFound,
@@ -102,7 +102,7 @@ def _paper_criteria(delegate: Delegates) -> list[GradedCriterion]:
     scores = {str(key): value for key, value in (delegate.paper_rubric_grade or {}).items()}
 
     criteria: list[GradedCriterion] = []
-    for criterion in paper_rubric_data:
+    for criterion in controls.paper_rubric_data:
         criterion_id = criterion.get("id")
         key = str(criterion_id)
         if criterion_id is None or key not in scores:
@@ -205,8 +205,8 @@ def submit_paper(
             Uploads.upload_time >= window_start,
         )
     ) or 0
-    if recent_uploads >= MAX_UPLOADS_PER_HOUR:
-        raise UploadRateLimited(MAX_UPLOADS_PER_HOUR, UPLOAD_WINDOW_HOURS)
+    if recent_uploads >= controls.MAX_UPLOADS_PER_HOUR:
+        raise UploadRateLimited(controls.MAX_UPLOADS_PER_HOUR, UPLOAD_WINDOW_HOURS)
 
     limit_mb = core.storage.MAX_PAPER_BYTES // (1024 * 1024)
     if len(data) > core.storage.MAX_PAPER_BYTES:

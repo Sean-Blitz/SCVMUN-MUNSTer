@@ -26,12 +26,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 import core.audit
-from core.controls import (
-    TIMELINE_PHASES,
-    award_options,
-    awards_rubric,
-    paper_rubric_data,
-)
+from core import controls
 from core.domain import papers
 from core.domain.errors import (
     AwardCriteriaUnscored,
@@ -197,7 +192,7 @@ def get_committee_overview(db: Session, account_id: int) -> CommitteeOverviewRes
                 for event in events
                 if event.phase == phase
             ]
-            for phase in TIMELINE_PHASES
+            for phase in controls.TIMELINE_PHASES
         }
     )
 
@@ -237,7 +232,7 @@ def build_paper_rubric() -> list[GradingRubricCriterion]:
     entry could never be graded - the delegate-side join skips it for the same reason.
     """
     rubric: list[GradingRubricCriterion] = []
-    for criterion in paper_rubric_data:
+    for criterion in controls.paper_rubric_data:
         criterion_id = criterion.get("id")
         if criterion_id is None:
             continue
@@ -411,7 +406,7 @@ def assignable_awards() -> list[str]:
     """The award names a chair may hand out, in the order core.controls lists them."""
     return [
         name.strip()
-        for name in award_options
+        for name in controls.award_options
         if name.strip() and name.strip().casefold() not in RESERVED_AWARD_OPTIONS
     ]
 
@@ -436,7 +431,7 @@ def build_awards_rubric() -> list[AwardsRubricCriterion]:
     """
     rubric: list[AwardsRubricCriterion] = []
 
-    for criterion in awards_rubric:
+    for criterion in controls.awards_rubric:
         criterion_id = criterion.get("id")
         if criterion_id is None:
             # `id` keys the scores map, so a criterion without one could never be stored.

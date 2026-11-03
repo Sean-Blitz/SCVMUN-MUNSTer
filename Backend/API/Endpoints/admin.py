@@ -12,7 +12,6 @@ import csv
 import io
 import json
 import os
-import secrets
 import shutil
 import socket
 from concurrent.futures import ThreadPoolExecutor
@@ -31,7 +30,7 @@ import core.monitor
 import core.storage
 from API import papers
 import crud.onboarding as onboarding
-from core.controls import BROADCAST_LIMITS, TIMELINE_PHASES
+from core import controls
 
 from crud.database_schema import (Account,AuthSession,Base,Broadcast,Chairs,
     ChecklistProgress,Committees,ConferenceChecklist,Delegates,
@@ -610,10 +609,10 @@ def _validate_broadcast(
     db: Session, kind: str, body: str, url: str | None, committee_name: str | None
 ) -> tuple[str, str | None, str | None]:
     """Normalise and check the fields shared by both kinds. Returns the cleaned values."""
-    if kind not in BROADCAST_LIMITS:
+    if kind not in controls.BROADCAST_LIMITS:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f"kind must be one of: {', '.join(sorted(BROADCAST_LIMITS))}.",
+            f"kind must be one of: {', '.join(sorted(controls.BROADCAST_LIMITS))}.",
         )
 
     body = (body or "").strip()
@@ -667,7 +666,7 @@ def _enforce_cap(
     db: Session, kind: str, committee_name: str | None, exclude_id: int | None = None
 ) -> None:
     """Refuse a create/edit that would put more lines in front of a delegate than fit."""
-    cap = BROADCAST_LIMITS[kind]["global" if committee_name is None else "committee"]
+    cap = controls.BROADCAST_LIMITS[kind]["global" if committee_name is None else "committee"]
     if _slots_used(db, kind, committee_name, exclude_id) >= cap:
         audience = "for every delegate" if committee_name is None else f"for {committee_name}"
         raise HTTPException(
@@ -683,10 +682,10 @@ def list_broadcasts(
     db: Session = Depends(get_db),
 ) -> BroadcastListResponse:
     """List every broadcast, expired ones included: this is the editor's view."""
-    if kind is not None and kind not in BROADCAST_LIMITS:
+    if kind is not None and kind not in controls.BROADCAST_LIMITS:
         raise HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f"kind must be one of: {', '.join(sorted(BROADCAST_LIMITS))}.",
+            f"kind must be one of: {', '.join(sorted(controls.BROADCAST_LIMITS))}.",
         )
 
     stmt = select(Broadcast).order_by(
@@ -1936,10 +1935,10 @@ def replace_timeline(
                 status.HTTP_400_BAD_REQUEST,
                 f"Event {position} is longer than {MAX_TIMELINE_LABEL} characters.",
             )
-        if entry.phase not in TIMELINE_PHASES:
+        if entry.phase not in controls.TIMELINE_PHASES:
             raise HTTPException(
                 status.HTTP_400_BAD_REQUEST,
-                f"Event {position}: phase must be one of {', '.join(TIMELINE_PHASES)}.",
+                f"Event {position}: phase must be one of {', '.join(controls.TIMELINE_PHASES)}.",
             )
         if entry.starts_at.tzinfo is not None:
             # The column is naive UTC; an aware value would land shifted by whatever the
