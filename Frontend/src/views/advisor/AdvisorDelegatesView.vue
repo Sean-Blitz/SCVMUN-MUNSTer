@@ -222,291 +222,470 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ============================================================ PAGE ====== */
+/* The same white surface, navy ink and hairline rules as the login and delegate
+   pages, so every role's portal reads as one product. Nothing here touches the
+   data: only colour, spacing, radius and shadow are set. */
 .advisor-page {
+  --ink: #03045e;
+  --ink-2: #232d5c;
+  --muted: #63708c;
+  --line: rgba(3, 4, 94, 0.09);
+  --accent: #009ddb;
+  --green: #15803d;
+  --red: #b42318;
+  --gap: clamp(12px, 1.6vh, 18px);
+  --radius: 16px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --font:
+    'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  max-width: 1200px;
+  gap: var(--gap);
+  width: 100%;
+  max-width: 1240px;
   margin: 0 auto;
-  padding: 20px;
-  color: #00007e93;
-  font-family: Arial, sans-serif;
+  padding: clamp(14px, 2.1vh, 24px) clamp(16px, 2.4vw, 34px);
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: clamp(0.85rem, 1.6vh, 1rem);
+  line-height: 1.5;
+  letter-spacing: 0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #ffffff;
 }
 
-/* TOP TOGGLE BUTTONS */
+/* =========================================================== TOGGLE ===== */
+/* Segmented pills: the page in view carries the navy weight, the other stays a
+   quiet outline, exactly like the primary/secondary pairing on the login page. */
 .toggle-container {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 15px;
+  gap: 10px;
 }
 
 .toggle-btn {
-  width: 240px;
-  height: 40px;
+  min-width: 210px;
+  padding: 10px 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
   background-color: #ffffff;
-  color: #5b6b7d;
-  border: 1px solid #e8c604;
-  border-radius: 4px;
-  font-weight: bold;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.76em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.toggle-btn.active {
-  background-color: #009ddbda;
-  color: #00007e;
-  border-color: #009ddb;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    transform 0.25s var(--ease);
 }
 
 .toggle-btn:hover:not(.active) {
-  background-color: #e8c604;
-  color: #00007e;
+  border-color: rgba(3, 4, 94, 0.18);
+  color: var(--ink);
+  transform: translateY(-1px);
 }
 
-/* STATS BAR */
+.toggle-btn.active {
+  border-color: var(--ink);
+  background-color: var(--ink);
+  color: #ffffff;
+}
+
+/* ============================================================= STATS ===== */
 .stats-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 16px;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--ink);
+  border-radius: 14px;
   background-color: #ffffff;
-  border: 1px solid #e8c604;
-  border-radius: 4px;
-  padding: 12px 20px;
-  font-size: 0.95rem;
-  color: #5b6b7d;
+  box-shadow: 0 1px 2px rgba(3, 4, 94, 0.04);
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .stats-bar strong {
-  color: #00007e;
+  color: var(--ink);
+  font-size: 1.35em;
+  letter-spacing: 0;
+  font-variant-numeric: tabular-nums;
 }
 
-/* LIST & TABLE HEADERS */
+/* ============================================================== LIST ===== */
 .list-container {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
 }
 
 .table-headers {
   display: grid;
   grid-template-columns: 1.5fr 1.2fr 1fr 1fr 1fr 1.2fr;
-  padding: 0 20px;
   gap: 10px;
+  padding: 0 18px;
 }
 
 .header-col {
-  font-size: 0.85rem;
-  font-weight: bold;
-  color: #6b7c8d;
+  font-size: 0.66em;
+  font-weight: 700;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
+  color: var(--muted);
 }
 
-/* DELEGATE BOX (ROW) */
+/* ROWS: white cards on white, separated by a hairline and one soft shadow. */
 .delegate-box {
-  background-color: #ffffff;
-  border: 1px solid #e8c604;
-  border-radius: 6px;
-  padding: 15px 20px;
   display: grid;
   grid-template-columns: 1.5fr 1.2fr 1fr 1fr 1fr 1.2fr;
   align-items: center;
   gap: 10px;
+  padding: 14px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.92));
+  box-shadow:
+    0 1px 2px rgba(3, 4, 94, 0.04),
+    0 20px 40px -38px rgba(3, 4, 94, 0.45);
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s var(--ease);
+  animation: row-in 0.7s var(--ease) both;
+}
+
+.delegate-box:hover {
+  border-color: rgba(3, 4, 94, 0.16);
+  transform: translateY(-1px);
+  box-shadow:
+    0 1px 2px rgba(3, 4, 94, 0.05),
+    0 22px 44px -38px rgba(3, 4, 94, 0.35);
+}
+
+@keyframes row-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 10px, 0);
+  }
 }
 
 .col-cell {
   display: flex;
   flex-direction: column;
   justify-content: center;
+  min-width: 0;
 }
 
 .primary-text {
-  color: #00007e93;
-  font-size: 1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink);
+  font-size: 0.9em;
+  font-weight: 650;
 }
 
 .sub-text {
-  color: #5b6b7d;
-  font-size: 0.85rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--muted);
+  font-size: 0.78em;
 }
 
 .grade-text {
-  color: #00007e93;
-  font-weight: bold;
+  color: var(--ink);
+  font-size: 0.86em;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 .hash-text {
-  font-family: monospace;
-  background-color: #f5fafd;
-  padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid #e8c604;
   width: fit-content;
-  color: #00007e;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 4px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background-color: #f7fafd;
+  color: var(--ink-2);
+  font-family: 'SFMono-Regular', ui-monospace, Menlo, Consolas, monospace;
+  font-size: 0.74em;
+  letter-spacing: 0.04em;
 }
 
-/* BADGES */
+/* ============================================================ BADGES ===== */
 .status-badge {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-weight: bold;
-  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
   width: fit-content;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 0.64em;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
 }
 
+/* Nothing submitted yet is the resting state, not a problem: plain ink on a hairline. */
 .status-unsubmitted {
-  background-color: #fee2e2;
-  color: #991b1b;
-  border: 1px solid #ef4444;
+  border: 1px solid var(--line);
+  background-color: transparent;
+  color: var(--muted);
 }
 
 .status-submitted {
-  background-color: #fdf6d3;
-  color: #7a5c00;
-  border: 1px solid #e8c604;
+  border: 1px solid rgba(3, 4, 94, 0.1);
+  background-color: #f2f4f8;
+  color: var(--ink-2);
 }
 
 .status-graded {
-  background-color: #dcfce7;
-  color: #166534;
-  border: 1px solid #16a34a;
+  background-color: rgba(22, 163, 74, 0.1);
+  color: var(--green);
 }
 
 .reg-badge {
-  font-size: 0.85rem;
-  font-weight: bold;
+  font-size: 0.66em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
 }
 
 .reg-yes {
-  color: #16a34a;
+  color: var(--green);
 }
 
 .reg-no {
-  color: #ef4444;
+  color: var(--muted);
 }
 
-/* BUTTONS */
+/* =========================================================== BUTTONS ===== */
 .btn-download {
-  background-color: #f5fafd;
-  color: #00007e;
-  border: 1px solid #e8c604;
-  padding: 8px 12px;
-  border-radius: 4px;
+  padding: 7px 13px;
+  border: 1px solid rgba(0, 157, 219, 0.4);
+  border-radius: 9px;
+  background-color: #ffffff;
+  color: #0079ab;
+  font-family: inherit;
+  font-size: 0.72em;
+  font-weight: 650;
   cursor: pointer;
-  font-size: 0.85rem;
-  font-weight: bold;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.25s var(--ease),
+    box-shadow 0.25s ease;
 }
 
 .btn-download:hover:not(:disabled) {
-  background-color: #009ddbda;
-  color: #00007e;
-  border-color: #009ddb;
+  border-color: var(--accent);
+  background-color: #f2f9fe;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px -16px rgba(0, 121, 171, 0.9);
 }
 
 .btn-download:disabled {
-  opacity: 0.4;
+  border-color: rgba(3, 4, 94, 0.12);
+  color: #9aa5b1;
   cursor: not-allowed;
 }
 
 .bottom-actions {
   display: flex;
   justify-content: center;
-  margin-top: 10px;
+  margin-top: 6px;
 }
 
 .btn-reveal {
-  background-color: #009ddb;
-  color: #00007e;
-  border: none;
-  padding: 10px 24px;
-  border-radius: 4px;
-  font-weight: bold;
+  padding: 11px 22px;
+  border: 0;
+  border-radius: 999px;
+  background-color: var(--ink);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.72em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
+  box-shadow: 0 12px 24px -18px rgba(3, 4, 94, 0.9);
+  transition:
+    background-color 0.25s ease,
+    transform 0.25s var(--ease),
+    box-shadow 0.25s ease;
 }
 
 .btn-reveal:hover {
-  background-color: #009ddb;
-  color: #00007e;
+  background-color: #071f7a;
+  transform: translateY(-1px);
+  box-shadow: 0 16px 28px -18px rgba(3, 4, 94, 0.9);
+}
+
+.btn-reveal:active {
+  transform: translateY(0) scale(0.99);
 }
 
 .revealed-notice {
-  color: #16a34a;
-  font-weight: bold;
+  display: inline-flex;
+  align-items: center;
+  padding: 7px 15px;
+  border-radius: 999px;
+  background-color: rgba(22, 163, 74, 0.1);
+  color: var(--green);
+  font-size: 0.7em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
 
-/* MODAL */
+/* ============================================================= MODAL ===== */
 .modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: rgba(0, 0, 126, 0.45);
+  inset: 0;
+  z-index: 100;
   display: flex;
   justify-content: center;
   align-items: center;
-  z-index: 100;
+  padding: 20px;
+  background-color: rgba(3, 4, 94, 0.45);
+  backdrop-filter: blur(2px);
 }
 
 .modal-card {
-  background-color: #ffffff;
-  border: 1px solid #e8c604;
-  border-radius: 8px;
-  padding: 30px;
-  width: 100%;
-  max-width: 400px;
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 16px;
+  width: 100%;
+  max-width: 400px;
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background-color: #ffffff;
+  box-shadow: 0 40px 80px -40px rgba(3, 4, 94, 0.6);
+  animation: modal-in 0.45s var(--ease) both;
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 12px, 0) scale(0.98);
+  }
 }
 
 .modal-card h3 {
   margin: 0;
-  color: #00007e;
+  font-size: 1.06em;
+  font-weight: 650;
+  letter-spacing: -0.005em;
+  color: var(--ink);
 }
 
 .modal-card p {
   margin: 0;
-  color: #5b6b7d;
-  font-size: 0.9rem;
+  font-size: 0.84em;
+  line-height: 1.55;
+  color: var(--muted);
 }
 
+/* Underline field, the same treatment the login inputs use. */
 .modal-card input {
-  background-color: #ffffff;
-  border: 1px solid #e8c604;
-  color: #00007e93;
-  padding: 10px;
-  border-radius: 4px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 10px 2px;
+  border: none;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: transparent;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 0.95em;
+  letter-spacing: 0.01em;
+  transition: border-color 0.2s ease;
+}
+
+.modal-card input:focus {
+  outline: none;
+  border-bottom-color: #023e8a;
+}
+
+.modal-card input::placeholder {
+  color: rgba(3, 4, 94, 0.45);
 }
 
 .error-msg {
-  color: #ef4444 !important;
-  font-size: 0.85rem !important;
+  color: var(--red) !important;
+  font-size: 0.8em !important;
 }
 
 .modal-buttons {
   display: flex;
   gap: 10px;
+  margin-top: 4px;
 }
 
 .btn-confirm {
   flex: 1;
-  background-color: #009ddbda;
-  color: #00007e;
-  border: none;
-  padding: 10px;
-  border-radius: 4px;
-  font-weight: bold;
+  padding: 11px;
+  border: 0;
+  border-radius: 10px;
+  background-color: var(--ink);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.74em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   cursor: pointer;
+  transition:
+    background-color 0.25s ease,
+    transform 0.25s var(--ease);
+}
+
+.btn-confirm:hover {
+  background-color: #071f7a;
+  transform: translateY(-1px);
 }
 
 .btn-cancel {
   flex: 1;
-  background-color: #f5fafd;
-  color: #00007e;
-  border: 1px solid #e8c604;
-  padding: 10px;
-  border-radius: 4px;
+  padding: 11px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background-color: #ffffff;
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 0.74em;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   cursor: pointer;
+  transition:
+    border-color 0.25s ease,
+    color 0.25s ease;
 }
 
-/* RESPONSIVE */
+.btn-cancel:hover {
+  border-color: rgba(3, 4, 94, 0.2);
+  color: var(--ink);
+}
+
+/* ========================================================== RESPONSIVE === */
 @media (max-width: 900px) {
   .table-headers {
     display: none;
@@ -514,7 +693,26 @@ onMounted(async () => {
 
   .delegate-box {
     grid-template-columns: 1fr;
-    gap: 15px;
+    gap: 12px;
+  }
+
+  .col-cell {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .toggle-btn {
+    flex: 1;
+    min-width: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .delegate-box,
+  .modal-card {
+    animation: none;
   }
 }
 </style>

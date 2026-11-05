@@ -1,15 +1,7 @@
 <template>
   <div class="delegate-page">
     <!-- PLATFORM: the page's own header, replacing the shell's navbar on this dashboard. -->
-    <header
-      ref="barEl"
-      class="platform-bar soap-bubble-surface"
-      :data-soap-bubble-ready="barReady ? '' : undefined"
-    >
-      <!-- The film: the same liquid glass the login buttons wear, drawn behind the content
-           so the rim can wobble past the header's box. -->
-      <canvas ref="barCanvasEl" class="soap-bubble-surface-canvas" aria-hidden="true"></canvas>
-
+    <header class="platform-bar">
       <div class="bar-left">
         <ConferenceCountdown class="bar-countdown" />
       </div>
@@ -215,14 +207,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
 import { useLogout } from '@/utils/useLogout'
 import ConferenceCountdown from '@/components/ConferenceCountdown.vue'
-import { useSoapBubble } from '@/components/soap-bubble/useSoapBubble'
-import '@/components/soap-bubble/soap-bubble.css'
 
 const toastStore = useToastStore()
 const authStore = useAuthStore()
@@ -230,119 +220,6 @@ const { handleLogout } = useLogout()
 
 // The platform shows who is signed in, exactly as the shell's navbar did.
 const currentUser = computed(() => authStore.user || { name: 'Guest', role: 'none' })
-
-// ---------- Platform glass (the soap-bubble film) ----------
-// The header is a real bubble surface, not a painted panel: the material draws its film on
-// the canvas below and the pointer handlers at the bottom of the script nudge it, so the
-// bar jiggles under the cursor exactly as the login buttons do.
-const barEl = ref(null)
-const barCanvasEl = ref(null)
-
-// The login page's approved light-glass preset, with a milky body so the countdown and the
-// title stay readable over the bright dashboard, and a livelier wobble than a button has
-// because the jiggle has a 880px bar to travel through.
-const barMaterial = {
-  glass: 0.95,
-  iridescence: 0.5,
-  filmScale: 4.85,
-  oilOpacity: 1,
-  oilCoverage: 0.73,
-  oilEdge: 18,
-  oilEdgeFade: 2.33,
-  clearCenter: 0.57,
-  thickness: 480,
-  drainage: 0.35,
-  swirl: 0.5,
-  reflectivity: 1.3,
-  refraction: 0.15,
-  dispersion: 1,
-  bevel: 14,
-  environment: 'soft',
-  windowLength: 1.3,
-  windowMargin: 0.85,
-  windowBend: 0.75,
-  windowSize: 0.75,
-  windowWidth: 0.8,
-  windowGradient: 0.96,
-  windowHead: 0.7,
-  windowTail: 0.6,
-  glintSize: 1.65,
-  glintIntensity: 0,
-  glintDistance: -0.45,
-  glintHeight: 0.65,
-  windowIntensity: 0.85,
-  windowTwin: false,
-  tint: '#ffffff',
-  // The film has no backdrop blur of its own, so the body carries enough milk to keep the
-  // header's own text clear of whatever panel sits underneath it.
-  opacity: 0.62,
-  bottomShadeColor: '#ffffff',
-  wobble: 1.7
-}
-
-// Pointer handling is bound here rather than by the composable: a bar is tens of times wider
-// than it is tall, and the composable normalises by the shorter side, which would send the
-// film's lean far past anything the shader expects.
-const { ready: barReady, engine: barEngine } = useSoapBubble({
-  host: barEl,
-  canvas: barCanvasEl,
-  material: barMaterial,
-  interactive: false
-})
-
-// Position on the bar in -1..1 on both axes, measured against the bar itself.
-const barPoint = (event) => {
-  const el = barEl.value
-  if (!el) return [0, 0]
-  const rect = el.getBoundingClientRect()
-  const halfWidth = rect.width / 2 || 1
-  const halfHeight = rect.height / 2 || 1
-  return [
-    (event.clientX - rect.left - halfWidth) / halfWidth,
-    -(event.clientY - rect.top - halfHeight) / halfHeight
-  ]
-}
-
-// Crossing the edge gives the film a jolt, so hovering reads as a nudge, not a glow.
-const onBarEnter = (event) => {
-  const [x, y] = barPoint(event)
-  barEngine.value?.pointer(x, y, true)
-  barEngine.value?.rebound()
-}
-
-const onBarMove = (event) => {
-  const [x, y] = barPoint(event)
-  barEngine.value?.pointer(x, y, true)
-}
-
-const onBarLeave = (event) => {
-  const [x, y] = barPoint(event)
-  barEngine.value?.pointer(x, y, false)
-  barEngine.value?.press(false)
-}
-
-const onBarDown = () => barEngine.value?.press(true)
-const onBarUp = () => barEngine.value?.press(false)
-
-onMounted(() => {
-  const el = barEl.value
-  if (!el) return
-  el.addEventListener('pointerenter', onBarEnter)
-  el.addEventListener('pointermove', onBarMove)
-  el.addEventListener('pointerleave', onBarLeave)
-  el.addEventListener('pointerdown', onBarDown)
-  el.addEventListener('pointerup', onBarUp)
-})
-
-onBeforeUnmount(() => {
-  const el = barEl.value
-  if (!el) return
-  el.removeEventListener('pointerenter', onBarEnter)
-  el.removeEventListener('pointermove', onBarMove)
-  el.removeEventListener('pointerleave', onBarLeave)
-  el.removeEventListener('pointerdown', onBarDown)
-  el.removeEventListener('pointerup', onBarUp)
-})
 
 // ---------- Wordmark (presentation only) ----------
 // The title assembles itself a letter at a time on load. Each glyph carries its own delay,
@@ -562,14 +439,12 @@ onMounted(async () => {
   grid-template-columns: 1fr auto 1fr;
   align-items: center;
   gap: 16px;
-  /* LAYOUT ONLY: the glass is the soap-bubble film on the canvas below, so the header itself
-     stays transparent. Anything painted here would sit still while the film wobbles. */
-  background: transparent;
-  border: 0;
+  /* PLAIN WHITE: a flat surface like the rest of the page - no film, no reflected window,
+     nothing that follows the pointer. */
+  background: #ffffff;
+  border: 1px solid var(--line);
   border-radius: 999px;
-  /* The film moves and a CSS shadow cannot follow it, so this one stays wide and soft. */
-  --soap-bubble-shadow: 0 18px 34px -26px rgba(3, 4, 94, 0.55);
-  box-shadow: var(--soap-bubble-shadow);
+  box-shadow: 0 14px 30px -26px rgba(3, 4, 94, 0.4);
   animation: bar-in 0.85s var(--ease) both;
 }
 
@@ -580,77 +455,7 @@ onMounted(async () => {
   }
 }
 
-/* FALLBACK: the CSS pane that stands in until the film's first frame - and for good when
-   WebGL is unavailable. It never shows while the canvas is drawing. */
-.platform-bar:not([data-soap-bubble-ready]) {
-  background-color: rgba(255, 255, 255, 0.46);
-  background-image:
-    /* The body of the glass: brighter where it faces the light, cooler along the underside. */
-    linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.5) 0%,
-      rgba(255, 255, 255, 0.14) 38%,
-      rgba(255, 255, 255, 0.06) 66%,
-      rgba(214, 236, 255, 0.32) 100%
-    ),
-    /* A long diagonal sheen, the way a glass surface catches a window at an angle. */
-    linear-gradient(
-      104deg,
-      rgba(255, 255, 255, 0.34) 0%,
-      rgba(255, 255, 255, 0) 32%,
-      rgba(255, 255, 255, 0) 66%,
-      rgba(255, 255, 255, 0.2) 100%
-    ),
-    /* The faint page tint the glass refracts, so it never reads as flat white. */
-    linear-gradient(94deg, rgba(0, 157, 219, 0.06), rgba(255, 255, 255, 0) 45%, rgba(232, 198, 4, 0.05));
-  border: 1px solid rgba(255, 255, 255, 0.62);
-  /* The stack: float over the page, a bright top lip and a dim bottom one (the pane's
-     thickness), then a cold halo pooling just inside the lower edge. */
-  box-shadow:
-    0 22px 45px -28px rgba(3, 4, 94, 0.45),
-    0 3px 12px -6px rgba(3, 4, 94, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.55),
-    inset 0 -9px 16px -12px rgba(3, 4, 94, 0.32),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.2);
-  /* Frosted, brightened and saturated: the blur alone would only look out of focus. */
-  -webkit-backdrop-filter: blur(18px) saturate(1.75) brightness(1.05);
-  backdrop-filter: blur(18px) saturate(1.75) brightness(1.05);
-}
-
-/* The CSS pane's own specular band and prism edge. Both are pure light: no hit area, no
-   layout - and both belong to the stand-in, since the film brings its own highlights. */
-.platform-bar:not([data-soap-bubble-ready])::before,
-.platform-bar:not([data-soap-bubble-ready])::after {
-  content: '';
-  position: absolute;
-  pointer-events: none;
-  border-radius: inherit;
-}
-
-.platform-bar:not([data-soap-bubble-ready])::before {
-  inset: 1px 1px auto;
-  height: 46%;
-  /* Bulging like the top of a glass tube, so the sheen follows a curve, not a line. */
-  border-radius: 999px 999px 42% 42% / 999px 999px 100% 100%;
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.72) 0%,
-    rgba(255, 255, 255, 0.16) 46%,
-    rgba(255, 255, 255, 0) 100%
-  );
-}
-
-.platform-bar:not([data-soap-bubble-ready])::after {
-  inset: 0;
-  /* Cool on one flank, warm on the other: the slight split light takes through glass. */
-  box-shadow:
-    inset 1px 0 0 rgba(0, 157, 219, 0.18),
-    inset -1px 0 0 rgba(232, 198, 4, 0.16),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.32);
-}
-
-/* Content sits above the two light layers. */
+/* Columns of the bar. */
 .bar-left,
 .bar-right,
 .bar-title {
@@ -670,14 +475,6 @@ onMounted(async () => {
   justify-content: flex-end;
   gap: 14px;
   min-width: 0;
-}
-
-/* Without a backdrop filter there is nothing to see through, so the pane turns opaque
-   instead of leaving the page text to show behind the header's own. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .platform-bar:not([data-soap-bubble-ready]) {
-    background-color: rgba(255, 255, 255, 0.97);
-  }
 }
 
 /* The wordmark: a wide-set, quietly weighted sans, assembled one letter at a time. */
@@ -707,7 +504,6 @@ onMounted(async () => {
   from {
     opacity: 0;
     transform: translate3d(0, 0.5em, 0);
-    filter: blur(5px);
   }
 }
 
@@ -845,10 +641,10 @@ onMounted(async () => {
 }
 
 .panel:hover {
-  border-color: rgba(0, 157, 219, 0.28);
+  border-color: rgba(3, 4, 94, 0.16);
   box-shadow:
     0 1px 2px rgba(3, 4, 94, 0.05),
-    0 28px 54px -36px rgba(3, 4, 94, 0.4);
+    0 22px 44px -38px rgba(3, 4, 94, 0.35);
 }
 
 @keyframes panel-in {
@@ -859,10 +655,10 @@ onMounted(async () => {
 }
 
 /* The cards land in reading order: identity, links, the paper, then the verdict. */
-.panel-delegate { --dot: var(--gold); animation-delay: 0.16s; }
-.panel-links { --dot: var(--accent); animation-delay: 0.24s; }
-.panel-paper { --dot: var(--ink); animation-delay: 0.3s; }
-.panel-grade { --dot: var(--green); animation-delay: 0.38s; }
+.panel-delegate { animation-delay: 0.16s; }
+.panel-links { animation-delay: 0.24s; }
+.panel-paper { animation-delay: 0.3s; }
+.panel-grade { animation-delay: 0.38s; }
 
 .panel-links {
   flex: 1;
@@ -878,16 +674,6 @@ onMounted(async () => {
   line-height: 1.25;
   letter-spacing: -0.005em;
   color: var(--ink);
-}
-
-.panel-title::before {
-  content: '';
-  flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background-color: var(--dot, var(--accent));
-  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot, var(--accent)) 14%, transparent);
 }
 
 /* CONFERENCE LINKS: five quiet wells that fill the card's spare height. */
@@ -1035,7 +821,6 @@ onMounted(async () => {
 .status-badge {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
   padding: 4px 10px;
   border-radius: 999px;
   font-size: 0.64em;
@@ -1044,27 +829,21 @@ onMounted(async () => {
   white-space: nowrap;
 }
 
-.status-badge::before {
-  content: '';
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background-color: currentColor;
-}
-
+/* Nothing submitted yet is the resting state, not a problem: plain ink on a hairline. */
 .status-unsubmitted {
-  background-color: rgba(239, 68, 68, 0.1);
-  color: #b42318;
+  border: 1px solid var(--line);
+  background-color: transparent;
+  color: var(--muted);
 }
 
 .status-submitted {
-  background-color: rgba(232, 198, 4, 0.18);
-  color: #8a6d00;
+  background-color: #f2f4f8;
+  color: var(--ink-2);
 }
 
 .status-graded {
-  background-color: rgba(22, 163, 74, 0.13);
-  color: #15803d;
+  background-color: #f2f4f8;
+  color: var(--ink);
 }
 
 /* GRADE & FEEDBACK PANEL */
@@ -1100,21 +879,13 @@ onMounted(async () => {
   height: 34px;
   border-radius: 50%;
   background-color: #ffffff;
-  color: var(--accent);
-  box-shadow:
-    inset 0 0 0 1px var(--line),
-    0 8px 18px -14px rgba(3, 4, 94, 0.6);
-  animation: float-soft 3.6s ease-in-out infinite;
+  color: var(--muted);
+  border: 1px solid var(--line);
 }
 
 .grade-empty-icon svg {
   width: 18px;
   height: 18px;
-}
-
-@keyframes float-soft {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-3px); }
 }
 
 .grade-summary {
@@ -1199,13 +970,13 @@ onMounted(async () => {
 .criterion-bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, #4ade80, var(--green));
+  background-color: var(--ink);
   transform-origin: left center;
   animation: bar-grow 1.15s var(--ease) 0.5s both;
 }
 
 .criterion-bar-fill.low {
-  background: linear-gradient(90deg, #f5d84a, var(--gold));
+  background-color: var(--muted);
 }
 
 /* Each bar follows the one above it, so the rubric fills in like a report being read. */
