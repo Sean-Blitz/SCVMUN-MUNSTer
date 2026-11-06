@@ -1,7 +1,12 @@
 <template>
   <div class="app-layout">
+    <!-- PLATFORM BAR: every role preview carries the delegate dashboard's header. A real
+         session (DEV_ROLE = null) keeps the shell's own navbar, and pages that draw their
+         own header opt out of both. -->
+    <PlatformBar v-if="showPlatformBar" />
+
     <!-- TOP GLOBAL NAVIGATION BAR (pages that carry their own header opt out of this one) -->
-    <header v-if="!$route.meta.hideNavbar" class="global-navbar">
+    <header v-else-if="!$route.meta.hideNavbar" class="global-navbar">
       <div class="navbar-left">
         <router-link to="/" class="logo-link">
           <!-- Fallback to placeholder if asset is missing -->
@@ -40,14 +45,21 @@
 
 <script setup>
 import { computed } from 'vue'
-import { useAuthStore } from '../stores/auth'
+import { useRoute } from 'vue-router'
+import { useAuthStore, isPreviewing } from '../stores/auth'
 import ConferenceCountdown from '../components/ConferenceCountdown.vue'
+import PlatformBar from '../components/PlatformBar.vue'
 import { useLogout } from '../utils/useLogout'
 
 const authStore = useAuthStore()
+const route = useRoute()
 
 const currentUser = computed(() => authStore.user || { name: 'Guest', role: 'none' })
 const { handleLogout } = useLogout()
+
+// Only a role preview swaps the shell's navbar for the platform bar; `null` means a real
+// session, which keeps the navbar it has always had.
+const showPlatformBar = computed(() => isPreviewing() && !route.meta.hideNavbar)
 </script>
 
 <style scoped>

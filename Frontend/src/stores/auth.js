@@ -20,7 +20,7 @@ import { ref, computed } from 'vue'
 //     `localStorage.getItem('token')` in its console.
 // The switch never writes to localStorage, so a real session survives turning it on and off.
 // =============================================================================
-const DEV_ROLE = null
+const DEV_ROLE = "advisor"
 
 const DEV_TOKENS = {
   delegate: null,
@@ -29,7 +29,7 @@ const DEV_TOKENS = {
   admin: null
 }
 
-const previewRole = import.meta.env.DEV && DEV_ROLE ? DEV_ROLE : "advisor" // DEV_ROLE
+const previewRole = import.meta.env.DEV && DEV_ROLE ? DEV_ROLE : null // DEV_ROLE
 /** Whether a role preview is active. `api/client.js` asks, so a 401 cannot end the preview. */
 export function isPreviewing() {
   return Boolean(previewRole)

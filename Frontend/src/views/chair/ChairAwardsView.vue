@@ -287,405 +287,602 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+/* ============================================================ PAGE ====== */
+/* Same white surface, navy ink and hairline rules as the delegate dashboard and the advisor
+   views. Award piles keep their colour, but as soft tints read as status, not borders. */
 .chair-page {
+  --ink: #03045e;
+  --ink-2: #232d5c;
+  --muted: #63708c;
+  --line: rgba(3, 4, 94, 0.09);
+  --accent: #009ddb;
+  --green: #15803d;
+  --gold: #7a5c00;
+  --red: #b42318;
+  --gap: clamp(12px, 1.6vh, 18px);
+  --radius: 16px;
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --font:
+    'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+
+  box-sizing: border-box;
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: var(--gap);
+  width: 100%;
   max-width: 1500px;
   margin: 0 auto;
-  padding: 20px;
-  color: #00007e93;
-  font-family: Arial, sans-serif;
+  padding: clamp(14px, 2.1vh, 24px) clamp(16px, 2.4vw, 34px);
+  color: var(--muted);
+  font-family: var(--font);
+  font-size: clamp(0.85rem, 1.6vh, 1rem);
+  line-height: 1.5;
+  letter-spacing: 0.005em;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background: #ffffff;
 }
 
-/* TOP TOGGLE BUTTONS */
+/* =========================================================== TOGGLE ===== */
 .toggle-container {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 15px;
+  gap: 10px;
 }
 
 .toggle-btn {
-  width: 220px;
-  height: 40px;
+  min-width: 210px;
+  padding: 10px 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
   background-color: #ffffff;
-  color: #5b6b7d;
-  border: 1px solid #e8c604;
-  border-radius: 4px;
-  font-weight: bold;
+  color: var(--muted);
+  font-family: inherit;
+  font-size: 0.76em;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.toggle-btn.active {
-  background-color: #009ddbda;
-  color: #00007e;
-  border-color: #009ddb;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    transform 0.25s var(--ease);
 }
 
 .toggle-btn:hover:not(.active) {
-  background-color: #e8c604;
-  color: #00007e;
+  border-color: rgba(3, 4, 94, 0.18);
+  color: var(--ink);
+  transform: translateY(-1px);
 }
 
-/* STATS COUNTER BAR */
+.toggle-btn.active {
+  border-color: var(--ink);
+  background-color: var(--ink);
+  color: #ffffff;
+}
+
+/* ============================================================ STATS ===== */
 .stats-bar {
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   justify-content: space-around;
-  background-color: #ffffff;
-  border: 1px solid #e8c604;
-  padding: 10px;
-  border-radius: 6px;
-  font-size: 0.85rem;
+  gap: 10px;
+  padding: clamp(10px, 1.4vh, 14px) clamp(12px, 1.4vw, 20px);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 255, 255, 0.92));
+  box-shadow:
+    0 1px 2px rgba(3, 4, 94, 0.04),
+    0 24px 48px -40px rgba(3, 4, 94, 0.45);
 }
 
 .stat-pill {
-  color: #5b6b7d;
+  font-size: 0.64em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .stat-pill strong {
-  color: #00007e;
+  margin-left: 4px;
+  font-size: 1.35em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--ink);
 }
 
-.pill-verbal strong { color: #e8c604; }
-.pill-honorable strong { color: #00007e; }
-.pill-outstanding strong { color: #16a34a; }
-.pill-best strong { color: #e8c604; }
+.pill-verbal strong {
+  color: var(--gold);
+}
 
-/* ULTRA-COMPACT 5-COLUMN GRID */
+.pill-honorable strong {
+  color: #0079ab;
+}
+
+.pill-outstanding strong {
+  color: var(--green);
+}
+
+.pill-best strong {
+  color: var(--gold);
+}
+
+/* ============================================================= GRID ===== */
+/* Five across, because a committee's shortlist has to be readable at a glance. */
 .grid-container {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 
 .delegate-card {
-  background-color: #ffffff;
-  border: 2px solid #e8c604;
-  border-radius: 6px;
-  padding: 10px 12px;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
-  height: 65px;
+  gap: 8px;
+  height: 68px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background-color: #ffffff;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition:
+    border-color 0.3s ease,
+    box-shadow 0.3s ease,
+    transform 0.3s var(--ease);
 }
 
 .delegate-card:hover {
+  border-color: rgba(3, 4, 94, 0.18);
   transform: translateY(-2px);
-  filter: brightness(1.1);
+  box-shadow: 0 14px 28px -22px rgba(3, 4, 94, 0.5);
 }
 
 .card-info {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
 }
 
 .country-name {
-  font-weight: bold;
-  font-size: 0.9rem;
-  color: #00007e93;
+  overflow: hidden;
+  font-size: 0.86em;
+  font-weight: 650;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--ink);
 }
 
 .committee-tag {
-  font-size: 0.7rem;
-  color: #6b7c8d;
+  flex: none;
+  max-width: 50%;
+  overflow: hidden;
+  font-size: 0.6em;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
 }
 
 .card-status-badge {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  font-size: 0.75rem;
-  font-weight: bold;
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  font-size: 0.66em;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.award-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--muted);
 }
 
 .score-indicator {
-  background-color: #f5fafd;
-  padding: 1px 5px;
-  border-radius: 3px;
-  color: #5b6b7d;
-  border: 1px solid #e8c604;
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background-color: #f7fafd;
+  font-size: 0.94em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
 }
 
-/* CARD COLOR DIFFERENTIATION BASED ON PILE / AWARD */
+/* ===================================================== AWARD TINTS ====== */
+/* Unassigned stays a plain card; each pile is a tint, so the wall of cards keeps its
+   colour coding without a single saturated border. */
 .award-none {
-  border-color: #e8c604;
+  border-color: var(--line);
 }
 
 .award-candidate {
-  border-color: #009ddb;
-  background-color: #eaf6fd;
+  border-color: rgba(0, 157, 219, 0.35);
+  background-color: rgba(0, 157, 219, 0.05);
 }
 
-.award-candidate .award-label { color: #00007e; }
+.award-candidate .award-label {
+  color: #0079ab;
+}
 
 .award-verbal {
-  border-color: #e8c604;
-  background-color: #009ddbda;
-  color: #00007e;
+  border-color: rgba(232, 198, 4, 0.45);
+  background-color: rgba(232, 198, 4, 0.1);
 }
 
-.award-verbal .award-label { color: #7a5c00; }
+.award-verbal .award-label {
+  color: var(--gold);
+}
 
 .award-honorable {
-  border-color: #009ddb;
-  background-color: #eaf6fd;
+  border-color: rgba(0, 157, 219, 0.3);
+  background-color: rgba(0, 157, 219, 0.08);
 }
 
-.award-honorable .award-label { color: #00007e; }
+.award-honorable .award-label {
+  color: #0079ab;
+}
 
 .award-outstanding {
-  border-color: #16a34a;
-  background-color: #dcfce7;
+  border-color: rgba(22, 163, 74, 0.35);
+  background-color: rgba(22, 163, 74, 0.07);
 }
 
-.award-outstanding .award-label { color: #166534; }
+.award-outstanding .award-label {
+  color: var(--green);
+}
 
 .award-best {
-  border-color: #e8c604;
-  background-color: #fdf6d3;
+  border-color: rgba(180, 35, 24, 0.3);
+  background-color: rgba(232, 198, 4, 0.16);
 }
 
-.award-best .award-label { color: #7a5c00; }
+.award-best .award-label {
+  color: var(--gold);
+}
 
-
-/* FULL SCREEN RUBRIC MODAL */
+/* ========================================================== OVERLAY ===== */
 .rubric-modal-overlay {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background-color: #f5fafd;
+  inset: 0;
   z-index: 1000;
   display: flex;
   flex-direction: column;
+  background-color: #f5fafd;
+  animation: overlay-in 0.3s ease both;
+}
+
+@keyframes overlay-in {
+  from {
+    opacity: 0;
+  }
 }
 
 .top-rubric-bar {
-  background-color: #ffffff;
-  border-bottom: 2px solid #e8c604;
-  padding: 12px 24px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 16px;
+  padding: 14px clamp(16px, 2.4vw, 34px);
+  border-bottom: 1px solid var(--line);
+  background-color: #ffffff;
+}
+
+.delegate-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
 }
 
 .delegate-meta h2 {
   margin: 0;
-  font-size: 1.2rem;
-  color: #00007e;
+  font-size: 1.15em;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  color: var(--ink);
 }
 
 .committee-sub {
-  font-size: 0.8rem;
-  color: #00007e;
+  font-size: 0.68em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .award-selector-box {
   display: flex;
   align-items: center;
-  gap: 10px;
-  font-size: 0.9rem;
+  gap: 9px;
+  font-size: 0.66em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .award-selector-box select {
+  padding: 8px 11px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background-color: #f7fafd;
+  color: var(--ink);
+  font-family: inherit;
+  font-size: 1.2em;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.award-selector-box select:focus {
+  outline: none;
+  border-color: rgba(0, 157, 219, 0.5);
   background-color: #ffffff;
-  color: #00007e93;
-  border: 1px solid #e8c604;
-  padding: 8px 12px;
-  border-radius: 4px;
-  font-weight: bold;
 }
 
 .score-summary-box {
-  background-color: #f5fafd;
-  border: 1px solid #e8c604;
-  padding: 8px 16px;
-  border-radius: 4px;
   display: flex;
-  gap: 8px;
   align-items: center;
+  gap: 8px;
+  padding: 7px 14px;
+  border-radius: 11px;
+  background-color: #f7fafd;
 }
 
 .score-label {
-  color: #5b6b7d;
-  font-size: 0.85rem;
+  font-size: 0.66em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .score-value {
-  color: #16a34a;
-  font-size: 1.1rem;
-  font-weight: bold;
+  font-size: 1.02em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--green);
 }
 
 .bar-actions {
   display: flex;
-  gap: 10px;
+  gap: 9px;
 }
 
 .btn-submit {
-  background-color: #16a34a;
-  color: #00007e;
-  border: none;
-  padding: 8px 18px;
-  border-radius: 4px;
-  font-weight: bold;
+  padding: 9px 18px;
+  border: 1px solid var(--ink);
+  border-radius: 9px;
+  background-color: var(--ink);
+  color: #ffffff;
+  font-family: inherit;
+  font-size: 0.78em;
+  font-weight: 650;
   cursor: pointer;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    transform 0.25s var(--ease);
 }
 
 .btn-submit:hover {
-  background-color: #e8c604;
-  color: #00007e;
+  background-color: #071f7a;
+  border-color: #071f7a;
+  transform: translateY(-1px);
 }
 
 .btn-close {
-  background-color: #f5fafd;
-  color: #00007e;
-  border: 1px solid #e8c604;
-  padding: 8px 14px;
-  border-radius: 4px;
+  padding: 9px 15px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background-color: #ffffff;
+  color: var(--ink-2);
+  font-family: inherit;
+  font-size: 0.78em;
+  font-weight: 650;
   cursor: pointer;
-  font-weight: bold;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease;
 }
 
 .btn-close:hover {
-  background-color: #ef4444;
-  color: #ffffff;
-  border-color: #ef4444;
+  border-color: rgba(180, 35, 24, 0.35);
+  background-color: rgba(180, 35, 24, 0.06);
+  color: var(--red);
 }
 
-/* VALIDATION BANNER */
 .validation-banner {
-  background-color: #fee2e2;
-  color: #991b1b;
-  border-bottom: 1px solid #ef4444;
-  padding: 10px 24px;
-  font-size: 0.9rem;
-  font-weight: bold;
+  padding: 10px clamp(16px, 2.4vw, 34px);
+  border-bottom: 1px solid rgba(180, 35, 24, 0.2);
+  background-color: rgba(180, 35, 24, 0.07);
+  font-size: 0.82em;
+  font-weight: 600;
   text-align: center;
+  color: var(--red);
 }
 
-/* RUBRIC MATRIX CONTAINER */
+/* =========================================================== RUBRIC ===== */
 .rubric-matrix-container {
   flex: 1;
-  padding: 24px;
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--gap);
+  padding: clamp(16px, 2.4vw, 30px);
+  overflow-y: auto;
 }
 
 .rubric-row {
-  background-color: #ffffff;
-  border: 1px solid #e8c604;
-  border-radius: 8px;
-  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 12px;
+  padding: clamp(14px, 1.9vh, 20px);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: #ffffff;
 }
 
 .criterion-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  border-bottom: 1px solid #e8c604;
-  padding-bottom: 8px;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
 }
 
 .criterion-header h3 {
   margin: 0;
-  font-size: 1rem;
-  color: #00007e;
+  font-size: 0.98em;
+  font-weight: 650;
+  color: var(--ink);
 }
 
 .selected-pts {
-  font-size: 0.85rem;
-  color: #5b6b7d;
+  font-size: 0.66em;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
 }
 
 .selected-pts strong {
-  color: #00007e;
+  font-size: 1.5em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0;
+  color: var(--ink);
 }
 
-/* CELL GRID WITHIN ROW */
 .level-cells-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .rubric-cell {
-  background-color: #f5fafd;
-  border: 2px solid #e8c604;
-  border-radius: 6px;
-  padding: 14px;
-  cursor: pointer;
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  transition: all 0.2s ease;
+  gap: 7px;
+  padding: 13px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background-color: #f7fafd;
+  cursor: pointer;
+  transition:
+    border-color 0.25s ease,
+    background-color 0.25s ease,
+    transform 0.25s var(--ease);
 }
 
 .rubric-cell:hover {
-  border-color: #009ddb;
+  border-color: rgba(0, 157, 219, 0.35);
+  background-color: #ffffff;
+  transform: translateY(-1px);
 }
 
+/* Chosen level: accent edge on a pale wash, so the whole row still reads as one scale. */
 .rubric-cell.selected {
-  border-color: #16a34a;
-  background-color: #dcfce7;
+  border-color: rgba(0, 157, 219, 0.55);
+  background-color: rgba(0, 157, 219, 0.07);
 }
 
 .cell-top {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .level-title {
-  font-weight: bold;
-  font-size: 0.9rem;
-  color: #00007e;
+  font-size: 0.78em;
+  font-weight: 650;
+  color: var(--ink);
 }
 
 .level-pts {
-  font-size: 0.8rem;
-  font-weight: bold;
-  color: #16a34a;
-  background-color: #f5fafd;
-  padding: 2px 6px;
-  border-radius: 3px;
+  flex: none;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background-color: #ffffff;
+  font-size: 0.64em;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+}
+
+.rubric-cell.selected .level-pts {
+  background-color: var(--ink);
+  color: #ffffff;
 }
 
 .cell-description {
   margin: 0;
-  font-size: 0.82rem;
-  color: #5b6b7d;
-  line-height: 1.4;
+  font-size: 0.76em;
+  line-height: 1.45;
+  color: var(--muted);
 }
 
-/* RESPONSIVE LAYOUT BREAKPOINTS */
+/* ========================================================== RESPONSIVE === */
 @media (max-width: 1200px) {
   .grid-container {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+
   .level-cells-grid {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (max-width: 900px) {
   .grid-container {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+
+  .toggle-btn {
+    flex: 1;
+    min-width: 0;
+  }
+
   .top-rubric-bar {
-    flex-direction: column;
     align-items: stretch;
+    flex-direction: column;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rubric-modal-overlay {
+    animation: none;
+  }
+
+  .delegate-card,
+  .rubric-cell,
+  .btn-submit,
+  .btn-close {
+    transition: none;
   }
 }
 </style>
