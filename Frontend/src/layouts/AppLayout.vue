@@ -69,7 +69,7 @@ const showPlatformBar = computed(() => isPreviewing() && !route.meta.hideNavbar)
   flex-direction: column;
   background-color: #ffffff;
   color: #00007e93;
-  font-family: Arial, sans-serif;
+  font-family: var(--font-theme);
 }
 
 /* TOP NAVBAR */
@@ -138,7 +138,7 @@ const showPlatformBar = computed(() => isPreviewing() && !route.meta.hideNavbar)
 }
 
 .role-badge {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   text-transform: uppercase;
   font-weight: bold;
   padding: 2px 8px;

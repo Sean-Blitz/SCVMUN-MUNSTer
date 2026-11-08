@@ -1,0 +1,95 @@
+/* =============================================================================
+ * SCVMUN theme
+ *
+ * One place for the conference's type and colour.
+ *
+ * Two faces, because one face cannot do both jobs well:
+ *   --font-display  the typewriter mark, for the wordmark and headings only.
+ *   --font-ui       a book serif for anything read as prose: body copy, tables,
+ *                   labels, form fields, buttons. It has a real bold, so
+ *                   emphasis works instead of being suppressed.
+ * Special Elite is self-hosted (no external request) and loaded once here.
+ * Palette: deep navy, gold rule, cyan accent, paper - the colours the login
+ * wordmark, medallion and delegate dashboard already use.
+ * ============================================================================= */
+@font-face {
+  font-family: 'Special Elite';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('./fonts/special-elite-400.woff2') format('woff2');
+}
+
+:root {
+  --scv-navy: #03045e;
+  --scv-navy-deep: #00007e;
+  --scv-cyan: #009ddb;
+  --scv-gold: #e8c604;
+  --scv-paper: #fbf7ea;
+
+  --font-display: 'Special Elite', 'Courier New', ui-monospace, monospace;
+
+  /* Georgia first: it is on every desktop and ships a proper bold, which is what
+     keeps dense admin tables and long paragraphs legible at small sizes. */
+  --font-ui: Georgia, 'Iowan Old Style', 'Charter', 'Palatino Linotype', 'Book Antiqua',
+    'Times New Roman', serif;
+
+  /* Hash values deliberately opt out of both faces: a code is read character by
+     character, so those stay monospace. */
+  --font-code: ui-monospace, Menlo, Consolas, 'Courier New', monospace;
+
+  /* Every view sizes its copy from this token, so it now resolves to the readable
+     face. The typewriter stays a display accent, not the default text. */
+  --font-theme: var(--font-ui);
+}
+
+/* Typewriter for display only: at heading sizes its rough edges read as character
+   rather than noise. It ships a single 400 weight, so hierarchy comes from size,
+   colour and tracking, and the browser is told not to fake a bold. */
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+  line-height: 1.2;
+  letter-spacing: 0.015em;
+}
+
+body {
+  font-family: var(--font-ui);
+  /* 16px base with a loose leading: the first thing that makes small print tired is
+     tight line spacing, not the face. */
+  font-size: 16px;
+  line-height: 1.65;
+  color: var(--scv-navy);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
+  /* Form copy is read line by line while typing, so it gets normal spacing and a
+     line height that stops descenders clipping in single-line inputs. */
+  font-size: inherit;
+  line-height: 1.45;
+}
+
+/* Keep long words, hashes and emails from being clipped mid-glyph. */
+p,
+li,
+td,
+th,
+dd,
+dt,
+label,
+small {
+  overflow-wrap: break-word;
+}

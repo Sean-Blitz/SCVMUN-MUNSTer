@@ -30,7 +30,7 @@ const goHome = () => {
   align-items: center;
   min-height: 70vh;
   color: #00007e93;
-  font-family: Arial, sans-serif;
+  font-family: var(--font-theme);
 }
 
 .error-card {

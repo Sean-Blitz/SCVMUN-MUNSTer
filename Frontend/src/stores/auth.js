@@ -14,13 +14,13 @@ import { ref, computed } from 'vue'
 // allowed. That means:
 //   - `admin` works fully (and so does `chair`, which the router also grants admins) while
 //     you are logged in as the admin account: the token is real, the role matches.
-// w  - `delegate` / `advisor` render their layout, but their endpoints answer 403, so panels
+//  - `delegate` / `advisor` render their layout, but their endpoints answer 403, so panels
 //     stay empty. To make a preview fully functional, paste that role's real token into
 //     DEV_TOKENS below: log in as the role once in another browser profile, then run
 //     `localStorage.getItem('token')` in its console.
 // The switch never writes to localStorage, so a real session survives turning it on and off.
 // =============================================================================
-const DEV_ROLE = "advisor"
+const DEV_ROLE = "delegate" // 'delegate', 'advisor', 'chair', 'admin' or null
 
 const DEV_TOKENS = {
   delegate: null,

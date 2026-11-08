@@ -9,17 +9,23 @@
 .admin-dashboard .admin-page {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  max-width: 1200px;
+  gap: 24px;
+  /* Wide enough for the six-column delegate table to breathe; the tables get their own
+     scroll below, so the page is never squeezed to fit them. */
+  max-width: 1440px;
   margin: 0 auto;
-  padding: 20px;
-  color: #00007e93;
-  font-family: Arial, sans-serif;
+  padding: clamp(16px, 2.4vw, 34px);
+  color: #00007e;
+  font-family: var(--font-theme);
+  font-size: 1rem;
+  line-height: 1.7;
+  letter-spacing: 0.01em;
 }
 
 .admin-dashboard .page-header h1 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.75rem;
+  letter-spacing: 0.02em;
   color: #00007e;
 }
 
@@ -32,12 +38,12 @@
 
 .admin-dashboard .toggle-btn {
   background-color: #f5fafd;
-  color: #5b6b7d;
+  color: #4a5578;
   border: 1px solid #e8c604;
-  padding: 8px 16px;
+  padding: 9px 18px;
   border-radius: 6px;
-  font-weight: bold;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  letter-spacing: 0.04em;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -58,28 +64,32 @@
   background-color: #ffffff;
   border: 1px solid #e8c604;
   border-radius: 8px;
-  padding: 20px;
+  padding: clamp(18px, 1.8vw, 26px);
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 18px;
+  min-width: 0;
 }
 
 .admin-dashboard .section-card h2 {
   margin: 0;
-  font-size: 1.1rem;
+  font-size: 1.18rem;
+  letter-spacing: 0.02em;
   color: #00007e;
 }
 
 .admin-dashboard .section-card h3 {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 1rem;
+  letter-spacing: 0.02em;
   color: #00007e;
 }
 
 .admin-dashboard .section-desc {
   margin: 0;
-  font-size: 0.85rem;
-  color: #5b6b7d;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: #4a5578;
 }
 
 .admin-dashboard .card-header-action {
@@ -91,18 +101,24 @@
 /* BUTTONS & EXPORTS */
 .admin-dashboard .action-buttons-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px;
 }
 
 .admin-dashboard .btn-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  min-height: 56px;
   background-color: #f5fafd;
   color: #00007e;
   border: 1px solid #e8c604;
-  padding: 12px;
+  padding: 12px 16px;
   border-radius: 6px;
-  font-weight: bold;
-  font-size: 0.9rem;
+  font-size: 0.92rem;
+  line-height: 1.4;
+  text-align: center;
   cursor: pointer;
   transition: all 0.2s ease;
 }
@@ -121,12 +137,17 @@
 }
 
 .admin-dashboard .btn-refresh {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background-color: #009ddbda;
   color: #00007e;
   border: none;
-  padding: 8px 14px;
+  padding: 9px 16px;
   border-radius: 4px;
-  font-weight: bold;
+  font-size: 0.9rem;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -136,12 +157,17 @@
 }
 
 .admin-dashboard .btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   background-color: #f5fafd;
   color: #00007e;
   border: 1px solid #e8c604;
-  padding: 8px 14px;
+  padding: 9px 16px;
   border-radius: 4px;
-  font-weight: bold;
+  font-size: 0.9rem;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -170,11 +196,16 @@
 }
 
 .admin-dashboard .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background-color: #f5fafd;
   color: #ef4444;
   border: 1px solid #e8c604;
   border-radius: 4px;
   width: 34px;
+  height: 34px;
+  padding: 0;
   cursor: pointer;
 }
 
@@ -183,13 +214,16 @@
 }
 
 .admin-dashboard .btn-copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   background-color: #f5fafd;
   color: #00007e;
   border: 1px solid #e8c604;
   border-radius: 4px;
-  padding: 4px 10px;
-  font-size: 0.75rem;
-  font-weight: bold;
+  padding: 5px 11px;
+  font-size: 0.8rem;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -228,8 +262,9 @@
 .admin-dashboard .committee-item {
   display: flex;
   justify-content: space-between;
-  font-size: 0.85rem;
-  padding: 6px 10px;
+  gap: 12px;
+  font-size: 0.9rem;
+  padding: 8px 12px;
   background-color: #f5fafd;
   border-radius: 4px;
 }
@@ -311,7 +346,7 @@
 }
 
 .admin-dashboard .port-number {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   color: #6b7c8d;
 }
 
@@ -334,12 +369,15 @@
 
 /* DOWNTIME TIMELINE */
 .admin-dashboard .no-downtime {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   background-color: #dcfce7;
   color: #166534;
-  padding: 12px;
+  padding: 14px 16px;
   border-radius: 6px;
-  font-size: 0.9rem;
-  font-weight: bold;
+  font-size: 0.92rem;
+  line-height: 1.55;
 }
 
 .admin-dashboard .timeline-list {
@@ -385,7 +423,7 @@
   color: #991b1b;
   padding: 2px 6px;
   border-radius: 3px;
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: bold;
 }
 
@@ -395,20 +433,23 @@
 
 /* FORMS */
 .admin-dashboard .field-label {
-  font-size: 0.8rem;
-  color: #5b6b7d;
-  margin-bottom: -8px;
+  font-size: 0.82rem;
+  color: #4a5578;
+  letter-spacing: 0.04em;
+  margin-bottom: 4px;
 }
 
 .admin-dashboard .text-input {
   width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   background-color: #ffffff;
   border: 1px solid #e8c604;
   border-radius: 4px;
-  padding: 9px 12px;
-  color: #00007e93;
-  font-size: 0.85rem;
+  padding: 10px 13px;
+  color: #00007e;
+  font-size: 0.92rem;
+  line-height: 1.4;
   font-family: inherit;
 }
 
@@ -420,13 +461,13 @@
 .admin-dashboard .form-rows {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .admin-dashboard .form-row {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr auto;
-  gap: 8px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
 }
 
@@ -450,13 +491,15 @@
 
 .admin-dashboard .school-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 0 16px;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 14px 18px;
 }
 
 .admin-dashboard .field-pair {
   display: flex;
   flex-direction: column;
+  gap: 2px;
+  min-width: 0;
 }
 
 .admin-dashboard .school-list {
@@ -474,32 +517,46 @@
 .delegate-head,
 .admin-dashboard .delegate-row {
   display: grid;
-  grid-template-columns: 1.4fr 1fr 1fr 1.2fr 1.3fr auto;
-  gap: 10px;
+  grid-template-columns:
+    minmax(140px, 1.2fr) minmax(96px, 0.9fr) minmax(112px, 1fr) minmax(118px, 1fr)
+    minmax(200px, 1.5fr) auto;
+  gap: 16px;
   align-items: center;
 }
 
+/* Grid tracks default to a min-content floor; letting the cells shrink is what keeps a
+   long hash or school name from squeezing every other column. */
+.admin-dashboard .delegate-head > *,
+.admin-dashboard .delegate-row > *,
+.admin-dashboard .chair-head > *,
+.admin-dashboard .chair-row > * {
+  min-width: 0;
+}
+
 .admin-dashboard .delegate-head {
-  font-size: 0.8rem;
+  font-size: 0.84rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #00007e93;
-  padding-bottom: 6px;
+  letter-spacing: 0.08em;
+  color: #4a5578;
+  padding-bottom: 10px;
   border-bottom: 1px solid #e6e6f0;
 }
 
 .admin-dashboard .delegate-row {
-  padding: 8px 0;
+  padding: 12px 0;
   border-bottom: 1px solid #f0f0f6;
 }
 
 .admin-dashboard .delegate-label {
-  font-weight: 600;
+  color: #00007e;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 
 .admin-dashboard .delegate-actions {
   display: flex;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
   justify-content: flex-end;
 }
 
@@ -510,22 +567,23 @@
 .chair-head,
 .admin-dashboard .chair-row {
   display: grid;
-  grid-template-columns: 1.1fr 1.3fr 1.3fr auto;
-  gap: 10px;
+  grid-template-columns:
+    minmax(150px, 1fr) minmax(180px, 1.35fr) minmax(200px, 1.5fr) minmax(320px, auto);
+  gap: 16px;
   align-items: center;
 }
 
 .admin-dashboard .chair-head {
-  font-size: 0.8rem;
+  font-size: 0.84rem;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: #00007e93;
-  padding-bottom: 6px;
+  letter-spacing: 0.08em;
+  color: #4a5578;
+  padding-bottom: 10px;
   border-bottom: 1px solid #e6e6f0;
 }
 
 .admin-dashboard .chair-row {
-  padding: 8px 0;
+  padding: 12px 0;
   border-bottom: 1px solid #f0f0f6;
 }
 
@@ -535,7 +593,9 @@
 
 /* The committees view shows one fewer editable column than the schools view. */
 .admin-dashboard .committee-row {
-  grid-template-columns: 1.2fr 0.8fr 1.1fr 1.2fr auto;
+  grid-template-columns:
+    minmax(150px, 1.4fr) minmax(96px, 1fr) minmax(120px, 1.1fr) minmax(200px, 1.6fr)
+    minmax(210px, auto);
 }
 
 .admin-dashboard .btn-copy-danger {
@@ -544,8 +604,10 @@
 }
 
 .admin-dashboard .paper-badge {
-  font-size: 0.8rem;
-  padding: 3px 8px;
+  display: inline-block;
+  font-size: 0.84rem;
+  line-height: 1.5;
+  padding: 4px 9px;
   border-radius: 999px;
   background: #eef0f7;
   white-space: nowrap;
@@ -560,12 +622,17 @@
 }
 
 .admin-dashboard .btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 10px 16px;
   border: none;
   border-radius: 8px;
   background: #b3261e;
   color: #ffffff;
-  font-weight: bold;
+  font-size: 0.9rem;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -580,28 +647,38 @@
 
 .admin-dashboard .hash-row {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  font-size: 0.85rem;
+  gap: 8px 12px;
+  font-size: 0.9rem;
 }
 
 .admin-dashboard .hash-name {
-  flex: 1;
-  color: #00007e93;
+  flex: 1 1 200px;
+  min-width: 0;
+  color: #00007e;
+  overflow-wrap: anywhere;
 }
 
 .admin-dashboard .hash-value {
-  font-family: 'Courier New', monospace;
+  display: inline-block;
+  max-width: 100%;
+  font-family: ui-monospace, Menlo, Consolas, 'Courier New', monospace;
+  font-size: 0.84rem;
+  line-height: 1.5;
   color: #00007e;
   background-color: #f5fafd;
-  padding: 3px 8px;
+  padding: 4px 8px;
   border-radius: 4px;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.4px;
+  overflow-wrap: anywhere;
+  word-break: break-all;
 }
 
 .admin-dashboard .empty-state {
-  font-size: 0.85rem;
-  color: #6b7c8d;
+  font-size: 0.92rem;
+  line-height: 1.7;
+  color: #5b6b7d;
   padding: 8px 0;
 }
 
@@ -644,29 +721,41 @@
 .admin-dashboard .broadcast-form {
   display: flex;
   flex-direction: column;
+  gap: 4px;
+}
+
+/* A label sits above its own field, with a wider gap before the next group. */
+.admin-dashboard .broadcast-form .field-label {
+  margin-top: 12px;
+}
+
+.admin-dashboard .broadcast-form .field-label:first-child {
+  margin-top: 0;
 }
 
 .admin-dashboard .schedule-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 14px;
 }
 
 .admin-dashboard .capacity-line {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
-  margin: 10px 0 4px;
+  gap: 10px;
+  line-height: 1.7;
+  margin: 10px 0 6px;
 }
 
 .admin-dashboard .capacity-chip {
   border: 1px solid #e8c604;
   border-radius: 10px;
-  padding: 2px 8px;
-  font-size: 0.8rem;
+  padding: 3px 9px;
+  font-size: 0.82rem;
   color: #00007e;
   background-color: #fffdf2;
+  white-space: nowrap;
 }
 
 .admin-dashboard .capacity-chip.full {
@@ -700,11 +789,11 @@
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 16px;
   border: 1px solid #e8c604;
   border-radius: 6px;
-  padding: 10px 12px;
-  margin-bottom: 8px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
   background-color: #ffffff;
 }
 
@@ -716,19 +805,21 @@
 .admin-dashboard .broadcast-main {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  flex: 1;
-  min-width: 240px;
+  gap: 5px;
+  flex: 1 1 260px;
+  min-width: 0;
 }
 
 .admin-dashboard .broadcast-body {
   color: #00007e;
-  font-weight: bold;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
 }
 
 .admin-dashboard .broadcast-url {
-  color: #009ddb;
-  font-size: 0.85rem;
+  color: #00719c;
+  font-size: 0.88rem;
+  line-height: 1.5;
   word-break: break-all;
 }
 
@@ -738,7 +829,7 @@
 }
 
 .admin-dashboard .broadcast-state {
-  font-size: 0.75rem;
+  font-size: 0.8rem;
   font-weight: bold;
   padding: 3px 8px;
   border-radius: 10px;
@@ -759,7 +850,8 @@
 .admin-dashboard .broadcast-actions {
   display: flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 .btn-icon:disabled,
@@ -773,8 +865,8 @@
 .admin-dashboard .checklist-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
+  gap: 12px;
+  margin-bottom: 10px;
 }
 
 .admin-dashboard .checklist-row .text-input {
@@ -793,7 +885,7 @@
 }
 
 .admin-dashboard .pinned-note {
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #8a7500;
@@ -802,10 +894,10 @@
 
 .admin-dashboard .timeline-editor-row {
   display: grid;
-  grid-template-columns: 180px 1fr 220px auto;
-  gap: 10px;
+  grid-template-columns: minmax(180px, 0.9fr) minmax(0, 1.5fr) minmax(210px, 1fr) auto;
+  gap: 12px;
   align-items: center;
-  margin-bottom: 8px;
+  margin-bottom: 10px;
 }
 
 .admin-dashboard .checklist-row input[type='checkbox'] {
@@ -813,6 +905,26 @@
   height: 16px;
   accent-color: #009ddb;
   cursor: pointer;
+}
+
+/* Below this width the delegate and chair tables stop shrinking and scroll sideways
+   instead: every column keeps its label and its readable width. */
+@media (max-width: 1100px) {
+  .admin-dashboard .delegate-table,
+  .admin-dashboard .chair-table {
+    overflow-x: auto;
+    padding-bottom: 6px;
+  }
+
+  .admin-dashboard .delegate-head,
+  .admin-dashboard .delegate-row {
+    min-width: 940px;
+  }
+
+  .admin-dashboard .chair-head,
+  .admin-dashboard .chair-row {
+    min-width: 800px;
+  }
 }
 
 @media (max-width: 900px) {
@@ -836,7 +948,7 @@
 }
 
 .admin-dashboard .pinned-note {
-  font-size: 0.7rem;
+  font-size: 0.78rem;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: #8a7500;
