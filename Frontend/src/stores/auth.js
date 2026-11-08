@@ -20,7 +20,7 @@ import { ref, computed } from 'vue'
 //     `localStorage.getItem('token')` in its console.
 // The switch never writes to localStorage, so a real session survives turning it on and off.
 // =============================================================================
-const DEV_ROLE = "delegate" // 'delegate', 'advisor', 'chair', 'admin' or null
+const DEV_ROLE = "advisor" // 'delegate', 'advisor', 'chair', 'admin' or null
 
 const DEV_TOKENS = {
   delegate: null,
