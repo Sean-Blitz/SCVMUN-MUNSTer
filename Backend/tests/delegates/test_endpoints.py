@@ -1,4 +1,4 @@
-"""End-to-end tests for the delegate endpoints, driven through Starlette's TestClient.
+"""API tests for /delegate/*, driven through Starlette's TestClient.
 
 These are *API* tests, not domain tests. Everything below goes over HTTP: the bearer token,
 the role gate, multipart parsing, the status code, and the ``{"message": ...}`` body the
@@ -9,7 +9,7 @@ Each test is written to fail for one reason, so a CI failure reads like a senten
 
 Run with::
 
-    cd Backend && .venv/bin/python -m pytest tests/test_delegates_endpoints.py -v
+    cd Backend && .venv/bin/python -m pytest tests/delegates/test_endpoints.py -v
 
 Prerequisites: a running PostgreSQL, and a ``DATABASE_URL`` in ``Backend/crud/.env``. The
 ``conftest.py`` next to this file derives a ``<name>_test`` database from it, creates that

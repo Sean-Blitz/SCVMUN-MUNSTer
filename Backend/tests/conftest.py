@@ -1,4 +1,4 @@
-"""Shared fixtures for the API tests.
+"""Shared fixtures for the delegate tests - both the API tests and the domain tests.
 
 Three things have to be true before a single test runs, and all three are set up at
 *import time* in this file, before anything from the application is imported:
@@ -133,6 +133,7 @@ from crud.database_schema import (  # noqa: E402
     Committees,
     Delegates,
     School,
+    Uploads,
 )
 from main import app  # noqa: E402
 
@@ -313,6 +314,37 @@ class Factory:
         self.db.add(delegate)
         self.db.commit()
         return delegate
+
+
+    def upload(
+        self,
+        delegate: Delegates,
+        *,
+        when=None,
+        file_name: str = "previous-paper.pdf",
+        file_path: str = "previous-paper.pdf",
+        write_bytes: bytes | None = None,
+    ) -> Uploads:
+        """Insert a ``position_papers`` row, optionally with bytes behind it.
+
+        The domain never creates a row without a file, but a *test* often wants one of the
+        two without the other - and a row whose file is missing is a real production state
+        (a half-restored volume), so it needs to be expressible.
+        """
+        if write_bytes is not None:
+            target = PAPER_DIR / file_path
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(write_bytes)
+
+        row = Uploads(
+            delegate_id=delegate.account_id,
+            file_name=file_name,
+            file_path=file_path,
+            upload_time=when or utcnow(),
+        )
+        self.db.add(row)
+        self.db.commit()
+        return row
 
     def broadcast(
         self,
