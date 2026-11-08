@@ -92,7 +92,8 @@
 
       <!-- VALIDATION ERROR ALERT -->
       <div v-if="validationError" class="validation-banner">
-        ⚠️ {{ validationError }}
+        <AppIcon name="warning" :size="17" />
+        <span>{{ validationError }}</span>
       </div>
 
       <!-- RUBRIC MATRIX GRID -->
@@ -133,6 +134,7 @@
 </template>
 
 <script setup>
+import AppIcon from '@/components/AppIcon.vue'
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useToastStore } from '@/stores/toast'
@@ -302,9 +304,7 @@ onMounted(async () => {
   --gap: clamp(12px, 1.6vh, 18px);
   --radius: 16px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --font:
-    'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  --font: var(--font-theme);
 
   box-sizing: border-box;
   display: flex;
@@ -716,11 +716,14 @@ onMounted(async () => {
 }
 
 .validation-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
   padding: 10px clamp(16px, 2.4vw, 34px);
   border-bottom: 1px solid rgba(180, 35, 24, 0.2);
   background-color: rgba(180, 35, 24, 0.07);
-  font-size: 0.82em;
-  font-weight: 600;
+  font-size: 0.85em;
   text-align: center;
   color: var(--red);
 }

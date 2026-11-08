@@ -51,9 +51,7 @@ const titleGlyphs = TITLE.split('').map((char) => (char === ' ' ? '\u00A0' : cha
   --muted: #63708c;
   --line: rgba(3, 4, 94, 0.09);
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --font:
-    'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  --font: var(--font-theme);
 
   position: relative;
   z-index: 2;
@@ -120,10 +118,10 @@ const titleGlyphs = TITLE.split('').map((char) => (char === ' ' ? '\u00A0' : cha
   margin: 0;
   min-width: 0;
   font-family: var(--font);
-  font-size: clamp(0.64rem, 1.05vw, 0.9rem);
-  font-weight: 650;
+  font-size: clamp(0.74rem, 1.05vw, 0.92rem);
+  font-weight: 700;
   line-height: 1;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.14em;
   /* Trailing tracking would push the centred word off-centre. */
   text-indent: 0.16em;
   text-transform: uppercase;
@@ -150,7 +148,7 @@ const titleGlyphs = TITLE.split('').map((char) => (char === ' ' ? '\u00A0' : cha
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 0.78em;
+  font-size: 0.86em;
   font-weight: 500;
   color: var(--muted);
 }
@@ -163,7 +161,7 @@ const titleGlyphs = TITLE.split('').map((char) => (char === ' ' ? '\u00A0' : cha
   background-color: rgba(255, 255, 255, 0.7);
   color: #d92d20;
   font-family: inherit;
-  font-size: 0.72em;
+  font-size: 0.78em;
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;

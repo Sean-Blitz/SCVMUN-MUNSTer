@@ -4,13 +4,16 @@
   <h2>Data & Log Exports</h2>
   <div class="action-buttons-grid">
     <button class="btn-action" @click="downloadFile('/admin/logs/business.txt', 'business-log.txt')">
-      📄 Download Business Log (.txt)
+      <AppIcon name="file" :size="17" />
+      <span>Download Business Log (.txt)</span>
     </button>
     <button class="btn-action" @click="downloadFile('/admin/logs/technology.txt', 'technology-log.txt')">
-      🛠️ Download Technology Log (.txt)
+      <AppIcon name="tools" :size="17" />
+      <span>Download Technology Log (.txt)</span>
     </button>
     <button class="btn-action btn-export" @click="downloadFile('/admin/export/database.csv', 'database-export.csv')">
-      📊 Export Database (.csv)
+      <AppIcon name="chart" :size="17" />
+      <span>Export Database (.csv)</span>
     </button>
   </div>
 </div>
@@ -61,7 +64,8 @@
   <div class="card-header-action">
     <h2>Port Health Monitor</h2>
     <button class="btn-refresh" :disabled="checkingPorts" @click="fetchPortHealth">
-      {{ checkingPorts ? 'Checking...' : '🔄 Check Port Health' }}
+      <AppIcon name="refresh" />
+      <span>{{ checkingPorts ? 'Checking...' : 'Check Port Health' }}</span>
     </button>
   </div>
 
@@ -88,7 +92,8 @@
   <p class="section-desc">Recorded incidents where server health checks timed out or reported offline status.</p>
 
   <div v-if="downtimeEvents.length === 0" class="no-downtime">
-    ✅ 100% Uptime — No downtime incidents recorded in the past 7 days.
+    <AppIcon name="check" />
+    <span>100% Uptime — No downtime incidents recorded in the past 7 days.</span>
   </div>
 
   <div v-else class="timeline-list">
@@ -113,6 +118,7 @@
 </template>
 
 <script setup>
+import AppIcon from '@/components/AppIcon.vue'
 import { computed, onMounted, ref } from 'vue'
 import apiClient from '@/api/client'
 import { useToastStore } from '@/stores/toast'

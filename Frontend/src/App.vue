@@ -40,7 +40,7 @@ body {
   padding: 12px 16px;
   border-radius: 6px;
   color: #fff;
-  font-family: sans-serif;
+  font-family: var(--font-theme);
   font-size: 0.9rem;
   display: flex;
   justify-content: space-between;

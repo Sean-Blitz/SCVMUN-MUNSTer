@@ -107,11 +107,12 @@
   <div class="card-header-action">
     <h2>{{ broadcastKind === 'link' ? 'Conference Links' : 'Announcements' }}</h2>
     <button class="btn-refresh" :disabled="loadingBroadcasts" @click="loadBroadcasts">
-      {{ loadingBroadcasts ? 'Loading...' : '🔄 Reload' }}
+      <AppIcon name="refresh" />
+      <span>{{ loadingBroadcasts ? 'Loading...' : 'Reload' }}</span>
     </button>
   </div>
   <p class="section-desc">
-    Use ▲ ▼ to reorder within a target. General lines are always shown before
+    Use the arrow buttons to reorder within a target. General lines are always shown before
     committee lines, whatever their position.
   </p>
 
@@ -170,7 +171,7 @@
             :disabled="!canMove(row, -1) || savingBroadcast"
             @click="moveBroadcast(row, -1)"
           >
-            ▲
+            <AppIcon name="up" :size="14" />
           </button>
           <button
             class="btn-icon"
@@ -178,7 +179,7 @@
             :disabled="!canMove(row, 1) || savingBroadcast"
             @click="moveBroadcast(row, 1)"
           >
-            ▼
+            <AppIcon name="down" :size="14" />
           </button>
           <button class="btn-secondary" @click="startEdit(row)">Edit</button>
           <button class="btn-danger" :disabled="savingBroadcast" @click="deleteBroadcast(row)">
@@ -214,7 +215,9 @@
         placeholder="e.g. Submit position papers"
         @input="checklistDirty = true"
       />
-      <button class="btn-icon" title="Remove line" @click="removeChecklistItem(index)">✕</button>
+      <button class="btn-icon" title="Remove line" @click="removeChecklistItem(index)">
+        <AppIcon name="close" :size="14" />
+      </button>
     </div>
 
     <div class="row-actions">
@@ -294,6 +297,7 @@
 </template>
 
 <script setup>
+import AppIcon from '@/components/AppIcon.vue'
 import { computed, onActivated, onDeactivated, ref } from 'vue'
 import apiClient from '@/api/client'
 import { useToastStore } from '@/stores/toast'

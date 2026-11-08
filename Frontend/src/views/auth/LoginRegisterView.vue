@@ -440,20 +440,25 @@ const handleRegister = async () => {
 /* GENERAL LAYOUT */
 .page-container {
   --p: 0; /* scroll progress 0 -> 1, written by the scroll handler */
-  /* One colour everywhere: the page, the rising sheet and the card are all this
-     value, so no area reads as a different shade. Every ink and rule derives from
-     it, making the whole palette a single value to retune. */
-  --surface: #ffffff;
-  --surface-raised: #ffffff;
+  /* SCVMUN palette: a navy stage with a paper sheet rising over it. The wordmark and
+     its dust are cream and gold on navy; everything on the sheet is navy ink on paper,
+     ruled in gold. */
+  --surface: #03045e;
+  --stage-deep: #020340;
+  --surface-raised: #fbf7ea;
   --ink: #03045e;
-  --ink-soft: rgba(3, 4, 94, 0.6);
-  --ink-faint: rgba(3, 4, 94, 0.45);
-  --rule: rgba(3, 4, 94, 0.18);
-  --rule-faint: rgba(3, 4, 94, 0.1);
+  --ink-soft: rgba(3, 4, 94, 0.72);
+  --ink-faint: rgba(3, 4, 94, 0.5);
+  --intro-ink: #f7efd8;
+  --intro-ink-soft: rgba(247, 239, 216, 0.68);
+  --rule: rgba(232, 198, 4, 0.7);
+  --rule-faint: rgba(3, 4, 94, 0.12);
+  --gold: #e8c604;
   min-height: 100vh;
   background-color: var(--surface);
-  color: var(--ink);
-  font-family: Arial, Helvetica, sans-serif;
+  background-image: radial-gradient(ellipse at 50% 0%, #0a136e 0%, var(--surface) 55%, var(--stage-deep) 100%);
+  color: var(--intro-ink);
+  font-family: var(--font-ui);
 }
 
 /* ---------- INTRO: the pinned typing stage ---------- */
@@ -479,13 +484,13 @@ const handleRegister = async () => {
   display: inline-flex;
   flex-wrap: wrap;
   justify-content: center;
-  font-family: 'Special Elite', 'Courier New', monospace;
+  font-family: var(--font-display);
   font-size: clamp(2.05rem, 6.9vw, 4.9rem);
   font-weight: 400;
   line-height: 1.25;
   letter-spacing: 0.02em;
   text-align: center;
-  color: var(--ink);
+  color: var(--intro-ink);
 }
 
 /* Each character is its own piece: it drifts off, spins, blurs and fades with `--p`. */
@@ -510,7 +515,7 @@ const handleRegister = async () => {
   height: 1em;
   margin-left: 6px;
   vertical-align: -0.1em;
-  background-color: var(--ink);
+  background-color: var(--gold);
   animation: caret-blink 1.05s steps(2, start) infinite;
   /* Fades with the title even though the blink animation owns `opacity`. */
   filter: opacity(calc(1 - var(--p) * 1.2));
@@ -547,7 +552,7 @@ const handleRegister = async () => {
   width: var(--size);
   height: var(--size);
   border-radius: 50%;
-  background-color: #0b0b0b;
+  background-color: var(--gold);
   transform:
     translate3d(
       calc(var(--sx) * (0.35 + var(--p) * 0.9)),
@@ -581,22 +586,22 @@ const handleRegister = async () => {
 }
 
 .scroll-hint-text {
-  font-family: 'Special Elite', 'Courier New', monospace;
-  font-size: 0.78rem;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
   line-height: 1;
   letter-spacing: 0.26em;
   /* Trailing tracking would push the label off-centre against the arrow. */
   text-indent: 0.26em;
   text-transform: uppercase;
   white-space: nowrap;
-  color: var(--ink-faint);
+  color: var(--intro-ink-soft);
 }
 
 .scroll-cue {
   width: 12px;
   height: 12px;
-  border-right: 1.5px solid var(--ink-faint);
-  border-bottom: 1.5px solid var(--ink-faint);
+  border-right: 1.5px solid var(--intro-ink-soft);
+  border-bottom: 1.5px solid var(--intro-ink-soft);
   transform: rotate(45deg);
   animation: cue-bob 1.9s ease-in-out infinite;
 }
@@ -615,9 +620,12 @@ const handleRegister = async () => {
      note below the fold. The sheet now ends with its content. */
   padding: 84px 24px 56px;
   background-color: var(--surface-raised);
+  color: var(--ink);
+  border-top: 2px solid var(--gold);
   border-radius: 32px 32px 0 0;
-  /* Neutral, barely-there edge: enough to read the sheet lifting, no colour on white. */
-  box-shadow: 0 -18px 60px rgba(0, 0, 0, 0.05);
+  /* The paper sheet lifts off the navy stage: a navy shadow and a gold rule read the
+     edge without tinting the type. */
+  box-shadow: 0 -22px 70px rgba(2, 3, 64, 0.45);
   overflow: hidden;
   display: flex;
   flex-direction: column;
@@ -649,8 +657,8 @@ const handleRegister = async () => {
 }
 
 .auth-card h2 {
-  font-size: 0.87rem;
-  font-weight: 600;
+  font-size: 0.9rem;
+  font-weight: 400;
   text-transform: uppercase;
   text-align: center;
   letter-spacing: 0.2em;
@@ -679,7 +687,7 @@ const handleRegister = async () => {
 }
 
 .input-group:focus-within {
-  border-bottom-color: #023e8a;
+  border-bottom-color: #8a6d00;
 }
 
 .input-group input {
@@ -689,7 +697,7 @@ const handleRegister = async () => {
   color: var(--ink);
   padding-left: 0;
   font-size: 1.12rem;
-  letter-spacing: 0.01em;
+  letter-spacing: 0.005em;
 }
 
 .input-group input:focus {
@@ -718,7 +726,7 @@ const handleRegister = async () => {
 }
 
 .input-group:focus-within .icon {
-  color: #023e8a;
+  color: #8a6d00;
 }
 
 /* BUTTON GROUP (SIDE-BY-SIDE) */
@@ -760,7 +768,7 @@ const handleRegister = async () => {
 /* CONTEXT TEXT */
 .registration-note {
   margin-top: 34px;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   color: var(--ink-soft);
   text-align: center;
   line-height: 1.6;
@@ -773,7 +781,7 @@ const handleRegister = async () => {
 .forgot-password {
   margin-top: 14px;
   text-align: center;
-  font-size: 0.92rem;
+  font-size: 0.95rem;
   color: var(--ink-faint);
 }
 
@@ -788,7 +796,7 @@ const handleRegister = async () => {
   margin: 36px auto 0;
   padding-top: 30px;
   border-top: 1px solid var(--rule-faint);
-  font-size: 0.9rem;
+  font-size: 0.94rem;
   line-height: 1.75;
   text-align: center;
   color: var(--ink-soft);
@@ -851,16 +859,5 @@ const handleRegister = async () => {
   .panel {
     margin-top: 0;
   }
-}
-</style>
-
-<style>
-/* Self-hosted typewriter face, so the title needs no external font request. */
-@font-face {
-  font-family: 'Special Elite';
-  font-style: normal;
-  font-weight: 400;
-  font-display: swap;
-  src: url('@/assets/fonts/special-elite-400.woff2') format('woff2');
 }
 </style>

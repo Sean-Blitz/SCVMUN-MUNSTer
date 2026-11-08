@@ -237,9 +237,7 @@ onMounted(async () => {
   --gap: clamp(12px, 1.6vh, 18px);
   --radius: 16px;
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --font:
-    'Inter', -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto,
-    'Helvetica Neue', Arial, sans-serif;
+  --font: var(--font-theme);
 
   box-sizing: border-box;
   display: flex;

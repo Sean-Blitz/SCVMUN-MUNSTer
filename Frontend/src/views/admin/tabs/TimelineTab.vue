@@ -3,7 +3,8 @@
   <div class="card-header-action">
     <h2>Conference Timeline</h2>
     <button class="btn-refresh" :disabled="loadingTimeline" @click="loadTimeline">
-      {{ loadingTimeline ? 'Loading...' : '🔄 Reload' }}
+      <AppIcon name="refresh" />
+      <span>{{ loadingTimeline ? 'Loading...' : 'Reload' }}</span>
     </button>
   </div>
   <p class="section-desc">
@@ -52,7 +53,9 @@
     <span v-if="event.pinned" class="pinned-note" title="The conference start: the header countdown reads it">
       start
     </span>
-    <button v-else class="btn-icon" title="Remove event" @click="removeTimelineEvent(index)">✕</button>
+    <button v-else class="btn-icon" title="Remove event" @click="removeTimelineEvent(index)">
+      <AppIcon name="close" :size="14" />
+    </button>
   </div>
 
   <div class="row-actions">
@@ -79,6 +82,7 @@
 </template>
 
 <script setup>
+import AppIcon from '@/components/AppIcon.vue'
 import { onActivated, ref } from 'vue'
 import apiClient from '@/api/client'
 import { useToastStore } from '@/stores/toast'

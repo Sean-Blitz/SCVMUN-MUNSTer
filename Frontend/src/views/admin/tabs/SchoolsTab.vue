@@ -136,7 +136,9 @@
       <input v-model="row.committee" class="text-input" type="text" placeholder="Committee" list="committee-names" />
       <input v-model="row.committeeType" class="text-input" type="text" placeholder="Committee type" />
       <input v-model="row.country" class="text-input" type="text" placeholder="Country" />
-      <button class="btn-icon" title="Remove row" @click="removeDelegateRow(index)">✕</button>
+      <button class="btn-icon" title="Remove row" @click="removeDelegateRow(index)">
+        <AppIcon name="close" :size="14" />
+      </button>
     </div>
   </div>
 
@@ -330,7 +332,8 @@
   <div class="card-header-action">
     <h2>All Hashes</h2>
     <button class="btn-refresh" :disabled="loadingAllHashes" @click="loadAllHashes">
-      {{ loadingAllHashes ? 'Loading...' : '🔄 Load all hashes' }}
+      <AppIcon name="refresh" />
+      <span>{{ loadingAllHashes ? 'Loading...' : 'Load all hashes' }}</span>
     </button>
   </div>
   <p class="section-desc">
@@ -351,6 +354,7 @@
 </template>
 
 <script setup>
+import AppIcon from '@/components/AppIcon.vue'
 import { computed, onActivated, ref } from 'vue'
 import apiClient from '@/api/client'
 import { useToastStore } from '@/stores/toast'

@@ -3,7 +3,8 @@
   <div class="card-header-action">
     <h2>Conference Awards Overview</h2>
     <button class="btn-refresh" :disabled="loadingAwards" @click="loadAwards">
-      {{ loadingAwards ? 'Loading...' : '🔄 Reload' }}
+      <AppIcon name="refresh" />
+      <span>{{ loadingAwards ? 'Loading...' : 'Reload' }}</span>
     </button>
   </div>
   <p class="section-desc">
@@ -25,6 +26,7 @@
 </template>
 
 <script setup>
+import AppIcon from '@/components/AppIcon.vue'
 import { onActivated, ref } from 'vue'
 import apiClient from '@/api/client'
 

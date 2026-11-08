@@ -60,7 +60,7 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 0.85rem;
+  font-size: 0.92rem;
   color: #00007ecc;
   white-space: nowrap;
 }
@@ -68,18 +68,18 @@ onBeforeUnmount(() => {
 .countdown-label {
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  font-size: 0.68rem;
+  font-size: 0.75rem;
   opacity: 0.7;
 }
 
 .countdown-value strong {
   font-variant-numeric: tabular-nums;
-  font-size: 0.95rem;
+  font-size: 1rem;
 }
 
 .countdown-value .unit {
   margin: 0 6px 0 2px;
-  font-size: 0.75rem;
+  font-size: 0.82rem;
   opacity: 0.7;
 }
 
