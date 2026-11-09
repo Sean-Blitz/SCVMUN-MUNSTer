@@ -3,8 +3,7 @@
 <div class="section-card">
   <h2>Create a Committee</h2>
   <p class="section-desc">
-    A committee has to exist before its delegates can be minted — a delegate's committee
-    is no longer created on the fly.
+    A committee has to exist before its delegates can be minted! If you got an error on the Schools Management page, this is the place to be.
   </p>
   <div class="school-fields">
     <div class="field-pair">
@@ -30,8 +29,7 @@
 <!-- PICKER -->
 <div class="section-card">
   <h2>Existing Committees</h2>
-  <p class="section-desc">Pick a committee to see its chairs and delegates.</p>
-  <label class="field-label" for="committee-picker">Committee</label>
+  <p class="section-desc">Pick a committee to see its chairs and delegates. You may need to reload the page after creating a fresh committee to see it.</p>
   <select id="committee-picker" v-model="selectedCommittee" class="text-input" @change="loadCommitteeDetail">
     <option value="">— choose a committee —</option>
     <option v-for="name in committeeNames" :key="name" :value="name">{{ name }}</option>
@@ -44,7 +42,7 @@
 <!-- DETAILS -->
 <div v-if="committeeDetail" class="section-card">
   <div class="card-header-action">
-    <h2>{{ committeeDetail.committee_name }}</h2>
+    <h2>Committee name: {{ committeeDetail.committee_name }}</h2>
     <button class="btn-refresh" :disabled="!committeeDirty || savingCommittee" @click="saveCommittee">
       {{ savingCommittee ? 'Saving...' : 'Save changes' }}
     </button>

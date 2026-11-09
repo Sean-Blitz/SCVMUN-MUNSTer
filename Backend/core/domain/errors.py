@@ -186,7 +186,7 @@ class NoAssignments(DomainError):
 
 
 class BadAssignmentShape(DomainError):
-    """One delegate entry was not [committee, committeeType, country]."""
+    """One delegate entry was not [committee, country] (or the legacy three-item form)."""
 
     def __init__(self, key: str) -> None:
         super().__init__(f"bad assignment shape for {key!r}")

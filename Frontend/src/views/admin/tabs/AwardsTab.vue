@@ -8,7 +8,7 @@
     </button>
   </div>
   <p class="section-desc">
-    Read-only report of every committee's award assignments.
+    Report of every committee's award assignments. You can also use this tab to print out awards later.
   </p>
 
   <div v-if="awardsCommittees.length" class="committee-awards-list">

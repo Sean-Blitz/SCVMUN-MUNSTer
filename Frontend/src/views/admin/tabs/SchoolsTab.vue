@@ -1,17 +1,15 @@
 <template>
-<!-- Committee names, offered to every committee field in the page. A delegate can only
-     be minted into a committee that exists, so the form suggests the real ones. -->
-<datalist id="committee-names">
-  <option v-for="name in committeeNames" :key="name" :value="name"></option>
-</datalist>
-
+<!-- The two entry points share a row: create the school on the left (it carries the long
+     form, so it gets most of the width), mint its delegate hashes on the right. Side by side
+     so neither has to be scrolled to find the other. -->
+<div class="schools-top-grid">
 <!-- CREATE A SCHOOL (and its advisor account) -->
 <div class="section-card">
   <h2>Create a School</h2>
   <p class="section-desc">
     Creates the school and its advisor account, and issues the advisor's login hash. The
     advisor claims it with "First-Time Register", exactly as a delegate does. Delegate
-    hashes can be generated below once the school exists.
+    hashes can be generated at the right once the school exists.
   </p>
 
   <div class="school-fields">
@@ -66,6 +64,12 @@
     <div class="field-pair">
       <label class="field-label" for="new-school-head-phone">Head delegate phone</label>
       <input id="new-school-head-phone" v-model="newSchool.head_delegate_phone" class="text-input" type="text" placeholder="555-0101" />
+    </div>
+    <!-- Optional: the advisor's billing page renders this as a link, so a school created
+         without one simply shows "No invoice available" until it is filled in above. -->
+    <div class="field-pair">
+      <label class="field-label" for="new-school-invoice">Invoice URL (optional)</label>
+      <input id="new-school-invoice" v-model="newSchool.invoiceURL" class="text-input" type="text" placeholder="https://example.com/invoice.pdf" />
     </div>
   </div>
 
@@ -122,24 +126,40 @@
     Register delegates for a school. Each row becomes an account and receives its own login hash.
   </p>
 
-  <label class="field-label" for="school-name">School name</label>
-  <input
-    id="school-name"
-    v-model="schoolName"
-    class="text-input"
-    type="text"
-    placeholder="e.g. Lincoln High School"
-  />
+  <label class="field-label" for="school-name">School</label>
+  <select id="school-name" v-model="schoolName" class="text-input">
+    <option value="">— choose a school —</option>
+    <option v-for="school in schools" :key="school.id" :value="school.name">
+      {{ school.name }}
+    </option>
+  </select>
+  <div v-if="!schools.length" class="empty-state">
+    No schools yet. Create one above.
+  </div>
 
   <div class="form-rows">
     <div v-for="(row, index) in newDelegates" :key="index" class="form-row">
-      <input v-model="row.committee" class="text-input" type="text" placeholder="Committee" list="committee-names" />
-      <input v-model="row.committeeType" class="text-input" type="text" placeholder="Committee type" />
-      <input v-model="row.country" class="text-input" type="text" placeholder="Country" />
+      <select v-model="row.committee" class="text-input" aria-label="Committee">
+        <option value="">— choose a committee —</option>
+        <option v-for="name in committeeNames" :key="name" :value="name">{{ name }}</option>
+      </select>
+      <input
+        v-model="row.country"
+        class="text-input"
+        type="text"
+        placeholder="Country"
+        aria-label="Country"
+      />
       <button class="btn-icon" title="Remove row" @click="removeDelegateRow(index)">
         <AppIcon name="close" :size="14" />
       </button>
     </div>
+  </div>
+
+  <!-- A delegate can only be minted into a committee that exists, and committees are
+       created on their own tab rather than by typing a name here. -->
+  <div v-if="!committeeNames.length" class="empty-state">
+    No committees yet. Create one on the Committees tab first.
   </div>
 
   <div class="row-actions">
@@ -158,15 +178,14 @@
     </div>
   </div>
 </div>
+</div>
 
 <!-- PICKER -->
 <div class="section-card">
   <h2>Existing Schools</h2>
   <p class="section-desc">
-    Pick a school to see and edit everything attached to it. Only the selected school's
-    data is loaded.
+    Pick a school to see and edit its data.
   </p>
-  <label class="field-label" for="existing-school">School</label>
   <select
     id="existing-school"
     v-model="selectedSchoolId"
@@ -383,7 +402,9 @@ const emptySchool = () => ({
   advisor_phone: '',
   head_delegate_name: '',
   head_delegate_email: '',
-  head_delegate_phone: ''
+  head_delegate_phone: '',
+  // Optional on the backend (`SchoolRequest.invoiceURL`), and stored as NULL when blank.
+  invoiceURL: ''
 })
 
 const newSchool = ref(emptySchool())
@@ -419,7 +440,13 @@ const createSchool = async () => {
 
   creatingSchool.value = true
   try {
-    const response = await apiClient.post('/admin/schools', newSchool.value)
+    // The invoice URL is optional: trimmed so a stray space is not stored as a URL, and
+    // blank becomes "" which the backend turns into NULL.
+    const payload = {
+      ...newSchool.value,
+      invoiceURL: newSchool.value.invoiceURL.trim()
+    }
+    const response = await apiClient.post('/admin/schools', payload)
     createdSchool.value = response.data
     newSchool.value = emptySchool()
     // The school must show up in the progress picker and in the list above.
@@ -431,7 +458,12 @@ const createSchool = async () => {
     creatingSchool.value = false
   }
 }
-const newDelegates = ref([{ committee: '', committeeType: '', country: '' }])
+// A delegate row is a committee (chosen from the ones that exist) and a country. The
+// committee's own *type* is a property of the committee, set on the Committees tab, so a
+// delegate never carries one: the old "Committee type" column had no database column to
+// land in and was ignored by the backend.
+const emptyDelegateRow = () => ({ committee: '', country: '' })
+const newDelegates = ref([emptyDelegateRow()])
 const generatingHashes = ref(false)
 const generatedHashes = ref([])
 
@@ -440,37 +472,50 @@ const loadingAllHashes = ref(false)
 
 // ---------- Hash management actions ----------
 const addDelegateRow = () => {
-  newDelegates.value.push({ committee: '', committeeType: '', country: '' })
+  newDelegates.value.push(emptyDelegateRow())
 }
 
 const removeDelegateRow = (index) => {
   if (newDelegates.value.length === 1) {
-    newDelegates.value[0] = { committee: '', committeeType: '', country: '' }
+    newDelegates.value[0] = emptyDelegateRow()
     return
   }
   newDelegates.value.splice(index, 1)
 }
 
 // The delegate rows entered in the card below, keyed by position ("1", "2"); each value is
-// [committee, type, country]. The school travels separately as `school_name`, and the
-// backend labels every entry "<school> - #<n>" for display. Shared by both entry points so
-// there is one definition of what gets submitted.
+// [committee, country]. The school travels separately as `school_name`, and the backend
+// labels every entry "<school> - #<n>" for display. Shared by both entry points so there is
+// one definition of what gets submitted.
 const buildAssignments = () => {
   const finalAssignments = {}
   newDelegates.value.forEach((row, index) => {
-    if (!row.committee.trim() && !row.committeeType.trim() && !row.country.trim()) return
-    finalAssignments[`${index + 1}`] = [
-      row.committee.trim(),
-      row.committeeType.trim(),
-      row.country.trim()
-    ]
+    if (!row.committee.trim() && !row.country.trim()) return
+    finalAssignments[`${index + 1}`] = [row.committee.trim(), row.country.trim()]
   })
   return finalAssignments
+}
+
+// A half-filled row would be submitted as an empty committee or country, and the backend
+// answers 400 without saying which row it was. Naming the row here is the useful message.
+const firstIncompleteRow = () => {
+  const index = newDelegates.value.findIndex((row) => {
+    const committee = row.committee.trim()
+    const country = row.country.trim()
+    return Boolean(committee || country) && !(committee && country)
+  })
+  return index === -1 ? null : index + 1
 }
 
 // POST /admin/hashes for one school name. Returns null when there is nothing to send, so
 // callers can bail without treating it as an error; real failures throw.
 const requestHashes = async (school) => {
+  const incomplete = firstIncompleteRow()
+  if (incomplete !== null) {
+    toastStore.showToast(`Row ${incomplete} needs both a committee and a country.`, 'error')
+    return null
+  }
+
   const finalAssignments = buildAssignments()
   if (Object.keys(finalAssignments).length === 0) {
     toastStore.showToast('Add at least one delegate row first.', 'error')
@@ -483,7 +528,7 @@ const requestHashes = async (school) => {
 const generateHashes = async () => {
   const school = schoolName.value.trim()
   if (!school) {
-    toastStore.showToast('Enter a school name before generating hashes.', 'error')
+    toastStore.showToast('Choose a school before generating hashes.', 'error')
     return
   }
 
@@ -700,7 +745,7 @@ const deleteSchool = async () => {
 }
 
 // Entry refresh, matching what the old switchTab did: fetch the list only if it is cold,
-// and keep the committee suggestions current so the datalist never goes stale.
+// and keep the committee dropdown current so it never offers a deleted committee.
 onActivated(() => {
   if (!schools.value.length) loadSchools()
   if (!committeeNames.value.length) loadCommitteeNames()

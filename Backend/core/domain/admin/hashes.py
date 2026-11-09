@@ -44,6 +44,19 @@ def revoke_sessions(db: Session, account_id: int) -> None:
     db.execute(delete(AuthSession).where(AuthSession.account_id == account_id))
 
 
+def _committee_and_country(assignment: list[str]) -> tuple[str, str]:
+    """Committee and country from one submitted row, stripped.
+
+    Rows arrive as `[committee, country]`. The older CLI shape,
+    `[committee, committeeType, country]`, is still accepted so existing callers keep
+    working, and its middle value is dropped: a committee's type is a property of the
+    committee row (`committees.committee_type`), never of the delegate, and `delegates`
+    has no column for it.
+    """
+    committee, country = assignment[0], assignment[-1]
+    return committee.strip(), country.strip()
+
+
 def mint_delegate_hashes(
     db: Session,
     *,
@@ -54,8 +67,8 @@ def mint_delegate_hashes(
     """Register new delegates for a school and return the hash minted for each one.
 
     `assignments` keys are per-school display labels ("1", "2") and each value is positional:
-    [committee, committeeType, country]. `committeeType` has no column in the schema (a
-    leftover from the CLI's shape), so it is accepted and ignored.
+    `[committee, country]`. The legacy three-item shape with a committee type in the middle
+    is still accepted and that item is ignored - see `_committee_and_country`.
 
     Two rows describing the same delegation (partners) end up sharing one hash, and a
     (committee, country) pair that already has an account is refused: "regenerate" is the
@@ -66,7 +79,7 @@ def mint_delegate_hashes(
         raise NoAssignments()
 
     for key, assignment in assignments.items():
-        if len(assignment) != 3:
+        if len(assignment) not in (2, 3):
             raise BadAssignmentShape(key)
 
     school = require_school(db, school_name)
@@ -75,8 +88,8 @@ def mint_delegate_hashes(
     shared: dict[tuple[str, str], Account] = {}
     hashes: list[HashEntry] = []
 
-    for key, (_committee, _committee_type, country) in assignments.items():
-        committee, country = _committee.strip(), country.strip()
+    for key, assignment in assignments.items():
+        committee, country = _committee_and_country(assignment)
         if not committee or not country:
             raise BadAssignmentValue(key)
 

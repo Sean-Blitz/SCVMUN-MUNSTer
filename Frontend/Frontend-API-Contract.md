@@ -638,7 +638,7 @@ Request:
 {
   "school_name": "Lincoln High School",
   "finalAssignments": {
-    "1": ["DISEC", "General Assembly", "France"]
+    "1": ["DISEC", "France"]
   }
 }
 ```
@@ -653,9 +653,10 @@ Field notes:
   hash. Create first, then mint delegates.
 - `finalAssignments` keys are the per-school labels the form uses as row positions
   ("1", "2", …); the backend turns each into the `<school> - #<key>` display name.
-  Its value is positional — `[committee, committeeType, country]` (the CLI's
-  `FinalAssignments` shape). `committeeType` is accepted but not persisted: there is no
-  column for it.
+  Its value is positional — `[committee, country]`. The legacy CLI shape
+  `[committee, committeeType, country]` is still accepted, but a committee's type belongs
+  to the committee row (`committees.committee_type`), not to a delegate, so that middle
+  item is ignored: `delegates` has no column for it.
 - A `(committee, country)` pair that already has an account is rejected with `409`
   ("regenerate" is the intended way to reissue). Double-delegation partners share one
   account, so they are submitted once and share one hash.

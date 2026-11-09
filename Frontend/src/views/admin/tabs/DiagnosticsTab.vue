@@ -96,24 +96,33 @@
     <span>100% Uptime — No downtime incidents recorded in the past 7 days.</span>
   </div>
 
-  <div v-else class="timeline-list">
-    <div
-      v-for="event in downtimeEvents"
-      :key="event.id"
-      class="timeline-item"
-    >
-      <div class="timeline-dot"></div>
-      <div class="timeline-content">
-        <div class="timeline-time">
-          <strong>{{ event.startTime }}</strong> to <strong>{{ event.endTime }}</strong>
-        </div>
-        <div class="timeline-details">
-          <span class="duration-badge">Duration: {{ event.duration }}</span>
-          <span class="reason-text">{{ event.reason }}</span>
+  <template v-else>
+    <!-- Only the most recent incidents are rendered: this is a read of the log, not the
+         log itself, which stays complete on disk and in the downloadable copy. -->
+    <p v-if="hiddenDowntimeCount > 0" class="downtime-note">
+      Showing the {{ DOWNTIME_DISPLAY_LIMIT }} most recent of
+      {{ downtimeEvents.length }} incidents recorded in the past 7 days.
+    </p>
+
+    <div class="timeline-list">
+      <div
+        v-for="event in visibleDowntimeEvents"
+        :key="event.id"
+        class="timeline-item"
+      >
+        <div class="timeline-dot"></div>
+        <div class="timeline-content">
+          <div class="timeline-time">
+            <strong>{{ event.startTime }}</strong> to <strong>{{ event.endTime }}</strong>
+          </div>
+          <div class="timeline-details">
+            <span class="duration-badge">Duration: {{ event.duration }}</span>
+            <span class="reason-text">{{ event.reason }}</span>
+          </div>
         </div>
       </div>
     </div>
-  </div>
+  </template>
 </div>
 </template>
 
@@ -132,6 +141,20 @@ const storage = ref({ usedGb: 0, totalGb: 0 })
 const ports = ref([])
 const downtimeEvents = ref([])
 const checkingPorts = ref(false)
+
+// How many incidents the timeline renders. The API returns the whole 7-day window newest
+// first (core.monitor.recent_outages reverses the log), so the first N are the last N.
+// This is a display limit only: downtime.log keeps every incident, and the download in the
+// card above still contains all of them.
+const DOWNTIME_DISPLAY_LIMIT = 10
+
+const visibleDowntimeEvents = computed(() =>
+  downtimeEvents.value.slice(0, DOWNTIME_DISPLAY_LIMIT)
+)
+
+const hiddenDowntimeCount = computed(() =>
+  Math.max(0, downtimeEvents.value.length - DOWNTIME_DISPLAY_LIMIT)
+)
 
 const storagePercentage = computed(() => {
   if (!storage.value.totalGb) return 0

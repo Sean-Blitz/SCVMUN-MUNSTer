@@ -25,8 +25,8 @@ LABEL_MAX = 200        # conference_checklist.label, timeline_events.label
 COUNTRY_MAX = 100      # delegates.country
 PASSWORD_MAX = 200     # never stored raw; a cap keeps Argon2 from hashing megabytes
 
-# [committee, committeeType, country] - committeeType has no column, so it gets the
-# committee limit.
+# One item of [committee, country]; the committee's type is not part of a delegate row, and
+# every item is a committee-sized name, so they all share the committee limit.
 AssignmentValue = Annotated[str, Field(max_length=NAME_MAX)]
 
 
@@ -160,12 +160,13 @@ class NewHashRequest(BaseModel):
     """
     Delegates to create, keyed by a display name such as "1".
 
-    Each value is positional, matching the CLI's `FinalAssignments`:
-    [committee, committeeType, country].
+    Each value is positional: [committee, country]. The legacy CLI shape that put a
+    committee type between them ([committee, committeeType, country]) is still accepted -
+    that item has no column and is ignored.
     """
     school_name: Annotated[str, Field(max_length=100)]
-    # The triple's arity is checked in the endpoint (its message names the offending
-    # delegate); only the per-string storage limit belongs here.
+    # A row's arity is checked in the endpoint (its message names the offending delegate);
+    # only the per-string storage limit belongs here.
     finalAssignments: dict[str, list[AssignmentValue]]
 
 

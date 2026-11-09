@@ -245,8 +245,8 @@
 <div class="section-card">
   <h2>Checklist Progress</h2>
   <p class="section-desc">
-    Which lines a school has ticked. Pick a school and tick its boxes — a tick here
-    shows only on that school's advisor dashboard.
+    This is shown on the advisor's dashboard, corresponding to
+    action checklist (above). Which lines a school has ticked. Pick a school and tick its boxes for progress.
   </p>
 
   <label class="field-label" for="progress-school">School</label>

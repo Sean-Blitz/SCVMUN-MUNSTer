@@ -168,7 +168,7 @@ def _hash_error(exc: domain_errors.DomainError) -> HTTPException:
     if isinstance(exc, domain_errors.BadAssignmentShape):
         return HTTPException(
             status.HTTP_400_BAD_REQUEST,
-            f'Delegate "{exc.key}" must be [committee, committeeType, country].',
+            f'Delegate "{exc.key}" must be [committee, country].',
         )
     if isinstance(exc, domain_errors.BadAssignmentValue):
         return HTTPException(
@@ -214,9 +214,9 @@ def create_delegate_hashes(
 
         `payload.school_name` names the existing school; its advisor account owns the new
         delegates. The keys of `payload.finalAssignments` are per-school display labels
-        ("1", "2") and each value is positional: [committee, committeeType, country].
-        `committeeType` has no column in the schema (leftover from the CLI's shape), so it
-        is accepted and ignored."""
+        ("1", "2") and each value is positional: [committee, country]. The legacy CLI shape
+        [committee, committeeType, country] is still accepted; a committee's type belongs to
+        the committee row, so that middle item has no column and is ignored."""
     try:
         return hashes_domain.mint_delegate_hashes(
             db,

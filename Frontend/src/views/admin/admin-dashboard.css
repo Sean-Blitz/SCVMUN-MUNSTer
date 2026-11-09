@@ -92,6 +92,19 @@
   color: #4a5578;
 }
 
+/* Schools Management: "Create a School" and "Generate Hashes for New Delegates" share one
+   row, so neither has to be scrolled past to reach the other. The left card owns the long
+   form and takes most of the width; the right card is shorter, so it keeps its natural
+   height (align-items: start) rather than stretching - a stretched card would push its
+   "Generate Hashes" button to the bottom of the tallest card, which is exactly the scrolling
+   this avoids. */
+.admin-dashboard .schools-top-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr);
+  gap: 24px;
+  align-items: start;
+}
+
 .admin-dashboard .card-header-action {
   display: flex;
   justify-content: space-between;
@@ -380,6 +393,14 @@
   line-height: 1.55;
 }
 
+/* The "showing the last N" line: quieter than .section-desc, since it explains a truncation
+   rather than introducing the card. */
+.admin-dashboard .downtime-note {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  color: #5b6b7d;
+}
+
 .admin-dashboard .timeline-list {
   display: flex;
   flex-direction: column;
@@ -464,9 +485,11 @@
   gap: 10px;
 }
 
+/* A new-delegate row: committee, country, remove. The committee's type is a property of the
+   committee row (set on the Committees tab), not of the delegate, so there are three tracks. */
 .admin-dashboard .form-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   gap: 10px;
   align-items: center;
 }
@@ -933,6 +956,12 @@
   .admin-dashboard .ports-grid {
     grid-template-columns: 1fr;
 }
+
+/* Two cards side by side need room for the right one's selects; below this they stack and
+   the page scrolls vertically as it did before. */
+.admin-dashboard .schools-top-grid {
+    grid-template-columns: 1fr;
+  }
 
 .admin-dashboard .form-row {
     grid-template-columns: 1fr;
