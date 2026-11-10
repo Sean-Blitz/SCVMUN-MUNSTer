@@ -170,6 +170,16 @@ class AwardsRubricCriterion(BaseModel):
     levels: list[RubricLevel]
 
 
+class RubricResponse(BaseModel):
+    """Both rubrics, as PUT /admin/rubrics returns them after a save.
+
+    The same two shapes the chair endpoints publish, so the admin editor reads exactly what
+    the graders will see - the save response is a re-read, not an echo of the request.
+    """
+    paper: list[GradingRubricCriterion] = []
+    awards: list[AwardsRubricCriterion] = []
+
+
 class AwardDelegate(BaseModel):
     id: int
     country: str

@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 import core.audit
 import core.storage
 from core import controls
-from core.domain import papers
+from core.domain import papers, rubrics
 from core.domain.errors import (
     DelegateNotFound,
     NotAPdf,
@@ -87,32 +87,34 @@ def _visible_broadcasts(db: Session, kind: str, committee: str) -> list[Broadcas
     return list(db.scalars(stmt).all())
 
 
-def _paper_criteria(delegate: Delegates) -> list[GradedCriterion]:
+def _paper_criteria(db: Session, delegate: Delegates) -> list[GradedCriterion]:
     """Join the chair's stored marks with the rubric, for the grade breakdown.
 
     `paper_rubric_grade` holds the chair's {criterion id: score} map; the labels and
-    maxima come from the rubric itself (core.controls). The delegate cannot call
+    maxima come from the rubric itself (core.domain.rubrics). The delegate cannot call
     /chair/rubric - it is role-gated - so the labels have to be resolved here. A
     criterion the chair left unmarked is skipped rather than reported as a zero.
 
     The lookup compares ids *as strings*: JSONB keys are always strings, so a rubric whose
     ids are numbers (which GradingRubricCriterion allows) would otherwise never match its
     own stored marks and silently vanish from the breakdown.
+
+    Reading the criteria through the same module the grading view uses is what stops a
+    rubric the admin edited from rendering differently on the two sides.
     """
     scores = {str(key): value for key, value in (delegate.paper_rubric_grade or {}).items()}
 
     criteria: list[GradedCriterion] = []
-    for criterion in controls.paper_rubric_data:
-        criterion_id = criterion.get("id")
-        key = str(criterion_id)
-        if criterion_id is None or key not in scores:
+    for criterion in rubrics.paper_criteria(db):
+        key = str(criterion.id)
+        if key not in scores:
             continue
         criteria.append(
             GradedCriterion(
-                id=criterion_id,
-                label=criterion.get("label", str(criterion_id)),
+                id=criterion.id,
+                label=criterion.label,
                 score=float(scores[key]),
-                maxScore=float(criterion.get("maxScore", 0)),
+                maxScore=float(criterion.maxScore),
             )
         )
     return criteria
@@ -144,7 +146,7 @@ def get_delegate_dashboard(
             score=delegate.paper_grade or "",
             feedback=delegate.paper_comments or "",
             instructions=[],  # no source for these yet; the panel hides when empty
-            criteria=_paper_criteria(delegate) if delegate.paper_status == "graded" else [],
+            criteria=_paper_criteria(db, delegate) if delegate.paper_status == "graded" else [],
         ),
     )
 

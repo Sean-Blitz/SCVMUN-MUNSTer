@@ -34,9 +34,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 import core.audit
+import core.controls
 from core.controls import CONFERENCE_START_LABEL
 
-from crud.database_schema import Base, TimelineEvent
+from crud.database_schema import Base, Rubric, TimelineEvent
 from crud.db import DATABASE_URL, engine, utcnow
 
 
@@ -86,6 +87,37 @@ def ensure_conference_start(bind, *, lead_days: int = 30) -> bool:
         return True
 
 
+def ensure_rubrics(bind) -> list[str]:
+    """Insert the two rubric documents if they are missing; return the kinds inserted.
+
+    This is the upgrade path for the two lists that used to live only in
+    `core/controls.py`: whatever was hand-written there becomes each rubric's starting
+    document, and from then on an admin edits it over PUT /admin/rubrics. Both are empty
+    today, so a fresh database and an upgraded one look the same - criteria-less, which the
+    chair views already render as "not configured" rather than crashing.
+
+    Shared with crud/bootstrap.py, like ensure_conference_start, so a bootstrapped database
+    and a seeded one agree. Idempotent: an existing row is never touched, so a rubric an
+    admin has edited cannot be reset by re-running this.
+    """
+    defaults = {
+        "paper": list(core.controls.paper_rubric_data),
+        "awards": list(core.controls.awards_rubric),
+    }
+
+    inserted: list[str] = []
+    with Session(bind) as db:
+        existing = set(db.scalars(select(Rubric.kind)).all())
+        for kind, items in defaults.items():
+            if kind in existing:
+                continue
+            db.add(Rubric(kind=kind, items=items, updated_at=utcnow()))
+            inserted.append(kind)
+        db.commit()
+
+    return inserted
+
+
 def main() -> None:
     """Create every table in Base.metadata; skip any that already exist."""
     if not DATABASE_URL:
@@ -109,6 +141,14 @@ def main() -> None:
         )
     else:
         print(f"'{CONFERENCE_START_LABEL}' already present.")
+
+    if ensure_rubrics(engine):
+        print(
+            "Seeded the paper and awards rubrics "
+            "(empty until an admin edits them in the dashboard)."
+        )
+    else:
+        print("Paper and awards rubrics already present.")
 
     # Recorded only when the application has already created its log directory: running
     # this script as another user (root, say) must not leave root-owned 0600 log files

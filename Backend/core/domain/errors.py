@@ -435,3 +435,48 @@ class DelegatePairTaken(DomainError):
         super().__init__(f"{country} ({committee}) already has a delegate")
         self.country = country
         self.committee = committee
+
+
+# --- Rubrics (§8.11) ---------------------------------------------------------------------
+
+
+class NothingToUpdate(DomainError):
+    """A rubric save named neither rubric, so there is nothing to write."""
+
+
+class RubricInvalid(DomainError):
+    """A submitted rubric breaks a rule the domain, not the schema, has to enforce.
+
+    The request schema owns types, lengths and positivity; this is for the rules that
+    depend on the other entries (a repeated criterion id, which would make every mark
+    filed under it ambiguous).
+    """
+
+    def __init__(self, detail: str) -> None:
+        super().__init__(f"invalid rubric: {detail}")
+        self.detail = detail
+
+
+class RubricCriterionInUse(DomainError):
+    """Dropping or renaming a criterion would orphan marks already recorded against its id.
+
+    `id` is the key in `delegates.paper_rubric_grade` and `delegates.overall_rubric_scores`,
+    so a save that removes one leaves stored marks pointing at a criterion that no longer
+    exists: the delegate's breakdown silently loses that line, and re-grading cannot
+    recover it. Refused unless the caller forces the save.
+    """
+
+    def __init__(self, orphaned: dict[str, dict[str, int]]) -> None:
+        listed = "; ".join(
+            f"{kind}: "
+            + ", ".join(
+                f"'{criterion_id}' ({count} marked)"
+                for criterion_id, count in sorted(ids.items())
+            )
+            for kind, ids in sorted(orphaned.items())
+        )
+        super().__init__(
+            f"These criteria already have recorded marks: {listed}. "
+            "Saving would orphan them - resend with force to remove them anyway."
+        )
+        self.orphaned = orphaned

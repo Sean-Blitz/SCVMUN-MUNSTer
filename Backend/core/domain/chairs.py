@@ -27,7 +27,7 @@ from sqlalchemy.orm import Session
 
 import core.audit
 from core import controls
-from core.domain import papers
+from core.domain import papers, rubrics
 from core.domain.errors import (
     AwardCriteriaUnscored,
     AwardNotAssignable,
@@ -46,7 +46,6 @@ from schemas.response_models import (
     CommitteeOverviewResponse,
     GradingDelegate,
     GradingRubricCriterion,
-    RubricLevel,
     Timeline,
     TimelineEvent as TimelineEventModel,
 )
@@ -212,43 +211,29 @@ def get_committee_overview(db: Session, account_id: int) -> CommitteeOverviewRes
 # endpoint with a different shape - do not merge them.
 
 
-def build_paper_rubric() -> list[GradingRubricCriterion]:
+def build_paper_rubric(db: Session) -> list[GradingRubricCriterion]:
     """
-    The position-paper grading rubric, built from `core.controls.paper_rubric_data`.
+    The position-paper grading rubric, as the admin last saved it.
 
-    A static list, not a table: the criteria are the same for every chair and every
-    delegate, so there is nothing per-committee to store and no database session is needed
-    to read it.
+    Conference-wide, not per-committee: the criteria are the same for every chair and
+    every delegate, so there is one document (`rubrics`, kind 'paper') rather than rows per
+    committee. `core.domain.rubrics` owns reading it and falling back to the in-code
+    defaults when it was never saved.
 
     A function rather than an inline body because `grade_paper` validates marks against
     exactly the criteria this publishes: if the two drifted, a chair could be blocked from
     saving a mark for a criterion the screen had just shown them.
 
-    The same list is the source the delegate's graded breakdown is joined against
+    The same document is what the delegate's graded breakdown is joined against
     (/delegate/my-assignment), which is what keeps both views showing the same labels and
     the same maximum marks.
-
-    An entry with no `id` is skipped: `id` is the key a mark is stored under, so such an
-    entry could never be graded - the delegate-side join skips it for the same reason.
     """
-    rubric: list[GradingRubricCriterion] = []
-    for criterion in controls.paper_rubric_data:
-        criterion_id = criterion.get("id")
-        if criterion_id is None:
-            continue
-        rubric.append(
-            GradingRubricCriterion(
-                id=criterion_id,
-                label=criterion.get("label") or str(criterion_id),
-                maxScore=float(criterion.get("maxScore", 0)),
-            )
-        )
-    return rubric
+    return rubrics.paper_criteria(db)
 
 
-def get_position_paper_grading_rubric() -> list[GradingRubricCriterion]:
+def get_position_paper_grading_rubric(db: Session) -> list[GradingRubricCriterion]:
     """The numeric rubric the grading view reads its labels and maxima from."""
-    return build_paper_rubric()
+    return build_paper_rubric(db)
 
 
 def list_committee_delegates(db: Session, account_id: int) -> list[GradingDelegate]:
@@ -333,7 +318,7 @@ def grade_paper(
     if delegate.paper_status == "unsubmitted":
         raise PaperNotSubmitted()
 
-    rubric = {str(criterion.id): criterion for criterion in build_paper_rubric()}
+    rubric = {str(criterion.id): criterion for criterion in build_paper_rubric(db)}
     if not rubric:
         raise RubricNotConfigured()
 
@@ -416,59 +401,24 @@ def list_award_options() -> list[str]:
     return assignable_awards()
 
 
-def build_awards_rubric() -> list[AwardsRubricCriterion]:
+def build_awards_rubric(db: Session) -> list[AwardsRubricCriterion]:
     """
-    The awards rubric, built from core.controls.awards_rubric.
+    The awards rubric, as the admin last saved it (`rubrics`, kind 'awards').
+
+    `core.domain.rubrics` owns reading the document and falling back to the in-code
+    defaults when it was never saved, so this stays the single source `assign_award`
+    validates against.
 
     Kept as a function rather than inlined because `assign_award` validates incoming marks
     against exactly the criteria this publishes - if the two ever drifted, a chair could be
     blocked from saving an award the screen had just asked them to score.
-
-    A criterion with no usable levels is skipped entirely: the view works out each
-    criterion's maximum as `Math.max(...levels)`, so an empty list would give it -Infinity.
-    A level with no label is skipped for the same reason a label-less checklist line is:
-    there would be nothing to render.
     """
-    rubric: list[AwardsRubricCriterion] = []
-
-    for criterion in controls.awards_rubric:
-        criterion_id = criterion.get("id")
-        if criterion_id is None:
-            # `id` keys the scores map, so a criterion without one could never be stored.
-            continue
-
-        levels: list[RubricLevel] = []
-        for level in criterion.get("levels") or []:
-            if not isinstance(level, dict):
-                continue
-            label = str(level.get("label") or "").strip()
-            if not label:
-                continue
-            levels.append(
-                RubricLevel(
-                    score=float(level.get("score", 0)),
-                    label=label,
-                    description=str(level.get("description") or ""),
-                )
-            )
-
-        if not levels:
-            continue
-
-        rubric.append(
-            AwardsRubricCriterion(
-                id=criterion_id,
-                label=str(criterion.get("label") or criterion_id),
-                levels=levels,
-            )
-        )
-
-    return rubric
+    return rubrics.awards_criteria(db)
 
 
-def get_awards_rubric() -> list[AwardsRubricCriterion]:
+def get_awards_rubric(db: Session) -> list[AwardsRubricCriterion]:
     """The leveled rubric used by the awards view."""
-    return build_awards_rubric()
+    return build_awards_rubric(db)
 
 
 def list_award_delegates(db: Session, account_id: int) -> list[AwardDelegate]:
@@ -537,7 +487,7 @@ def assign_award(
 
     marks = {str(criterion_id): float(mark) for criterion_id, mark in scores.items()}
 
-    rubric = build_awards_rubric()
+    rubric = build_awards_rubric(db)
     labels = {str(criterion.id): criterion.label for criterion in rubric}
 
     unknown = sorted(set(marks) - set(labels))

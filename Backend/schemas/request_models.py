@@ -273,3 +273,69 @@ class TimelineUpdateRequest(BaseModel):
     server sorts by time)."""
 
     events: list[TimelineEventRequest]
+
+
+# --- Admin: conference-wide rubrics (§8.11) ---------------------------------------------
+# The two rubrics are whole documents: the editor sends the complete array and the server
+# replaces the stored one, the same way PUT /admin/timeline takes the whole schedule.
+#
+# These models own *shape* only - types, lengths, a positive maximum, at least one level.
+# The rules that need a sentence the admin can act on (a repeated id, a blank label) are
+# enforced in core/domain/admin/rubrics.py, which is where the rest of the API keeps its
+# wording.
+
+MAX_RUBRIC_CRITERIA = 50
+MAX_RUBRIC_LEVELS = 20
+RUBRIC_LABEL_MAX = 200
+RUBRIC_DESCRIPTION_MAX = 500
+
+
+class PaperRubricCriterionInput(BaseModel):
+    """One criterion of the position-paper rubric.
+
+    Mirrors `response_models.GradingRubricCriterion`. `id` stays `int | str` because that is
+    what the response allows and what existing stored marks may be filed under; it must not
+    change once marks exist, which the endpoint refuses.
+    """
+
+    id: str | int
+    label: Annotated[str, Field(max_length=RUBRIC_LABEL_MAX)]
+    # Zero or negative would make the criterion ungradeable and poison the total.
+    maxScore: Annotated[float, Field(gt=0)]
+
+
+class RubricLevelInput(BaseModel):
+    """One score level of an awards criterion, e.g. 4 / "Outstanding" / "…"."""
+
+    score: float
+    label: Annotated[str, Field(max_length=RUBRIC_LABEL_MAX)]
+    description: Annotated[str, Field(max_length=RUBRIC_DESCRIPTION_MAX)] = ""
+
+
+class AwardsRubricCriterionInput(BaseModel):
+    """One criterion of the awards rubric, mirroring `AwardsRubricCriterion`.
+
+    At least one level is required: the awards view derives the criterion's maximum from
+    its levels, so a level-less criterion has no range to score.
+    """
+
+    id: str | int
+    label: Annotated[str, Field(max_length=RUBRIC_LABEL_MAX)]
+    levels: Annotated[
+        list[RubricLevelInput], Field(min_length=1, max_length=MAX_RUBRIC_LEVELS)
+    ]
+
+
+class RubricUpdateRequest(BaseModel):
+    """Replace one or both rubrics.
+
+    An omitted key is left untouched, so the paper editor and the awards editor cannot
+    overwrite each other; `[]` explicitly empties a rubric. Sending neither is a 400.
+    """
+
+    paper: Annotated[
+        list[PaperRubricCriterionInput] | None, Field(max_length=MAX_RUBRIC_CRITERIA)
+    ] = None
+    awards: Annotated[
+        list[AwardsRubricCriterionInput] | None, Field(max_length=MAX_RUBRIC_CRITERIA)
+    ] = None

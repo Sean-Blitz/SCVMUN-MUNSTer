@@ -43,6 +43,12 @@
         >
           Timeline
         </button>
+        <button
+          :class="['toggle-btn', { active: activeTab === 'rubrics' }]"
+          @click="switchTab('rubrics')"
+        >
+          Rubrics
+        </button>
       </div>
 
       <KeepAlive>
@@ -58,6 +64,7 @@ import AwardsTab from './tabs/AwardsTab.vue'
 import CommitteesTab from './tabs/CommitteesTab.vue'
 import ContentTab from './tabs/ContentTab.vue'
 import DiagnosticsTab from './tabs/DiagnosticsTab.vue'
+import RubricsTab from './tabs/RubricsTab.vue'
 import SchoolsTab from './tabs/SchoolsTab.vue'
 import TimelineTab from './tabs/TimelineTab.vue'
 import './admin-dashboard.css'
@@ -71,7 +78,8 @@ const tabs = {
   committees: CommitteesTab,
   awards: AwardsTab,
   content: ContentTab,
-  timeline: TimelineTab
+  timeline: TimelineTab,
+  rubrics: RubricsTab
 }
 
 // Tab ids keep their historical names ('hashes' is Schools Management) so the ids in the

@@ -137,14 +137,17 @@ def get_committee_overview(
 @router.get("/rubric", response_model=list[GradingRubricCriterion])
 def get_position_paper_grading_rubric(
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> list[GradingRubricCriterion]:
     """
     Return the numeric grading rubric used by the position-paper grading view.
 
-    The endpoint exists so the frontend has one place to read the labels and maxima from;
-    the marks themselves are stored per delegate by POST /chair/papers/{id}/grade.
+    The criteria are conference-wide and admin-editable (PUT /admin/rubrics), so they come
+    from the `rubrics` document rather than a constant in the code. The endpoint exists so
+    the frontend has one place to read the labels and maxima from; the marks themselves
+    are stored per delegate by POST /chair/papers/{id}/grade.
     """
-    return chairs_domain.get_position_paper_grading_rubric()
+    return chairs_domain.get_position_paper_grading_rubric(db)
 
 
 @router.get("/delegates", response_model=list[GradingDelegate])
@@ -242,15 +245,16 @@ def list_award_options(
 @router.get("/awards/rubric", response_model=list[AwardsRubricCriterion])
 def get_awards_rubric(
     user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
 ) -> list[AwardsRubricCriterion]:
     """
     Return the leveled rubric used by the awards view.
 
-    Static and shared, from core.controls.awards_rubric - one score per criterion is
-    stored per delegate, chosen from that criterion's levels. Levels keep the order they
-    are written in, which is the order the view renders as score cells.
+    Admin-editable (PUT /admin/rubrics), shared by every committee - one score per
+    criterion is stored per delegate, chosen from that criterion's levels. Levels keep the
+    order they are saved in, which is the order the view renders as score cells.
     """
-    return chairs_domain.get_awards_rubric()
+    return chairs_domain.get_awards_rubric(db)
 
 
 @router.get("/awards/delegates", response_model=list[AwardDelegate])

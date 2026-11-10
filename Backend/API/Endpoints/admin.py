@@ -25,20 +25,22 @@ from core.domain import errors as domain_errors
 from core.domain.admin import hashes as hashes_domain
 from core.domain.admin import interface as interface_domain
 from core.domain.admin import schedule as schedule_domain
+from core.domain.admin import rubrics as rubrics_domain
 from core.domain.admin import schools as schools_domain
 from crud.db import get_db
 from schemas.request_models import (
     BroadcastRequest, BroadcastUpdateRequest, ChairHashRequest, ChairRequest,
     ChairUpdateRequest, CommitteeRequest, CommitteeUpdateRequest, DelegateUpdateRequest,
     SchoolRequest, SchoolUpdateRequest, ChecklistProgressRequest, ChecklistUpdateRequest,
-    DelegateHashRequest, NewHashRequest, TimelineUpdateRequest,
+    DelegateHashRequest, NewHashRequest, RubricUpdateRequest, TimelineUpdateRequest,
 )
 from schemas.response_models import (
     AdminDashboardStatsResponse, AwardsOverviewResponse, BroadcastEntry,
     BroadcastListResponse, CommitteeChairEntry, CommitteeDetailResponse,
     ConferenceChecklistResponse, DelegateRemovedResponse, HashEntry, HashListResponse,
     PortHealth, SchoolChecklistResponse, SchoolDelegateEntry, SchoolDetailResponse,
-    SchoolDeletedResponse, SchoolEntry, SchoolListResponse, TimelineListResponse,
+    RubricResponse, SchoolDeletedResponse, SchoolEntry, SchoolListResponse,
+    TimelineListResponse,
 )
 
 
@@ -990,3 +992,69 @@ def replace_timeline(
         )
     except domain_errors.DomainError as exc:
         raise _schedule_error(exc) from exc
+
+
+# --- Conference-wide rubrics (§8.11) -----------------------------------------------------
+# Reads deliberately are not repeated here: GET /chair/rubric and GET /chair/awards/rubric
+# are already open to admins (the chair router allows the "admin" role), so the editor reads
+# the rubric from exactly the endpoints the graders use, and there is no second read route
+# that could drift out of step with them.
+
+
+def _rubric_error(exc: domain_errors.DomainError) -> HTTPException:
+    """Translate a rubric failure into the status code the contract documents."""
+    if isinstance(exc, domain_errors.RubricCriterionInUse):
+        return HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    if isinstance(exc, domain_errors.RubricInvalid):
+        return HTTPException(status.HTTP_400_BAD_REQUEST, str(exc))
+    if isinstance(exc, domain_errors.NothingToUpdate):
+        return HTTPException(
+            status.HTTP_400_BAD_REQUEST,
+            "Send the paper rubric, the awards rubric, or both.",
+        )
+    return HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error.")
+
+
+@router.put("/rubrics", response_model=RubricResponse)
+def update_rubrics(
+    payload: RubricUpdateRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    force: Annotated[
+        bool,
+        Query(
+            description=(
+                "Save even if a criterion being removed already has recorded marks. "
+                "Those marks stay in the database but stop appearing in the breakdowns."
+            )
+        ),
+    ] = False,
+    db: Session = Depends(get_db),
+) -> RubricResponse:
+    """
+        Replace the conference-wide grading rubrics.
+
+        Both rubrics are whole documents: what is sent replaces what is stored, with no
+        merging and no ids to match up. The keys are independent, so the paper editor can
+        save without touching the awards rubric and vice versa; omitting both is a 400.
+
+        `force` exists for one case. Every recorded mark is filed under a criterion `id`
+        (`paper_rubric_grade`, `overall_rubric_scores`), so dropping or renaming a criterion
+        that is already graded would strand real work: the delegate's breakdown silently
+        loses that line. Such a save is refused with 409 and a list of the affected ids
+        unless this flag is set.
+
+        The response is a re-read of both rubrics - the same shapes GET /chair/rubric and
+        GET /chair/awards/rubric publish - so the editor shows what the graders will see."""
+    paper = None if payload.paper is None else [item.model_dump() for item in payload.paper]
+    awards = None if payload.awards is None else [item.model_dump() for item in payload.awards]
+
+    try:
+        return rubrics_domain.replace(
+            db,
+            paper=paper,
+            awards=awards,
+            actor=core.audit.actor(user),
+            force=force,
+        )
+    except domain_errors.DomainError as exc:
+        raise _rubric_error(exc) from exc

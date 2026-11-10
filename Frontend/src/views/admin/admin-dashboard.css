@@ -501,6 +501,91 @@
   flex-wrap: wrap;
 }
 
+/* RUBRIC EDITOR
+   Two documents on one tab. The paper rubric is a flat row per criterion (id, label, max);
+   the awards rubric nests levels inside a criterion, so it gets a bordered block. Column
+   counts differ between the two grids on purpose - the header row above each must line up
+   with the inputs below it, which is why they share a selector. */
+.admin-dashboard .rubric-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.admin-dashboard .rubric-paper-head,
+.admin-dashboard .rubric-paper-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 2fr) 90px auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-dashboard .rubric-paper-head {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #5b6b7d;
+  padding: 0 2px;
+}
+
+.admin-dashboard .rubric-criteria {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.admin-dashboard .rubric-criterion {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border: 1px solid #e8f0f7;
+  border-radius: 6px;
+  padding: 12px;
+  background-color: #fbfdff;
+}
+
+.admin-dashboard .rubric-criterion-head,
+.admin-dashboard .rubric-level-row {
+  display: grid;
+  gap: 10px;
+  align-items: center;
+}
+
+.admin-dashboard .rubric-criterion-head {
+  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 2fr) auto;
+}
+
+.admin-dashboard .rubric-level-row {
+  grid-template-columns: 90px minmax(120px, 0.8fr) minmax(0, 2fr) auto;
+}
+
+/* Sits on the left of .row-actions, which right-aligns its buttons. */
+.admin-dashboard .rubric-total {
+  margin-right: auto;
+  align-self: center;
+  font-size: 0.82rem;
+  color: #5b6b7d;
+}
+
+/* 409: the save would orphan marks that are already recorded, so it needs `force`. */
+.admin-dashboard .rubric-conflict {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  background-color: #fff7e6;
+  border: 1px solid #e8c604;
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+
+.admin-dashboard .rubric-conflict p {
+  flex: 1 1 320px;
+  margin: 0;
+  font-size: 0.88rem;
+  color: #6b5a00;
+}
+
 /* HASH RESULTS */
 .admin-dashboard .hash-result {
   display: flex;
@@ -965,6 +1050,19 @@
 
 .admin-dashboard .form-row {
     grid-template-columns: 1fr;
+  }
+
+/* The rubric editor's multi-column grids: one field per line on a narrow screen, which also
+   keeps the remove buttons from being squeezed to nothing. */
+.admin-dashboard .rubric-paper-head,
+.admin-dashboard .rubric-paper-row,
+.admin-dashboard .rubric-criterion-head,
+.admin-dashboard .rubric-level-row {
+    grid-template-columns: 1fr;
+  }
+
+.admin-dashboard .rubric-paper-head {
+    display: none;
   }
 
 .admin-dashboard .schedule-row {

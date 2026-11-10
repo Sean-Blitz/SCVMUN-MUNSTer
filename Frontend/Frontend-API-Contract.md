@@ -365,6 +365,9 @@ Field notes:
 - `maxScore` values are summed to compute the maximum possible total.
 - This is the grading rubric. The awards rubric at `/chair/awards/rubric` (§7.2) has a
   different shape.
+- Conference-wide and **admin-editable** (§8.11), so this reads the saved document rather
+  than a constant in the code. An empty array means no rubric has been configured and
+  grading is refused with `400`.
 
 ### 6.2 `GET /chair/delegates`
 
@@ -462,6 +465,8 @@ Field notes:
 - `levels[].score` is both the list key and the value stored in `scores`.
 - Each criterion's maximum is derived client-side as the highest `level.score`.
 - One score per criterion is stored, selected by clicking a level cell.
+- Conference-wide and **admin-editable** (§8.11). A criterion's levels keep the order they
+  were saved in, which is the order the matrix renders.
 
 ### 7.3 `GET /chair/awards/delegates`
 
@@ -1212,6 +1217,58 @@ Response `200`: `{ "name": "Alex Chair", "hash": "<new>" }`. Mints a new hash, r
 chair's sessions, and the old hash stops working. Chairs are identified by account id because
 they have no committee+country pair; delegate reissue stays §8.4.2.
 
+### 8.11 Rubrics — the grading and awards criteria
+
+Both rubrics are conference-wide documents, stored as JSON and replaced as a whole. **The
+read side is the chair's, deliberately**: `GET /chair/rubric` (§6.1) and
+`GET /chair/awards/rubric` (§7.2) already accept the `admin` role, so the editor reads exactly
+what the graders read and there is no second read route to keep in step.
+
+#### 8.11.1 `PUT /admin/rubrics`
+
+One or both documents. The two keys are independent: sending only `paper` leaves `awards`
+alone, which is what lets each editor save without clobbering the other.
+
+```json
+{
+  "paper": [
+    { "id": "clarity", "label": "Clarity of Argument", "maxScore": 10 },
+    { "id": "evidence", "label": "Use of Evidence", "maxScore": 15 }
+  ],
+  "awards": [
+    {
+      "id": "speaking",
+      "label": "Speaking",
+      "levels": [
+        { "score": 4, "label": "Outstanding", "description": "Rare, sustained advocacy" },
+        { "score": 2, "label": "Adequate", "description": "" }
+      ]
+    }
+  ]
+}
+```
+
+Field notes:
+- Both keys are optional; `{}` is a `400`. `[]` explicitly empties a rubric, which is how the
+  conference starts — and grading is refused while the paper rubric is empty (§6.3).
+- `paper[].id` / `awards[].id` is what every recorded mark is filed under
+  (`paper_rubric_grade`, `overall_rubric_scores`). Ids must be unique within a rubric; every
+  criterion needs a non-blank label, and an awards criterion needs at least one labelled level.
+- `paper[].maxScore` must be positive. An awards criterion's maximum is derived from its
+  levels, so it is not sent.
+- **`409`** when a submitted document drops or renames an id that already has recorded marks.
+  The message names each id and how many delegates it would orphan, because those marks stay
+  in the database but stop appearing in the delegates' breakdowns. Nothing is written on a
+  refusal — both documents are saved in one transaction.
+- `?force=true` saves anyway, for the case where a rubric really is being replaced mid-event.
+- Response `200`: `{ "paper": [...], "awards": [...] }` — a re-read of both, in the shapes
+  §6.1 and §7.2 publish, so the editor shows what the graders will see.
+
+Storage: the `rubrics` table, one row per kind (`paper`, `awards`) with the document in an
+`items` JSONB column. `crud/seed.py` and `crud/bootstrap.py` create the two rows from the old
+`core/controls.py` lists (empty today); a database without them falls back to those defaults,
+which is why an older deployment behaves exactly as before.
+
 ### 9. Public meta — the header countdown
 
 #### 9.1 `GET /api/conference`
@@ -1293,7 +1350,8 @@ Field notes:
 | 51 | Admin | DELETE | `/admin/committees/{name}/chairs/{aid}` | (204, no body) |
 | 52 | Admin | DELETE | `/admin/committees/{name}/delegates/{aid}` | removal summary |
 | 53 | Admin | POST | `/admin/hashes/regenerate/chair` | `{name, hash}` |
-| 54 | Public | GET | `/conference` | `{label, starts_at}` |
+| 54 | Admin | PUT | `/admin/rubrics` | both rubrics |
+| 55 | Public | GET | `/conference` | `{label, starts_at}` |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.

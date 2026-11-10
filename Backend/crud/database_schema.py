@@ -5,7 +5,6 @@ from sqlalchemy import String, Integer, Boolean, Float, ForeignKey, CheckConstra
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 from sqlalchemy.dialects.postgresql import JSONB
 from datetime import datetime
-from core.controls import paper_rubric_data, award_options, awards_rubric
 
 class Base(DeclarativeBase):
     pass
@@ -258,3 +257,32 @@ class TimelineEvent(Base):
     # therefore the target of the header countdown. It can be re-dated but not deleted or
     # renamed; PUT /admin/timeline enforces that. Seeded by crud/seed.py.
     pinned: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=false())
+
+
+class Rubric(Base):
+    """One conference-wide rubric, stored as a single JSON document.
+
+    `kind` is the primary key: `'paper'` holds flat `{id, label, maxScore}` criteria (the
+    shape GET /chair/rubric publishes) and `'awards'` holds `{id, label, levels[]}` (the
+    shape GET /chair/awards/rubric publishes).
+
+    Stored as one JSONB array rather than a criteria table on purpose: a rubric is read as
+    a whole and written as a whole, nothing ever queries by criterion, and `levels` is
+    nested - normalising it would buy nothing and cost a join on every grading request.
+    The editor sends the array back verbatim (PUT /admin/rubrics).
+
+    `id` inside the array is load-bearing: every stored mark is filed under it
+    (`delegates.paper_rubric_grade`, `delegates.overall_rubric_scores`), which is why the
+    admin endpoint refuses a save that would drop an id already being graded.
+
+    A missing row means "never edited": readers fall back to the in-code defaults in
+    core.controls, so a database seeded before this table existed behaves as it used to.
+    """
+    __tablename__ = "rubrics"
+
+    kind: Mapped[str] = mapped_column(String(20), primary_key=True)  # 'paper' | 'awards'
+    items: Mapped[List[Dict[str, Any]]] = mapped_column(JSONB, nullable=False, default=list)
+    updated_at: Mapped[Optional[datetime]] = mapped_column(nullable=True)
+    # Who saved it last, as `role:id` (core.audit.actor). The audit log holds the history;
+    # this is only what the editor's footer shows.
+    updated_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
