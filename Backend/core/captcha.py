@@ -30,14 +30,30 @@ from urllib.request import Request, urlopen
 
 SITEVERIFY_URL: Final = "https://challenges.cloudflare.com/turnstile/v0/siteverify"
 
-SECRET_KEY: Final = os.getenv("TURNSTILE_SECRET", "").strip()
 
-# Empty means "reject everything" once the secret is set (see verify).
-ALLOWED_HOSTNAMES: Final = tuple(
-    host.strip().lower()
-    for host in os.getenv("TURNSTILE_HOSTNAMES", "").split(",")
-    if host.strip()
-)
+def secret_key() -> str:
+    """The widget's secret, read from the environment **at call time**.
+
+    Deliberately not a module-level constant. This module is imported very early - through
+    `API/dependencies.py`, before any `crud.*` module - and `load_dotenv()` only runs when
+    `crud/db.py` is imported. A constant captured at import time therefore read an empty
+    environment, `enabled()` returned False, and the startup log reported
+    `captcha.disabled` with no other symptom: logins simply stopped asking for a token.
+    Reading it here makes the answer independent of import order.
+    """
+    return os.getenv("TURNSTILE_SECRET", "").strip()
+
+
+def allowed_hostnames() -> tuple[str, ...]:
+    """The hostnames Siteverify may report, read at call time for the same reason.
+
+    Empty means "reject everything" once the secret is set (see `verify`).
+    """
+    return tuple(
+        host.strip().lower()
+        for host in os.getenv("TURNSTILE_HOSTNAMES", "").split(",")
+        if host.strip()
+    )
 
 # The gate should answer quickly; Cloudflare is not on the critical path of a normal
 # request, only of a login attempt.
@@ -63,7 +79,7 @@ class CaptchaUnavailable(RuntimeError):
 
 def enabled() -> bool:
     """Whether a captcha is configured at all."""
-    return bool(SECRET_KEY)
+    return bool(secret_key())
 
 
 def verify(
@@ -83,13 +99,14 @@ def verify(
 
     # Fail closed on a half-done deployment: with no expected hostnames there is nothing to
     # compare against, and accepting any hostname would make the check theatre.
-    if not ALLOWED_HOSTNAMES:
+    hostnames = allowed_hostnames()
+    if not hostnames:
         return False
 
     if not token or len(token) > MAX_TOKEN_LENGTH:
         return False
 
-    form = {"secret": SECRET_KEY, "response": token}
+    form = {"secret": secret_key(), "response": token}
     if remote_ip:
         form["remoteip"] = remote_ip
 
@@ -112,7 +129,7 @@ def verify(
         return False
 
     reported = str(payload.get("hostname") or "").lower()
-    if reported not in ALLOWED_HOSTNAMES:
+    if reported not in hostnames:
         return False
 
     if expected_action and str(payload.get("action") or "") != expected_action:
