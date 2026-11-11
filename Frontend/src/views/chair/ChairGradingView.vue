@@ -22,6 +22,34 @@
       </button>
     </div>
 
+    <!-- HOW THIS VIEW WORKS -->
+    <section class="page-guide">
+      <h2>How position paper grading works</h2>
+      <p>
+        Every card is one delegation and displays the position paper's status:
+        <strong>Not submitted</strong>, <strong>Submitted</strong> with the date, or
+        <strong>Graded</strong> with the score it was given.
+      </p>
+      <ol>
+        <li>
+          <strong>View &amp; Grade</strong> opens the paper and grading view. Available once the delegate 
+          submits their paper.
+        </li>
+        <li>Inside the grading view, mark each criterion out of its maximum. The total updates as you type.</li>
+        <li>
+          Comments are optional. They will be displayed to the delegate immediately, as will the score.
+        </li>
+        <li>
+          Press <strong>Submit Grade</strong>. Grading can be repeated: the new marks replace
+          the previous ones.
+        </li>
+      </ol>
+      <p>
+        Once a paper is graded, delegates cannot resubmit. <strong>PDF</strong>
+        downloads the submitted paper as a file.
+      </p>
+    </section>
+
     <!-- COMPACT DELEGATE GRID VIEW -->
     <div class="grid-container">
       <div 
@@ -346,6 +374,52 @@ onMounted(async () => {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: #ffffff;
+}
+
+/* ============================================================ GUIDE ===== */
+/* The "how this works" panel under the tab strip: reference text, so it sits on a pale wash
+   with a hairline, quieter than the cards it explains. */
+.page-guide {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: #f7fafd;
+  padding: clamp(12px, 1.6vh, 18px) clamp(14px, 1.8vw, 22px);
+}
+
+.page-guide h2 {
+  margin: 0 0 6px;
+  font-size: 1em;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.page-guide p {
+  margin: 0 0 8px;
+  font-size: 0.86em;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.page-guide p:last-child {
+  margin-bottom: 0;
+}
+
+.page-guide ol {
+  margin: 0 0 8px;
+  padding-left: 1.2em;
+  font-size: 0.86em;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.page-guide li + li {
+  margin-top: 3px;
+}
+
+.page-guide strong {
+  color: var(--ink-2);
+  font-weight: 650;
 }
 
 /* =========================================================== TOGGLE ===== */

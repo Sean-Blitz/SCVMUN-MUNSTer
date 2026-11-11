@@ -9,8 +9,8 @@
   </div>
   <p class="section-desc">
     The schedule every chair sees on their committee overview. Events are
-    <strong>points in time</strong> — a chair's dashboard marks each one completed, in
-    progress or upcoming by comparing it with the clock, so there is nothing to tick.
+    <strong>instantaneous checkpoints</strong> — the chair's dashboard compares each one with
+    the clock and marks it Completed once it has passed, so there is nothing to tick.
     Order does not matter here: the list is sorted by time when it is saved.
     <br><br>
     Take note that the first event is pinned to the conference start, and its time is what the header countdown reads. You cannot remove or change this event except the date.

@@ -22,6 +22,32 @@
       </button>
     </div>
 
+    <!-- HOW THIS VIEW WORKS -->
+    <section class="page-guide">
+      <h2>How this view works</h2>
+      <p>
+        Every delegation in your committee is a card below, showing the award it currently
+        holds and its rubric points. Nothing on this page is visible to delegates.
+      </p>
+      <ol>
+        <li>Click a delegate card to open their rubric full screen.</li>
+        <li>Start by selecting countries for candidates. This will need to be done at a time specified by the Secretariat.</li>
+        <li>
+          Pick the award from the top dropdown:
+          <strong>Candidate</strong> (shortlist), or one of the official awards.
+        </li>
+        <li>For each criteria, click the level that best describes the delegate's performance</li>
+        <li>
+          Press <strong>Save &amp; Submit</strong>. Closing the rubric without saving discards
+          the changes.
+        </li>
+      </ol>
+      <p>
+        An official award needs <strong>every</strong> criterion scored before it will save;
+        "Candidate" and "None" do not. All scores and awards can be changed before the deadline (see the Secretariat). Not every delegate needs to be marked here.
+      </p>
+    </section>
+
     <!-- SUMMARY PILE COUNTERS -->
     <div class="stats-bar">
       <div class="stat-pill">Candidates: <strong>{{ countByAward('Candidate') }}</strong></div>
@@ -141,11 +167,15 @@ import { useToastStore } from '@/stores/toast'
 import apiClient from '@/api/client'
 
 const router = useRouter()
+const toastStore = useToastStore()
 
 // Reactive State
 const awardsList = ref([])
 const rubricMatrix = ref([])
 const delegates = ref([])
+
+// True while the award is being saved, so the button can say so instead of looking dead.
+const savingAward = ref(false)
 
 // Modal Active State
 const activeDelegate = ref(null)
@@ -253,6 +283,7 @@ const submitAwardAndScore = async () => {
     totalScore: calculatedTotalScore.value
   }
 
+  savingAward.value = true
   try {
     // Send award assignment and scores to backend
     await apiClient.post(`/chair/awards/${activeDelegate.value.id}`, payload)
@@ -265,7 +296,15 @@ const submitAwardAndScore = async () => {
     toastStore.showToast('Award saved successfully.', 'success')
     closeModal()
   } catch (error) {
-    // Errors handle popup automatically via client.js
+    // A failed request is already described by the interceptor. A failure in this handler
+    // itself has no such safety net, and used to vanish without a word - so say something
+    // rather than leaving the button looking dead.
+    if (!error?.response && !error?.request) {
+      toastStore.showToast('Could not save the award. Please try again.', 'error')
+    }
+    console.error('Saving the award failed:', error)
+  } finally {
+    savingAward.value = false
   }
 }
 
@@ -322,6 +361,52 @@ onMounted(async () => {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   background: #ffffff;
+}
+
+/* ============================================================ GUIDE ===== */
+/* The "how this works" panel under the tab strip: reference text, so it sits on a pale wash
+   with a hairline, quieter than the cards it explains. */
+.page-guide {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background-color: #f7fafd;
+  padding: clamp(12px, 1.6vh, 18px) clamp(14px, 1.8vw, 22px);
+}
+
+.page-guide h2 {
+  margin: 0 0 6px;
+  font-size: 1em;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  color: var(--ink);
+}
+
+.page-guide p {
+  margin: 0 0 8px;
+  font-size: 0.86em;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.page-guide p:last-child {
+  margin-bottom: 0;
+}
+
+.page-guide ol {
+  margin: 0 0 8px;
+  padding-left: 1.2em;
+  font-size: 0.86em;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.page-guide li + li {
+  margin-top: 3px;
+}
+
+.page-guide strong {
+  color: var(--ink-2);
+  font-weight: 650;
 }
 
 /* =========================================================== TOGGLE ===== */
@@ -671,6 +756,13 @@ onMounted(async () => {
   gap: 9px;
 }
 
+/* While the save is in flight the button says "Saving…" and stops accepting clicks, so a
+   slow request cannot be mistaken for a dead button. */
+.btn-submit:disabled {
+  opacity: 0.7;
+  cursor: progress;
+}
+
 .btn-submit {
   padding: 9px 18px;
   border: 1px solid var(--ink);
@@ -781,12 +873,18 @@ onMounted(async () => {
 }
 
 .level-cells-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  display: flex;
   gap: 10px;
+  /* More levels than fit scroll sideways rather than wrapping onto a second line: a level
+     that drops below its neighbours stops reading as one scale. */
+  overflow-x: auto;
+  padding-bottom: 2px;
 }
 
 .rubric-cell {
+  /* Share the row evenly, but never squeeze a description into a sliver. */
+  flex: 1 1 0;
+  min-width: 160px;
   display: flex;
   flex-direction: column;
   gap: 7px;
@@ -853,10 +951,6 @@ onMounted(async () => {
 @media (max-width: 1200px) {
   .grid-container {
     grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .level-cells-grid {
-    grid-template-columns: minmax(0, 1fr);
   }
 }
 
