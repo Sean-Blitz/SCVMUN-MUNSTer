@@ -1255,6 +1255,9 @@ Field notes:
 - `paper[].id` / `awards[].id` is what every recorded mark is filed under
   (`paper_rubric_grade`, `overall_rubric_scores`). Ids must be unique within a rubric; every
   criterion needs a non-blank label, and an awards criterion needs at least one labelled level.
+- The dashboard never asks for an id: it derives a slug from the label the first time a
+  criterion is saved and reuses that id on every later save, so renaming a label is a rename
+  rather than a new criterion (and does not orphan the marks recorded under it).
 - `paper[].maxScore` must be positive. An awards criterion's maximum is derived from its
   levels, so it is not sent.
 - **`409`** when a submitted document drops or renames an id that already has recorded marks.

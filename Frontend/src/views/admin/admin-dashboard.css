@@ -558,7 +558,9 @@
 .admin-dashboard .rubric-paper-head,
 .admin-dashboard .rubric-paper-row {
   display: grid;
-  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 2fr) 90px auto;
+  /* Label, maximum, remove. The criterion's id is derived from the label on save, so it is
+     not a column any more - see assignId in RubricsTab.vue. */
+  grid-template-columns: minmax(0, 2fr) 90px auto;
   gap: 10px;
   align-items: center;
 }
@@ -587,19 +589,35 @@
   background-color: #fbfdff;
 }
 
+/* Every field in the awards editor is wrapped in a .field-pair so it carries a visible
+   label - aria-label alone left the card looking like three unlabelled boxes. `end` lines the
+   remove buttons up with the inputs' bottom edge rather than their labels. */
 .admin-dashboard .rubric-criterion-head,
 .admin-dashboard .rubric-level-row {
   display: grid;
   gap: 10px;
-  align-items: center;
+  align-items: end;
 }
 
 .admin-dashboard .rubric-criterion-head {
-  grid-template-columns: minmax(120px, 0.7fr) minmax(0, 2fr) auto;
+  grid-template-columns: minmax(0, 2fr) auto;
 }
 
 .admin-dashboard .rubric-level-row {
   grid-template-columns: 90px minmax(120px, 0.8fr) minmax(0, 2fr) auto;
+}
+
+.admin-dashboard .rubric-levels {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border-left: 2px solid #e8f0f7;
+  margin-left: 2px;
+}
+
+.admin-dashboard .rubric-levels-title {
+  margin: 0 0 2px;
 }
 
 /* Sits on the left of .row-actions, which right-aligns its buttons. */

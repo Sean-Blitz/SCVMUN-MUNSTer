@@ -28,19 +28,11 @@
 
   <div v-else class="rubric-rows">
     <div class="rubric-paper-head">
-      <span>Criterion id</span>
       <span>Label - Description</span>
       <span>Max Points</span>
       <span></span>
     </div>
     <div v-for="(criterion, index) in paper" :key="index" class="rubric-paper-row">
-      <input
-        v-model="criterion.id"
-        class="text-input"
-        type="text"
-        aria-label="Criterion id"
-        placeholder="e.g. clarity"
-      />
       <input
         v-model="criterion.label"
         class="text-input"
@@ -97,55 +89,66 @@
   <div v-else class="rubric-criteria">
     <div v-for="(criterion, cIndex) in awards" :key="cIndex" class="rubric-criterion">
       <div class="rubric-criterion-head">
-        <input
-          v-model="criterion.id"
-          class="text-input"
-          type="text"
-          aria-label="Criterion id"
-          placeholder="e.g. speaking"
-        />
-        <input
-          v-model="criterion.label"
-          class="text-input"
-          type="text"
-          aria-label="Criterion label"
-          placeholder="Speaking"
-        />
+        <div class="field-pair">
+          <label class="field-label" :for="`awards-label-${cIndex}`">Criterion label</label>
+          <input
+            :id="`awards-label-${cIndex}`"
+            v-model="criterion.label"
+            class="text-input"
+            type="text"
+            placeholder="e.g. Speaking"
+          />
+        </div>
         <button class="btn-icon" title="Remove criterion" @click="awards.splice(cIndex, 1)">
           <AppIcon name="close" :size="14" />
         </button>
       </div>
 
-      <div v-for="(level, lIndex) in criterion.levels" :key="lIndex" class="rubric-level-row">
-        <input
-          v-model.number="level.score"
-          class="text-input"
-          type="number"
-          step="1"
-          aria-label="Level score"
-          placeholder="4"
-        />
-        <input
-          v-model="level.label"
-          class="text-input"
-          type="text"
-          aria-label="Level label"
-          placeholder="Outstanding"
-        />
-        <input
-          v-model="level.description"
-          class="text-input"
-          type="text"
-          aria-label="Level description"
-          placeholder="Optional description"
-        />
-        <button
-          class="btn-icon"
-          title="Remove level"
-          @click="criterion.levels.splice(lIndex, 1)"
-        >
-          <AppIcon name="close" :size="14" />
-        </button>
+      <div class="rubric-levels">
+        <p class="field-label rubric-levels-title">Score levels</p>
+
+        <div v-for="(level, lIndex) in criterion.levels" :key="lIndex" class="rubric-level-row">
+          <div class="field-pair">
+            <label class="field-label" :for="`level-score-${cIndex}-${lIndex}`">Score</label>
+            <input
+              :id="`level-score-${cIndex}-${lIndex}`"
+              v-model.number="level.score"
+              class="text-input"
+              type="number"
+              step="1"
+              placeholder="4"
+            />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" :for="`level-label-${cIndex}-${lIndex}`">Level label</label>
+            <input
+              :id="`level-label-${cIndex}-${lIndex}`"
+              v-model="level.label"
+              class="text-input"
+              type="text"
+              placeholder="e.g. Outstanding"
+            />
+          </div>
+          <div class="field-pair">
+            <label class="field-label" :for="`level-desc-${cIndex}-${lIndex}`">
+              Description (optional)
+            </label>
+            <input
+              :id="`level-desc-${cIndex}-${lIndex}`"
+              v-model="level.description"
+              class="text-input"
+              type="text"
+              placeholder="What this level means"
+            />
+          </div>
+          <button
+            class="btn-icon"
+            title="Remove level"
+            @click="criterion.levels.splice(lIndex, 1)"
+          >
+            <AppIcon name="close" :size="14" />
+          </button>
+        </div>
       </div>
 
       <div class="row-actions">
@@ -190,22 +193,103 @@ const paperTotal = computed(() =>
 const criterionMax = (criterion) =>
   Math.max(0, ...(criterion.levels || []).map((level) => Number(level.score) || 0))
 
-// A fresh id that does not collide with the ones already on screen. Ids key every recorded
-// mark, so they have to be unique; the admin can rename one before saving, at which point
-// the server refuses if that id is already graded (409 + force).
-const nextId = (items, prefix) => {
-  const taken = new Set(items.map((item) => String(item.id)))
-  let number = items.length + 1
-  while (taken.has(`${prefix}-${number}`)) number += 1
-  return `${prefix}-${number}`
-}
+// ---------- Blank scaffolding ----------
+// A rubric that has never been filled in comes back as `[]`, which used to render as a card
+// with a sentence in it and nothing to aim at. Two criteria - and, for awards, two score
+// levels each - show the shape of the document instead. These rows are drafts: `save()`
+// drops the ones that were left blank, so nothing reaches the server and a half-filled
+// rubric saves the part that was filled in.
+const blankPaperCriterion = () => ({ id: '', label: '', maxScore: 10 })
+const blankLevel = (score) => ({ score, label: '', description: '' })
+const blankAwardsCriterion = () => ({
+  id: '',
+  label: '',
+  levels: [blankLevel(4), blankLevel(2)]
+})
+
+const withPaperScaffold = (items) =>
+  items.length ? items : [blankPaperCriterion(), blankPaperCriterion()]
+const withAwardsScaffold = (items) =>
+  items.length ? items : [blankAwardsCriterion(), blankAwardsCriterion()]
 
 const applyRubrics = (data) => {
-  paper.value = (data.paper || []).map((criterion) => ({ ...criterion }))
-  awards.value = (data.awards || []).map((criterion) => ({
-    ...criterion,
-    levels: (criterion.levels || []).map((level) => ({ ...level }))
-  }))
+  paper.value = withPaperScaffold((data.paper || []).map((criterion) => ({ ...criterion })))
+  awards.value = withAwardsScaffold(
+    (data.awards || []).map((criterion) => ({
+      ...criterion,
+      levels: (criterion.levels || []).map((level) => ({ ...level }))
+    }))
+  )
+}
+
+// What actually gets sent.
+//
+// `id` is not a field any more - the label is the only name the admin types - but the
+// server still needs one, because it is the key every recorded mark is filed under
+// (`paper_rubric_grade`, `overall_rubric_scores`). So it is derived here instead:
+//
+//   * a criterion that was already saved keeps the id it has, which is what makes renaming
+//     a label a pure rename rather than a 409 ("that id is already graded");
+//   * a new one takes a slug of its label, made unique within the same save.
+//
+// A blank row is scaffolding, not content, so it is dropped rather than sent: the server
+// would answer 400 for a criterion with no label.
+const isBlank = (value) => !String(value ?? '').trim()
+
+const slugify = (text) =>
+  String(text)
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 60)
+
+const assignId = (criterion, used) => {
+  const existing = typeof criterion.id === 'string' ? criterion.id.trim() : criterion.id
+  if (!isBlank(existing)) {
+    const key = String(existing)
+    if (!used.has(key)) {
+      used.add(key)
+      return existing
+    }
+  }
+
+  const base = slugify(criterion.label) || 'criterion'
+  let candidate = base
+  let suffix = 2
+  while (used.has(candidate)) candidate = `${base}-${suffix++}`
+  used.add(candidate)
+  return candidate
+}
+
+const paperPayload = () => {
+  const used = new Set()
+  return paper.value
+    .filter((criterion) => !isBlank(criterion.label))
+    .map((criterion) => ({
+      id: assignId(criterion, used),
+      label: criterion.label.trim(),
+      maxScore: criterion.maxScore
+    }))
+}
+
+const awardsPayload = () => {
+  const used = new Set()
+  return awards.value
+    .filter((criterion) => !isBlank(criterion.label))
+    .map((criterion) => ({
+      id: assignId(criterion, used),
+      label: criterion.label.trim(),
+      // A level with no label is a blank row too - an unlabelled cell has nothing to render
+      // in the awards matrix, and the server rejects it.
+      levels: (criterion.levels || [])
+        .filter((level) => !isBlank(level.label))
+        .map((level) => ({
+          score: level.score,
+          label: level.label.trim(),
+          description: (level.description || '').trim()
+        }))
+    }))
 }
 
 const load = async () => {
@@ -227,20 +311,8 @@ const load = async () => {
 // stale tab cannot resurrect a rubric the other editor has since changed).
 const save = async (kind, force = false) => {
   const saving = kind === 'paper' ? savingPaper : savingAwards
-  const body =
-    kind === 'paper'
-      ? { paper: paper.value.map(({ id, label, maxScore }) => ({ id, label, maxScore })) }
-      : {
-          awards: awards.value.map((criterion) => ({
-            id: criterion.id,
-            label: criterion.label,
-            levels: (criterion.levels || []).map(({ score, label, description }) => ({
-              score,
-              label,
-              description: description || ''
-            }))
-          }))
-        }
+  // Blank scaffolding rows are dropped here rather than rejected by the server.
+  const body = kind === 'paper' ? { paper: paperPayload() } : { awards: awardsPayload() }
 
   saving.value = true
   conflict.value = null
@@ -265,21 +337,20 @@ const save = async (kind, force = false) => {
 }
 
 const addPaperCriterion = () => {
-  paper.value.push({ id: nextId(paper.value, 'criterion'), label: '', maxScore: 10 })
+  paper.value.push(blankPaperCriterion())
 }
 
 const addAwardsCriterion = () => {
-  awards.value.push({
-    id: nextId(awards.value, 'criterion'),
-    label: '',
-    levels: [{ score: 4, label: '', description: '' }]
-  })
+  awards.value.push(blankAwardsCriterion())
 }
 
+// Levels read as a descending scale (4, 2, 1), so a new one goes below the lowest rather
+// than above the highest - adding a level used to suggest a score better than the top.
 const addLevel = (criterion) => {
   criterion.levels = criterion.levels || []
-  const highest = criterionMax(criterion)
-  criterion.levels.push({ score: highest + 1, label: '', description: '' })
+  const scores = criterion.levels.map((level) => Number(level.score) || 0)
+  const lowest = scores.length ? Math.min(...scores) : 2
+  criterion.levels.push(blankLevel(Math.max(1, lowest - 1)))
 }
 
 onMounted(load)
