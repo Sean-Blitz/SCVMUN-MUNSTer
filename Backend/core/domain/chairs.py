@@ -39,7 +39,7 @@ from core.domain.errors import (
     ScoreCriterionUnknown,
     ScoreOutOfRange,
 )
-from crud.database_schema import Account, Chairs, Delegates, TimelineEvent, Uploads
+from crud.database_schema import Account, Chairs, Committees, Delegates, TimelineEvent, Uploads
 from schemas.response_models import (
     AwardDelegate,
     AwardsRubricCriterion,
@@ -179,6 +179,10 @@ def get_committee_overview(db: Session, account_id: int) -> CommitteeOverviewRes
         )
     )
 
+    # The topic and type are properties of the committee, so they come from its row rather
+    # than from the chair: a chair profile only carries the committee's name.
+    committee_row = db.get(Committees, committee)
+
     events = db.scalars(
         select(TimelineEvent).order_by(TimelineEvent.starts_at, TimelineEvent.id)
     ).all()
@@ -198,6 +202,8 @@ def get_committee_overview(db: Session, account_id: int) -> CommitteeOverviewRes
     return CommitteeOverviewResponse(
         chairName=chair.name,
         committeeName=committee,
+        committeeType=(committee_row.committee_type or "") if committee_row else "",
+        topic=(committee_row.topic or "") if committee_row else "",
         delegatesRegistered=delegates_registered or 0,
         totalDelegates=total_delegates or 0,
         papersGraded=papers_graded or 0,

@@ -329,6 +329,8 @@ Field notes:
 {
   "chairName": "string",
   "committeeName": "string",
+  "committeeType": "General Assembly | Crisis | ...",
+  "topic": "string",
   "delegatesRegistered": 10,
   "totalDelegates": 15,
   "papersGraded": 4,
@@ -345,9 +347,14 @@ Field notes:
 ```
 
 Field notes:
+- `committeeType` and `topic` come from the committee row, not from the chair profile. Both
+  columns are optional on that row, so they arrive as `""` when the admin has not filled them
+  in; the panel prints "Not set" in that case. `topic` is a sentence, so the view renders it
+  as a wrapping full-width row rather than beside a label.
 - `timeline` must always contain both keys, even when empty; the template iterates both directly.
 - `timestamp` must be a parseable date string. It is compared against the current time to derive
-  each event's completed/active/upcoming status, and is formatted for display.
+  each event's upcoming/completed status (checkpoints have no "in progress" state), and is
+  formatted for display.
 - Each `timestamp` carries an explicit UTC offset (`2026-10-10T16:00:00+00:00`). The database
   stores naive UTC, but `new Date("2026-10-10T16:00:00")` in a browser would read that as *local*
   time and shift every event by the viewer's offset — so the offset is part of the contract, not
@@ -980,12 +987,13 @@ requests.patch(
 The schedule shown on every chair's committee overview (§5.1) is a single conference-wide list
 in `timeline_events`, edited from the admin **Timeline** tab. It is universal — every committee
 runs on the same schedule — and purely time-based: there is no completion flag and no per-chair
-tick, because the chair dashboard derives each event's completed / in progress / upcoming state
-by comparing its time with the clock.
+tick, because the chair dashboard derives each event's state by comparing its time with the
+clock. Events are **instantaneous checkpoints**, so there are only two states: `Upcoming` before
+the time, `Completed` after it. There is no "in progress" state, and no event window that runs
+until the next one.
 
-That is why ordering matters and why the payload carries no order: events come back sorted by
-`starts_at` ascending, and the view treats each event's time as the start of a window that ends
-at the next event (the last pre-conference event bridges into the first during-conference one).
+The payload carries no order: events come back sorted by `starts_at` ascending, which is the
+order the view renders them in. Nothing depends on consecutive events being adjacent in time.
 
 Limits: at most **30** events, each label 200 characters or fewer after trimming, no blank
 labels, and `starts_at` must be **naive UTC** — an aware value with a timezone suffix is

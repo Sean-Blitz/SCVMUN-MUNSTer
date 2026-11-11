@@ -136,6 +136,10 @@ class Timeline(BaseModel):
 class CommitteeOverviewResponse(BaseModel):
     chairName: str
     committeeName: str
+    # Both are optional on the committee row, so they arrive as "" rather than null: the chair
+    # view prints them as they are and falls back to its own wording when they are empty.
+    committeeType: str = ""
+    topic: str = ""
     delegatesRegistered: int
     totalDelegates: int
     papersGraded: int

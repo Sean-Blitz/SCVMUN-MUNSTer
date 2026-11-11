@@ -45,6 +45,18 @@
             </div>
 
             <div class="metric-card">
+              <span class="metric-label">Committee Type</span>
+              <span class="metric-value">{{ committeeType || 'Not set' }}</span>
+            </div>
+
+            <!-- The topic is a sentence, so it gets its own full-width row rather than being
+                 squeezed beside a label. -->
+            <div class="metric-card">
+              <span class="metric-label">Topic</span>
+              <span class="metric-value metric-topic">{{ committeeTopic || 'Not set' }}</span>
+            </div>
+
+            <div class="metric-card">
               <span class="metric-label">Delegates Registered</span>
               <span class="metric-value fraction">
                 <strong>{{ delegatesRegistered }}</strong> / {{ totalDelegates }}
@@ -64,7 +76,7 @@
       <!-- RIGHT COLUMN (TIMELINE & PHASES) -->
       <div class="right-column">
         <section class="panel full-height-panel">
-          <h2 class="panel-title">Conference Timeline & Active Phase</h2>
+          <h2 class="panel-title">Conference Timeline</h2>
 
           <!-- PRE-CONFERENCE TIMELINE -->
           <div class="timeline-section">
@@ -73,17 +85,15 @@
               <div 
                 v-for="(event, index) in timeline.preConference" 
                 :key="'pre-' + index"
-                :class="['timeline-item', getEventStatus(event.timestamp, getNextTimestamp('pre', index))]"
+                :class="['timeline-item', getEventStatus(event.timestamp)]"
               >
                 <div class="node-indicator">
-                  <span v-if="getEventStatus(event.timestamp, getNextTimestamp('pre', index)) === 'completed'">✓</span>
-                  <span v-else-if="getEventStatus(event.timestamp, getNextTimestamp('pre', index)) === 'active'">▶</span>
-                  <span v-else class="dot">•</span>
+                  <AppIcon name="check" :size="12" class="node-check" />
                 </div>
                 <div class="timeline-content">
                   <div class="event-header">
                     <span class="event-label">{{ event.label }}</span>
-                    <span class="status-pill">{{ getStatusLabel(getEventStatus(event.timestamp, getNextTimestamp('pre', index))) }}</span>
+                    <span class="status-pill">{{ getStatusLabel(getEventStatus(event.timestamp)) }}</span>
                   </div>
                   <span class="event-time">{{ formatDate(event.timestamp) }}</span>
                 </div>
@@ -98,17 +108,15 @@
               <div 
                 v-for="(event, index) in timeline.duringConference" 
                 :key="'during-' + index"
-                :class="['timeline-item', getEventStatus(event.timestamp, getNextTimestamp('during', index))]"
+                :class="['timeline-item', getEventStatus(event.timestamp)]"
               >
                 <div class="node-indicator">
-                  <span v-if="getEventStatus(event.timestamp, getNextTimestamp('during', index)) === 'completed'">✓</span>
-                  <span v-else-if="getEventStatus(event.timestamp, getNextTimestamp('during', index)) === 'active'">▶</span>
-                  <span v-else class="dot">•</span>
+                  <AppIcon name="check" :size="12" class="node-check" />
                 </div>
                 <div class="timeline-content">
                   <div class="event-header">
                     <span class="event-label">{{ event.label }}</span>
-                    <span class="status-pill">{{ getStatusLabel(getEventStatus(event.timestamp, getNextTimestamp('during', index))) }}</span>
+                    <span class="status-pill">{{ getStatusLabel(getEventStatus(event.timestamp)) }}</span>
                   </div>
                   <span class="event-time">{{ formatDate(event.timestamp) }}</span>
                 </div>
@@ -122,6 +130,7 @@
 </template>
 
 <script setup>
+import AppIcon from '@/components/AppIcon.vue'
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import apiClient from '@/api/client'
@@ -132,6 +141,8 @@ const toastStore = useToastStore()
 
 // Reactive State
 const chairName = ref('')
+const committeeType = ref('')
+const committeeTopic = ref('')
 const committeeName = ref('')
 const delegatesRegistered = ref(0)
 const totalDelegates = ref(0)
@@ -160,45 +171,16 @@ const formatDate = (isoString) => {
   })
 }
 
-// Get next timestamp in line to determine current active window
-const getNextTimestamp = (section, index) => {
-  const list = section === 'pre' ? timeline.value.preConference : timeline.value.duringConference
-  if (index + 1 < list.length) {
-    return list[index + 1].timestamp
-  }
-  
-  // If at end of pre-conference, bridge to first item of during-conference
-  if (section === 'pre' && timeline.value.duringConference?.length > 0) {
-    return timeline.value.duringConference[0].timestamp
-  }
-  
-  return null
+// Events are instantaneous checkpoints, not windows: each one is either still ahead of the
+// clock or already behind it. There is deliberately no "in progress" state - a checkpoint is
+// not something that lasts, so once its time passes it is done.
+const getEventStatus = (eventTimestamp) => {
+  const at = new Date(eventTimestamp).getTime()
+  if (Number.isNaN(at)) return 'upcoming'
+  return Date.now() >= at ? 'completed' : 'upcoming'
 }
 
-// Compare current browser time against event windows
-const getEventStatus = (eventTimestamp, nextTimestamp) => {
-  const now = new Date()
-  const eventTime = new Date(eventTimestamp)
-  const nextTime = nextTimestamp ? new Date(nextTimestamp) : null
-
-  if (now < eventTime) {
-    return 'upcoming'
-  } else if (nextTime && now >= nextTime) {
-    return 'completed'
-  } else if (now >= eventTime && (!nextTime || now < nextTime)) {
-    return 'active'
-  } else {
-    return 'completed'
-  }
-}
-
-const getStatusLabel = (status) => {
-  switch (status) {
-    case 'completed': return 'Completed'
-    case 'active': return 'In Progress'
-    case 'upcoming': default: return 'Upcoming'
-  }
-}
+const getStatusLabel = (status) => (status === 'completed' ? 'Completed' : 'Upcoming')
 
 // Fetch initial data from backend on mount
 onMounted(async () => {
@@ -208,6 +190,8 @@ onMounted(async () => {
     // Assign stats and committee details
     chairName.value = response.data.chairName
     committeeName.value = response.data.committeeName
+    committeeType.value = response.data.committeeType || ''
+    committeeTopic.value = response.data.topic || ''
     delegatesRegistered.value = response.data.delegatesRegistered
     totalDelegates.value = response.data.totalDelegates
     papersGraded.value = response.data.papersGraded
@@ -427,6 +411,13 @@ onMounted(async () => {
   color: var(--muted);
 }
 
+/* A topic can be a full sentence: let it wrap and keep the line height readable. */
+.metric-topic {
+  font-size: 0.88em;
+  line-height: 1.5;
+  overflow-wrap: break-word;
+}
+
 .metric-value {
   font-size: 0.92em;
   font-weight: 600;
@@ -489,19 +480,25 @@ onMounted(async () => {
   transform: translateX(2px);
 }
 
+/* The node. Two states only: a green tick once the checkpoint has passed, an empty ring
+   while it is still ahead. */
 .node-indicator {
   flex: none;
   display: grid;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   margin-top: 1px;
-  border: 1px solid var(--line);
+  border: 1px solid rgba(3, 4, 94, 0.16);
   border-radius: 50%;
   background-color: #ffffff;
   color: var(--muted);
-  font-size: 0.72em;
-  font-weight: 700;
+}
+
+/* Revealed by the item's state class, so the markup does not branch on status. */
+.node-check {
+  opacity: 0;
+  transition: opacity 0.25s ease;
 }
 
 .timeline-content {
@@ -552,33 +549,16 @@ onMounted(async () => {
   color: #ffffff;
 }
 
+.timeline-item.completed .node-check {
+  opacity: 1;
+}
+
 .timeline-item.completed .status-pill {
   background-color: rgba(22, 163, 74, 0.1);
   color: var(--green);
 }
 
-/* Active: the one row that is live right now. */
-.timeline-item.active {
-  border-color: rgba(0, 157, 219, 0.35);
-  background-color: rgba(0, 157, 219, 0.05);
-}
-
-.timeline-item.active .node-indicator {
-  border-color: transparent;
-  background-color: var(--accent);
-  color: #ffffff;
-}
-
-.timeline-item.active .event-label {
-  color: var(--ink);
-}
-
-.timeline-item.active .status-pill {
-  background-color: rgba(0, 157, 219, 0.14);
-  color: #0079ab;
-}
-
-/* Upcoming: waiting, not wrong. */
+/* Upcoming: waiting, not wrong - the plain ring above, and an outlined pill. */
 .timeline-item.upcoming .status-pill {
   border: 1px solid var(--line);
   background-color: #ffffff;
@@ -603,6 +583,10 @@ onMounted(async () => {
   }
 
   .timeline-item {
+    transition: none;
+  }
+
+  .node-check {
     transition: none;
   }
 }
