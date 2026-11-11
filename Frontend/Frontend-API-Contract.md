@@ -147,7 +147,9 @@ sign-out.
   "announcements": ["string"],
   "delegate": {
     "committee": "string",
-    "country": "string"
+    "country": "string",
+    "committeeTopic": "string",
+    "chairs": ["string"]
   },
   "conferenceLinks": [
     { "text": "string", "url": "string" }
@@ -174,6 +176,11 @@ Field notes:
   so nothing is normally dropped.
 - `instructions` renders as an ordered list.
 - `delegate.committee` and `delegate.country` fall back to `"Unassigned"` when empty.
+- `delegate.committeeTopic` is the committee's topic as the admin wrote it, printed
+  unlabelled under the committee name. Empty (or absent) hides the line.
+- `delegate.chairs` is the committee's chair names, sorted. The panel joins them with
+  commas and renders **"Undecided"** when the list is empty, because a committee can exist
+  before anyone has been assigned to chair it.
 - `score`, `feedback`, and `criteria` populate the **Grade & Chair Feedback** panel and are
   only displayed when `positionPaper.status` is `"graded"`. While the paper is `"submitted"`
   or `"unsubmitted"` the panel shows a waiting message instead.

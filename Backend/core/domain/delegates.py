@@ -33,7 +33,7 @@ from core.domain.errors import (
     PaperTooLarge,
     UploadRateLimited,
 )
-from crud.database_schema import Broadcast, Delegates, Uploads
+from crud.database_schema import Broadcast, Chairs, Committees, Delegates, Uploads
 from crud.db import utcnow
 from schemas.response_models import (
     ConferenceLink,
@@ -124,6 +124,23 @@ def _delegate_for(db: Session, account_id: int) -> Delegates | None:
     return db.scalars(select(Delegates).where(Delegates.account_id == account_id)).first()
 
 
+def _committee_topic(db: Session, committee_name: str) -> str:
+    """What the committee is debating, or "" when the admin has not written one yet."""
+    committee = db.get(Committees, committee_name)
+    return (committee.topic or "") if committee is not None else ""
+
+
+def _committee_chairs(db: Session, committee_name: str) -> list[str]:
+    """The committee's chairs, alphabetically. Empty when none has been assigned."""
+    return list(
+        db.scalars(
+            select(Chairs.name)
+            .where(Chairs.committee_name == committee_name)
+            .order_by(Chairs.name)
+        ).all()
+    )
+
+
 def get_delegate_dashboard(
     db: Session, account_id: int
 ) -> DelegateAssignmentResponse | None:
@@ -137,7 +154,12 @@ def get_delegate_dashboard(
 
     return DelegateAssignmentResponse(
         announcements=[broadcast.body for broadcast in announcements],
-        delegate=DelegateInfo(committee=delegate.committee, country=delegate.country),
+        delegate=DelegateInfo(
+            committee=delegate.committee,
+            country=delegate.country,
+            committeeTopic=_committee_topic(db, delegate.committee),
+            chairs=_committee_chairs(db, delegate.committee),
+        ),
         conferenceLinks=[
             ConferenceLink(text=broadcast.body, url=broadcast.url or "") for broadcast in links
         ],

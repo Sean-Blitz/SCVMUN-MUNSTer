@@ -44,7 +44,7 @@ async def lifespan(app: FastAPI):
             "captcha.disabled",
             hint="set TURNSTILE_SECRET to require the human check on login and register",
         )
-    elif not core.captcha.ALLOWED_HOSTNAMES:
+    elif not core.captcha.allowed_hostnames():
         # Fail-closed is the right default, but it means every login is rejected, so say so
         # at startup rather than leaving it to the first confused delegate.
         core.audit.technical(

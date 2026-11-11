@@ -24,7 +24,7 @@ from sqlalchemy import select
 import core.storage
 from core import controls
 from core.domain import delegates as delegates_domain
-from crud.database_schema import Uploads
+from crud.database_schema import Chairs, Uploads
 from crud.db import utcnow
 
 # A minimal file that passes the ``%PDF-`` signature check the domain performs. Tests that
@@ -125,11 +125,43 @@ def test_returns_the_dashboard_payload(client, delegate, delegate_headers):
 
     assert response.status_code == 200
     body = response.json()
-    assert body["delegate"] == {"committee": "DISEC", "country": "France"}
+    # The delegate panel renders committee + topic + chairs + country from this object; a bare
+    # committee has no topic and no chairs yet.
+    assert body["delegate"] == {
+        "committee": "DISEC",
+        "country": "France",
+        "committeeTopic": "",
+        "chairs": [],
+    }
     assert body["announcements"] == []
     assert body["conferenceLinks"] == []
     assert body["positionPaper"]["status"] == "unsubmitted"
     assert body["positionPaper"]["criteria"] == []
+
+
+def test_dashboard_carries_the_committees_topic_and_chairs(
+    client, committee, delegate, delegate_headers, factory
+):
+    """The delegate panel shows what the committee debates and who is running it.
+
+    Both live on the committee row rather than the delegate, so the payload joins them in;
+    chairs come back sorted, because the panel prints them in one line.
+    """
+    committee.topic = "Maritime security in the Gulf of Guinea"
+    first = factory.account(role="chair", name="Zoe Chair", identifier="CHAIR-0002")
+    second = factory.account(role="chair", name="Alex Chair", identifier="CHAIR-0001")
+    factory.db.add_all([
+        Chairs(account_id=first.id, name=first.name, committee_name="DISEC", email="z@example.test"),
+        Chairs(account_id=second.id, name=second.name, committee_name="DISEC", email="a@example.test"),
+    ])
+    factory.db.commit()
+
+    response = client.get("/api/delegate/my-assignment", headers=delegate_headers)
+
+    assert response.status_code == 200
+    info = response.json()["delegate"]
+    assert info["committeeTopic"] == "Maritime security in the Gulf of Guinea"
+    assert info["chairs"] == ["Alex Chair", "Zoe Chair"]
 
 
 def test_an_account_without_a_delegate_profile_is_404(client, factory):

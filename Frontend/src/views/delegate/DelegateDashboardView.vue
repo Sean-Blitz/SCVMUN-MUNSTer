@@ -32,6 +32,15 @@
                 <span class="info-label">Committee</span>
                 <span class="info-value">{{ dashboardData.delegate.committee || 'Unassigned' }}</span>
               </div>
+              <!-- The topic sits under the committee it describes, unlabelled: it reads as
+                   part of the committee line rather than as another field. -->
+              <p v-if="dashboardData.delegate.committeeTopic" class="committee-topic">
+                {{ dashboardData.delegate.committeeTopic }}
+              </p>
+              <div class="info-row">
+                <span class="info-label">Chairs</span>
+                <span class="info-value">{{ chairNames }}</span>
+              </div>
               <div class="info-row">
                 <span class="info-label">Country Assignment</span>
                 <span class="info-value">{{ dashboardData.delegate.country || 'Unassigned' }}</span>
@@ -201,7 +210,9 @@ const dashboardData = ref({
   announcements: [],
   delegate: {
     committee: '',
-    country: ''
+    country: '',
+    committeeTopic: '',
+    chairs: []
   },
   conferenceLinks: [],
   positionPaper: {
@@ -218,6 +229,11 @@ const downloadingPaper = ref(false)
 
 // Shorthand for the position paper panel state
 const positionPaper = computed(() => dashboardData.value.positionPaper)
+
+const chairNames = computed(() => {
+  const chairs = dashboardData.value.delegate.chairs || []
+  return chairs.length ? chairs.join(', ') : 'Undecided'
+})
 
 // Pad or trim links array to strictly 5 slot boxes
 const formattedLinks = computed(() => {
@@ -330,7 +346,9 @@ onMounted(async () => {
       announcements: data.announcements || [],
       delegate: {
         committee: data.delegate?.committee || '',
-        country: data.delegate?.country || ''
+        country: data.delegate?.country || '',
+        committeeTopic: data.delegate?.committeeTopic || '',
+        chairs: data.delegate?.chairs || []
       },
       conferenceLinks: data.conferenceLinks || [],
       positionPaper: {
@@ -588,6 +606,17 @@ onMounted(async () => {
   padding: clamp(7px, 1vh, 10px) 12px;
   border-radius: 11px;
   background-color: #f7fafd;
+}
+
+/* The committee's topic: no label of its own, indented to sit under the committee row and
+   read as a continuation of it. */
+.committee-topic {
+  margin: 0;
+  padding: 0 12px 2px 15px;
+  border-left: 2px solid rgba(3, 4, 94, 0.12);
+  font-size: 0.78em;
+  line-height: 1.5;
+  color: var(--muted);
 }
 
 .info-label {

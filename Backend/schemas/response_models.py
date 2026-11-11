@@ -28,8 +28,17 @@ class LoginResponse(BaseModel):
 
 
 class DelegateInfo(BaseModel):
+    """The delegate's own assignment, plus the two things that describe the committee.
+
+    `committeeTopic` and `chairs` come from the committee row rather than the delegate, but
+    they are what a delegate needs to make sense of their assignment: what the body is
+    debating, and who is running it. `chairs` is empty when none has been assigned yet - the
+    dashboard renders that as "Undecided" rather than as a blank line.
+    """
     committee: str = ""
     country: str = ""
+    committeeTopic: str = ""
+    chairs: list[str] = []
 
 
 class ConferenceLink(BaseModel):
