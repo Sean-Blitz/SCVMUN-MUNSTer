@@ -23,6 +23,7 @@ from core.domain.admin import broadcasts as broadcasts_domain
 from core.domain.admin import committees as committees_domain
 from core.domain import errors as domain_errors
 from core.domain.admin import hashes as hashes_domain
+from core.domain.admin import passwords as passwords_domain
 from core.domain.admin import interface as interface_domain
 from core.domain.admin import schedule as schedule_domain
 from core.domain.admin import rubrics as rubrics_domain
@@ -38,8 +39,8 @@ from schemas.response_models import (
     AdminDashboardStatsResponse, AwardsOverviewResponse, BroadcastEntry,
     BroadcastListResponse, CommitteeChairEntry, CommitteeDetailResponse,
     ConferenceChecklistResponse, DelegateRemovedResponse, HashEntry, HashListResponse,
-    PortHealth, SchoolChecklistResponse, SchoolDelegateEntry, SchoolDetailResponse,
-    RubricResponse, SchoolDeletedResponse, SchoolEntry, SchoolListResponse,
+    PasswordResetResponse, PortHealth, SchoolChecklistResponse, SchoolDelegateEntry,
+    SchoolDetailResponse, RubricResponse, SchoolDeletedResponse, SchoolEntry, SchoolListResponse,
     TimelineListResponse,
 )
 
@@ -274,6 +275,41 @@ def regenerate_chair_hash(
         )
     except domain_errors.DomainError as exc:
         raise _hash_error(exc) from exc
+
+
+def _password_error(exc: domain_errors.DomainError) -> HTTPException:
+    """Translate a credential failure into the status code the contract documents."""
+    if isinstance(exc, domain_errors.AccountNotFound):
+        return HTTPException(status.HTTP_404_NOT_FOUND, "No account has that id.")
+    if isinstance(exc, domain_errors.AccountNotRegistered):
+        return HTTPException(status.HTTP_409_CONFLICT, str(exc))
+    return HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error.")
+
+
+@router.post("/accounts/{account_id}/reset-password", response_model=PasswordResetResponse)
+def reset_account_password(
+    account_id: int,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> PasswordResetResponse:
+    """
+        Clear one account's password so its holder can choose a new one.
+
+        A hash and a password are separate: reissuing a hash changes the login code and
+        leaves the old password attached, which does not help someone who has forgotten it.
+        This is the operation for that case. It sets `password_hash` back to NULL and ends
+        the account's sessions, so the existing hash works with "First-Time Register" again -
+        the holder sets the new password themselves, and the admin never sees one.
+
+        `409` when the account has never registered (the hash is still unclaimed, so there
+        is nothing to reset); `404` for an unknown account id. The returned `hash` is the
+        code to hand back, unchanged."""
+    try:
+        return passwords_domain.reset_password(
+            db, account_id=account_id, actor=core.audit.actor(user)
+        )
+    except domain_errors.DomainError as exc:
+        raise _password_error(exc) from exc
 
 
 @router.get("/hashes", response_model=HashListResponse)

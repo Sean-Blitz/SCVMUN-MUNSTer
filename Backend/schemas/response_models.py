@@ -183,6 +183,18 @@ class AwardsRubricCriterion(BaseModel):
     levels: list[RubricLevel]
 
 
+class PasswordResetResponse(BaseModel):
+    """What an admin gets back after clearing an account's password.
+
+    The hash is included because it is what the holder registers with again - the admin has
+    to be able to read it back out without leaving the page.
+    """
+
+    name: str
+    role: str
+    hash: str
+
+
 class RubricResponse(BaseModel):
     """Both rubrics, as PUT /admin/rubrics returns them after a save.
 

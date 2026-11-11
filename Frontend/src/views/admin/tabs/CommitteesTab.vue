@@ -92,6 +92,14 @@
         <button class="btn-copy" :disabled="reissuingChairId === row.account_id" @click="reissueChair(row)">
           {{ reissuingChairId === row.account_id ? 'Reissuing...' : 'Reissue' }}
         </button>
+        <button
+          class="btn-copy"
+          :disabled="resettingPasswordId === row.account_id"
+          title="Clear their password so they can register again with this hash"
+          @click="resetPassword(row, row.name)"
+        >
+          {{ resettingPasswordId === row.account_id ? 'Resetting...' : 'Reset password' }}
+        </button>
         <button class="btn-copy btn-copy-danger" :disabled="removingChairId === row.account_id" @click="removeChair(row)">
           {{ removingChairId === row.account_id ? 'Removing...' : 'Remove' }}
         </button>
@@ -145,6 +153,14 @@
         <button class="btn-copy" :disabled="reissuingDelegateId === row.account_id" @click="reissueCommitteeDelegate(row)">
           {{ reissuingDelegateId === row.account_id ? 'Reissuing...' : 'Reissue' }}
         </button>
+        <button
+          class="btn-copy"
+          :disabled="resettingPasswordId === row.account_id"
+          title="Clear their password so they can register again with this hash"
+          @click="resetPassword(row, `${row.country} (${row.school_name})`)"
+        >
+          {{ resettingPasswordId === row.account_id ? 'Resetting...' : 'Reset password' }}
+        </button>
         <button class="btn-copy btn-copy-danger" :disabled="removingDelegateId === row.account_id" @click="removeCommitteeDelegate(row)">
           {{ removingDelegateId === row.account_id ? 'Removing...' : 'Remove' }}
         </button>
@@ -179,6 +195,8 @@ const newChair = ref({ name: '', email: '' })
 const addingChair = ref(false)
 const savingChairId = ref(null)
 const reissuingChairId = ref(null)
+// One action at a time; both lists key their rows by account id.
+const resettingPasswordId = ref(null)
 const removingChairId = ref(null)
 const reissuingDelegateId = ref(null)
 const removingDelegateId = ref(null)
@@ -359,6 +377,33 @@ const reissueChair = async (row) => {
     // toasted by the interceptor
   } finally {
     reissuingChairId.value = null
+  }
+}
+
+// Reissuing a hash changes the login code but keeps the old password, which is no help to
+// someone who has forgotten it. This clears the password instead: the account returns to the
+// unclaimed state and the same hash registers again through "First-Time Register".
+const resetPassword = async (row, label) => {
+  if (
+    !window.confirm(
+      `Reset the password for ${label}?\n\nThey will be signed out, and must use ` +
+        `"First-Time Register" with their hash to choose a new one. The hash does not change.`
+    )
+  ) {
+    return
+  }
+
+  resettingPasswordId.value = row.account_id
+  try {
+    const response = await apiClient.post(`/admin/accounts/${row.account_id}/reset-password`)
+    toastStore.showToast(
+      `Password cleared for ${response.data.name} — they register again with hash ${response.data.hash}.`,
+      'success'
+    )
+  } catch (error) {
+    // 409 (not registered yet) and everything else are toasted by the interceptor
+  } finally {
+    resettingPasswordId.value = null
   }
 }
 

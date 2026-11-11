@@ -342,6 +342,14 @@
         >
           {{ reissuingId === row.account_id ? 'Reissuing...' : 'Reissue hash' }}
         </button>
+        <button
+          class="btn-copy"
+          :disabled="resettingPasswordId === row.account_id"
+          title="Clear their password so they can register again with this hash"
+          @click="resetPassword(row)"
+        >
+          {{ resettingPasswordId === row.account_id ? 'Resetting...' : 'Reset password' }}
+        </button>
       </div>
     </div>
   </div>
@@ -574,6 +582,33 @@ const loadAllHashes = async () => {
   }
 }
 
+// A hash and a password are separate: reissuing a hash gives a new login code but keeps the
+// old password, so a delegate who has forgotten it needs this instead. Clearing the password
+// puts the account back in the unclaimed state, and the same hash registers again.
+const resetPassword = async (row) => {
+  if (
+    !window.confirm(
+      `Reset the password for ${row.name}?\n\nThey will be signed out, and must use ` +
+        `"First-Time Register" with their hash to choose a new one. The hash does not change.`
+    )
+  ) {
+    return
+  }
+
+  resettingPasswordId.value = row.account_id
+  try {
+    const response = await apiClient.post(`/admin/accounts/${row.account_id}/reset-password`)
+    toastStore.showToast(
+      `Password cleared for ${response.data.name} — they register again with hash ${response.data.hash}.`,
+      'success'
+    )
+  } catch (error) {
+    // 409 (not registered yet) and everything else are toasted by the interceptor
+  } finally {
+    resettingPasswordId.value = null
+  }
+}
+
 // ---------- Existing Schools: per-school detail, editing, deletion ----------
 const selectedSchoolId = ref(null)
 const schoolDetail = ref(null)
@@ -582,6 +617,8 @@ const delegateDrafts = ref([])
 const savingSchool = ref(false)
 const savingDelegateId = ref(null)
 const reissuingId = ref(null)
+// Which account's password is being reset, so its row can show the progress.
+const resettingPasswordId = ref(null)
 const deletingSchool = ref(false)
 
 const applySchoolDetail = (detail) => {

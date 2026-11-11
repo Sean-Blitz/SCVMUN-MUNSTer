@@ -480,3 +480,25 @@ class RubricCriterionInUse(DomainError):
             "Saving would orphan them - resend with force to remove them anyway."
         )
         self.orphaned = orphaned
+
+
+# --- Account credentials (§8.12) ---------------------------------------------------------
+
+
+class AccountNotFound(DomainError):
+    """No account row has that id."""
+
+    def __init__(self, account_id: int) -> None:
+        super().__init__(f"no account with id {account_id}")
+        self.account_id = account_id
+
+
+class AccountNotRegistered(DomainError):
+    """The account still has no password, so there is nothing to reset."""
+
+    def __init__(self, name: str) -> None:
+        super().__init__(
+            f"{name} has not registered yet - the hash is still unclaimed, so they can "
+            "use First-Time Register with it as it is."
+        )
+        self.name = name

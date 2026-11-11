@@ -709,6 +709,10 @@ Response `200`:
 { "name": "France (DISEC)", "hash": "hash789ghi" }
 ```
 
+The new hash replaces the login code and the delegate's sessions are revoked, but **the
+password is untouched**: the old password now pairs with the new hash. Someone who has
+forgotten their password needs §8.12, not a reissue.
+
 #### 8.4.3 `GET /admin/hashes`
 
 Query: `schoolName` (optional) — narrows the list to a single school.
@@ -1231,7 +1235,8 @@ the Existing Schools view (§8.9.3).
 
 Response `200`: `{ "name": "Alex Chair", "hash": "<new>" }`. Mints a new hash, revokes that
 chair's sessions, and the old hash stops working. Chairs are identified by account id because
-they have no committee+country pair; delegate reissue stays §8.4.2.
+they have no committee+country pair; delegate reissue stays §8.4.2. As with delegates, the
+password is not changed — use §8.12 for that.
 
 ### 8.11 Rubrics — the grading and awards criteria
 
@@ -1287,6 +1292,30 @@ Storage: the `rubrics` table, one row per kind (`paper`, `awards`) with the docu
 `items` JSONB column. `crud/seed.py` and `crud/bootstrap.py` create the two rows from the old
 `core/controls.py` lists (empty today); a database without them falls back to those defaults,
 which is why an older deployment behaves exactly as before.
+
+### 8.12 Passwords — clearing one so its holder can set a new one
+
+A hash and a password are separate credentials on the same account row. The hash
+(`accounts.identifier`) is the code the organisers hand out; the password
+(`accounts.password_hash`) is what its holder chose when they first registered. Nothing
+derives one from the other, and reissuing a hash deliberately leaves the password alone.
+
+#### 8.12.1 `POST /admin/accounts/{account_id}/reset-password`
+
+```json
+{ "name": "France (DISEC)", "role": "delegate", "hash": "hash789ghi" }
+```
+
+Field notes:
+- Sets `password_hash` back to `NULL` and deletes the account's sessions. The account is
+  **unclaimed** again, so the same hash claims it through `POST /auth/register`
+  ("First-Time Register") and the holder picks their own new password. The admin never sees
+  or invents one.
+- The hash is unchanged, and is echoed back because it is what has to be handed over.
+- `409` when the account has never registered: there is no password to clear, and the hash
+  is already usable for First-Time Register. `404` for an unknown account id.
+- Works for any role (delegate, advisor, chair, admin) — it takes an account id, so it is not
+  tied to a committee or a school.
 
 ### 9. Public meta — the header countdown
 
@@ -1370,7 +1399,8 @@ Field notes:
 | 52 | Admin | DELETE | `/admin/committees/{name}/delegates/{aid}` | removal summary |
 | 53 | Admin | POST | `/admin/hashes/regenerate/chair` | `{name, hash}` |
 | 54 | Admin | PUT | `/admin/rubrics` | both rubrics |
-| 55 | Public | GET | `/conference` | `{label, starts_at}` |
+| 55 | Admin | POST | `/admin/accounts/{id}/reset-password` | `{name, role, hash}` |
+| 56 | Public | GET | `/conference` | `{label, starts_at}` |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.
