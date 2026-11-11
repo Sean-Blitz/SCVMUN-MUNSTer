@@ -26,22 +26,16 @@
           Awards Overview
         </button>
         <button
-          :class="['toggle-btn', { active: activeTab === 'content' }]"
-          @click="switchTab('content')"
+          :class="['toggle-btn', { active: activeTab === 'displays' }]"
+          @click="switchTab('displays')"
         >
-          Delegate Content
+          Displays
         </button>
         <button
           :class="['toggle-btn', { active: activeTab === 'committees' }]"
           @click="switchTab('committees')"
         >
           Committees
-        </button>
-        <button
-          :class="['toggle-btn', { active: activeTab === 'timeline' }]"
-          @click="switchTab('timeline')"
-        >
-          Timeline
         </button>
         <button
           :class="['toggle-btn', { active: activeTab === 'rubrics' }]"
@@ -62,11 +56,10 @@
 import { computed, ref } from 'vue'
 import AwardsTab from './tabs/AwardsTab.vue'
 import CommitteesTab from './tabs/CommitteesTab.vue'
-import ContentTab from './tabs/ContentTab.vue'
 import DiagnosticsTab from './tabs/DiagnosticsTab.vue'
+import DisplaysTab from './tabs/DisplaysTab.vue'
 import RubricsTab from './tabs/RubricsTab.vue'
 import SchoolsTab from './tabs/SchoolsTab.vue'
-import TimelineTab from './tabs/TimelineTab.vue'
 import './admin-dashboard.css'
 
 // One component per tab. Kept alive rather than re-created so that switching tabs does not
@@ -77,8 +70,8 @@ const tabs = {
   hashes: SchoolsTab,
   committees: CommitteesTab,
   awards: AwardsTab,
-  content: ContentTab,
-  timeline: TimelineTab,
+  // Delegate Content + Timeline, grouped by the role each display serves.
+  displays: DisplaysTab,
   rubrics: RubricsTab
 }
 

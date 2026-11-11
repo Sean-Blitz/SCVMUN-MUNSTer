@@ -86,11 +86,13 @@ import AppIcon from '@/components/AppIcon.vue'
 import { onActivated, ref } from 'vue'
 import apiClient from '@/api/client'
 import { useToastStore } from '@/stores/toast'
-import { toLocalInput, toUtcIso } from '../utils/datetime'
+import { toLocalInput, toUtcIso } from '../../utils/datetime'
 
+// Self-contained: nothing else on the Displays tab reads the timeline, so its state stays
+// here rather than in a composable. It was its own tab until the displays were grouped by
+// role; the card and its behaviour are unchanged.
 const toastStore = useToastStore()
 
-// ---------- Timeline state ----------
 const timelinePhases = [
   { value: 'preConference', label: 'Pre-conference' },
   { value: 'duringConference', label: 'During conference' }
@@ -101,7 +103,6 @@ const savingTimeline = ref(false)
 const timelineDirty = ref(false)
 const maxTimelineEvents = 30 // mirrors MAX_TIMELINE_EVENTS in admin.py
 
-// ---------- Timeline actions ----------
 const loadTimeline = async () => {
   loadingTimeline.value = true
   try {
@@ -182,9 +183,8 @@ const saveTimeline = async () => {
   }
 }
 
-// Refreshed on entry, but never over unsaved edits - the same rule the old switchTab had.
+// Refreshed on entry, but never over unsaved edits - the same rule the old tab had.
 onActivated(() => {
   if (!timelineDirty.value) loadTimeline()
 })
-
 </script>

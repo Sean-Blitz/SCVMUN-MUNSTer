@@ -94,7 +94,7 @@
         Reveal All Hashes
       </button>
       <span v-else class="revealed-notice">
-        ✓ Confidential hashes unlocked for session.
+        ✓ Hashes temporarily revealed!
       </span>
     </div>
 

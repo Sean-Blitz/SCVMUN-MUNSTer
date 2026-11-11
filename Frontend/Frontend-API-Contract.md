@@ -724,7 +724,7 @@ Field notes:
 ### 8.6 Announcements & conference links
 
 The lines delegates see on their dashboard (§2.1). An admin edits them from the
-**Delegate Content** tab. `kind` selects the strip: `announcement` feeds the bar at
+**Displays** tab, under *Delegates*. `kind` selects the strip: `announcement` feeds the bar at
 the top of the delegate page, `link` feeds the five slots in the "Conference & General
 Info" panel.
 
@@ -827,7 +827,8 @@ tables, and the split is the whole point:
 | `checklist_progress` | `school_id`, `item_id`, `completed` | one row per school that has ticked a line; a pair with no row means "not done" |
 
 So the labels are edited once, while each school's ticks are its own — Lincoln paying its
-invoice does not tick Rival's box. Both are edited from the **Delegate Content** tab.
+invoice does not tick Rival's box. Both are edited from the **Displays** tab, under
+*Advisors*.
 
 Because `checklist_progress.item_id` points at `conference_checklist.id`, the admin route
 **reconciles lines by id**: a line sent with an id is updated in place (so its schools' ticks
@@ -987,7 +988,7 @@ rejected (`400`) rather than silently shifted by the database session's offset.
 countdown (§9) reads it, and it can be re-dated but **not removed or renamed** — `PUT` rejects
 an edit that drops it with `400`. Because the payload carries no ids, it is matched by
 `(phase, label)`. `crud/seed.py` inserts it (with a placeholder date) so every database has
-one; the placeholder is meant to be replaced from the Timeline tab.
+one; the placeholder is meant to be replaced from the **Displays** tab, under *Chairs*.
 
 #### 8.8.1 `GET /admin/timeline`
 
