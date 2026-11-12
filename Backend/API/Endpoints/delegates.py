@@ -74,7 +74,7 @@ def _http_error(exc: domain_errors.DomainError) -> HTTPException:
     if isinstance(exc, domain_errors.PaperStorageFailed):
         return HTTPException(
             status.HTTP_500_INTERNAL_SERVER_ERROR,
-            "Could not store the upload. Check that the paper directory is writable.",
+            "Could not store the upload. Please try again later.",
         )
     # An unmapped domain error is a programming mistake, not a bad request.
     return HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, "Internal server error.")

@@ -4,10 +4,13 @@ import { useToastStore } from '../stores/toast'
 import router from '../router'
 
 const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
-  headers: {
-    'Content-Type': 'application/json'
-  }
+  baseURL: import.meta.env.VITE_API_BASE_URL || '/api'
+  // No default Content-Type on purpose. Setting one here made axios treat every body the
+  // same way: with `application/json` pinned as the default, a FormData body was serialised
+  // as JSON ({"paper": {}}) and the file never reached the server, which answered 422
+  // "Paper is required" for the position-paper upload. Axios sets application/json itself
+  // for plain-object bodies, and leaves FormData alone so the browser can add the multipart
+  // boundary.
 })
 
 apiClient.interceptors.request.use((config) => {
