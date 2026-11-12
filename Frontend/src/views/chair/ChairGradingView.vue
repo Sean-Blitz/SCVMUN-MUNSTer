@@ -103,62 +103,14 @@
       </div>
     </div>
 
-    <!-- FULL SCREEN PDF VIEWER & GRADING OVERLAY -->
+    <!-- FULL SCREEN: the paper on the left, the grading controls in a sidebar on the right -->
     <div v-if="activeDelegate" class="grading-modal-overlay">
-      <!-- TOP GRADING CONTROL BAR -->
-      <header class="top-grading-bar">
-        <!-- HEADER ROW: INFO, SCORE SUMMARY, & ACTIONS -->
-        <div class="bar-header-row">
-          <div class="delegate-summary">
-            <h2>{{ activeDelegate.country }}</h2>
-            <span class="committee-label">{{ activeDelegate.committee }}</span>
-          </div>
-
-          <div class="score-summary-box">
-            <span class="summary-label">Total Score:</span>
-            <span class="summary-score">{{ calculatedTotalScore }} / {{ maxPossibleScore }}</span>
-          </div>
-
-          <div class="bar-actions">
-            <button class="btn-save" @click="saveGrade">Submit Grade</button>
-            <button class="btn-close" @click="closeGradingModal">✕ Close</button>
-          </div>
-        </div>
-
-        <!-- DYNAMIC RUBRIC INPUTS & COMMENTS ROW -->
-        <div class="rubric-row">
-          <div class="rubric-inputs">
-            <div 
-              v-for="cat in rubric" 
-              :key="cat.id" 
-              class="rubric-field"
-            >
-              <label>{{ cat.label }} (Max {{ cat.maxScore }})</label>
-              <input 
-                type="number" 
-                min="0" 
-                :max="cat.maxScore"
-                v-model.number="gradingScores[cat.id]"
-              />
-            </div>
-          </div>
-
-          <div class="comments-field">
-            <label>Chair Feedback / Comments:</label>
-            <textarea 
-              v-model="gradingComments" 
-              placeholder="Enter comments for delegate..."
-            ></textarea>
-          </div>
-        </div>
-      </header>
-
       <!-- NATIVE PDF PREVIEW IFRAME (src is an in-memory blob URL; an iframe cannot
            send the Authorization header, so the PDF is fetched through the API client) -->
       <div class="pdf-viewer-container">
-        <iframe 
-          v-if="previewUrl" 
-          :src="previewUrl" 
+        <iframe
+          v-if="previewUrl"
+          :src="previewUrl"
           class="pdf-iframe"
           title="Position Paper PDF Preview"
         ></iframe>
@@ -166,6 +118,51 @@
           {{ loadingPreview ? 'Loading the position paper…' : 'Unable to preview document.' }}
         </div>
       </div>
+
+      <!-- GRADING SIDEBAR: identity, running total, one row per category, comments, actions.
+           The sidebar owns the full height, so each category gets its own line instead of
+           being squeezed into a strip above the paper. -->
+      <aside class="grading-sidebar">
+        <div class="sidebar-head">
+          <div class="delegate-summary">
+            <h2>{{ activeDelegate.country }}</h2>
+            <span class="committee-label">{{ activeDelegate.committee }}</span>
+          </div>
+
+          <div class="score-summary-box">
+            <span class="summary-label">Total Score</span>
+            <span class="summary-score">{{ calculatedTotalScore }} / {{ maxPossibleScore }}</span>
+          </div>
+        </div>
+
+        <div class="rubric-inputs">
+          <div v-for="cat in rubric" :key="cat.id" class="rubric-field">
+            <label :for="`score-${cat.id}`">{{ cat.label }}</label>
+            <span class="rubric-max">max {{ cat.maxScore }}</span>
+            <input
+              :id="`score-${cat.id}`"
+              type="number"
+              min="0"
+              :max="cat.maxScore"
+              v-model.number="gradingScores[cat.id]"
+            />
+          </div>
+        </div>
+
+        <div class="comments-field">
+          <label for="grading-comments">Chair Feedback / Comments</label>
+          <textarea
+            id="grading-comments"
+            v-model="gradingComments"
+            placeholder="Enter comments for delegate..."
+          ></textarea>
+        </div>
+
+        <div class="bar-actions">
+          <button class="btn-save" @click="saveGrade">Submit Grade</button>
+          <button class="btn-close" @click="closeGradingModal">✕ Close</button>
+        </div>
+      </aside>
     </div>
   </div>
 </template>
@@ -534,7 +531,9 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   gap: 2px;
-  font-size: 0.72em;
+  /* The card's whole point is where the paper stands, so the status line carries more weight
+     than it used to; the date and score inside it scale with it. */
+  font-size: 0.82em;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -561,16 +560,17 @@ onMounted(async () => {
 }
 
 .score-badge {
-  padding: 2px 8px;
+  padding: 3px 10px;
   border-radius: 999px;
   background-color: rgba(22, 163, 74, 0.1);
   color: var(--green);
-  font-size: 0.94em;
+  font-size: 1.08em;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 
 .sub-date {
-  font-size: 0.82em;
+  font-size: 0.95em;
   font-weight: 500;
   letter-spacing: 0.02em;
   text-transform: none;
@@ -640,7 +640,9 @@ onMounted(async () => {
   inset: 0;
   z-index: 1000;
   display: flex;
-  flex-direction: column;
+  /* Paper left, grading controls right. It used to be a column with a control strip on top,
+     which left the rubric inputs in a single cramped line above the document. */
+  flex-direction: row;
   background-color: #f5fafd;
   animation: overlay-in 0.3s ease both;
 }
@@ -651,21 +653,31 @@ onMounted(async () => {
   }
 }
 
-.top-grading-bar {
+/* The sidebar owns the full height of the screen, so every category gets its own row and the
+   comments box can grow into whatever is left. */
+.grading-sidebar {
+  flex: none;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 14px clamp(16px, 2.4vw, 34px);
-  border-bottom: 1px solid var(--line);
+  gap: 14px;
+  width: clamp(340px, 27vw, 430px);
+  /* `border-box`, height and min-height: 0 together keep the sidebar exactly one screen tall.
+     Without border-box its vertical padding was added on top of `height: 100%`, making the
+     column 36px taller than the viewport and pushing the action buttons below the fold. */
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 0;
+  padding: 18px clamp(16px, 1.6vw, 22px);
+  border-left: 1px solid var(--line);
   background-color: #ffffff;
+  overflow-y: auto;
 }
 
-.bar-header-row {
+.sidebar-head {
+  flex: none;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .delegate-summary {
@@ -695,8 +707,9 @@ onMounted(async () => {
 .score-summary-box {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  padding: 7px 14px;
+  padding: 8px 14px;
   border-radius: 11px;
   background-color: #f7fafd;
 }
@@ -717,6 +730,7 @@ onMounted(async () => {
 }
 
 .bar-actions {
+  flex: none;
   display: flex;
   gap: 9px;
 }
@@ -766,32 +780,52 @@ onMounted(async () => {
 }
 
 /* ===================================================== RUBRIC INPUTS ==== */
-.rubric-row {
-  display: flex;
-  align-items: flex-end;
-  gap: 20px;
-  flex-wrap: wrap;
-}
-
 .rubric-inputs {
+  flex: none;
   display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.rubric-field,
+/* Category name, its maximum, then the mark: one row each, full width of the sidebar. */
+.rubric-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 78px;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 11px;
+  border-radius: 9px;
+  background-color: #f7fafd;
+}
+
+.rubric-field label {
+  /* Sentence case here, not the uppercase label style: a criterion name can be a sentence,
+     and it is the thing the chair reads while typing the mark. */
+  font-size: 0.8em;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink-2);
+  overflow-wrap: break-word;
+}
+
+.rubric-max {
+  font-size: 0.7em;
+  font-variant-numeric: tabular-nums;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
 .comments-field {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  /* The only flexible block in the sidebar: it takes the leftover height, but keeps enough
+     room for a few lines before the sidebar starts scrolling. */
+  flex: 1 1 auto;
+  min-height: 104px;
 }
 
-.comments-field {
-  flex: 1;
-  min-width: 220px;
-}
-
-.rubric-field label,
 .comments-field label {
   font-size: 0.62em;
   font-weight: 600;
@@ -804,7 +838,7 @@ onMounted(async () => {
 .comments-field textarea {
   border: 1px solid var(--line);
   border-radius: 9px;
-  background-color: #f7fafd;
+  background-color: #ffffff;
   color: var(--ink);
   font-family: inherit;
   font-size: 0.84em;
@@ -814,16 +848,16 @@ onMounted(async () => {
 }
 
 .rubric-field input {
-  width: 80px;
+  width: 100%;
   padding: 7px 9px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
 
 .comments-field textarea {
-  height: 38px;
-  padding: 8px 11px;
-  resize: none;
+  flex: 1;
+  padding: 9px 11px;
+  resize: vertical;
   line-height: 1.45;
 }
 
@@ -836,8 +870,10 @@ onMounted(async () => {
 
 /* ========================================================== PDF VIEW ==== */
 .pdf-viewer-container {
+  /* Takes whatever the fixed-width sidebar does not: `min-width: 0` lets it shrink instead of
+     forcing the row wider than the viewport. */
   flex: 1;
-  width: 100%;
+  min-width: 0;
   min-height: 0;
   background-color: #f2f4f8;
   color: var(--muted);
@@ -875,9 +911,22 @@ onMounted(async () => {
     min-width: 0;
   }
 
-  .rubric-row {
+  /* Not enough width for a side-by-side paper and sidebar: stack them, with the grading
+     controls on top so the marks are reachable without scrolling past the document. */
+  .grading-modal-overlay {
     flex-direction: column;
-    align-items: stretch;
+  }
+
+  .grading-sidebar {
+    order: -1;
+    width: 100%;
+    height: auto;
+    max-height: 52vh;
+    /* Same reason as the desktop rule: padding must count inside the cap, or the buttons
+       scroll out of reach again. */
+    box-sizing: border-box;
+    border-left: 0;
+    border-bottom: 1px solid var(--line);
   }
 }
 
