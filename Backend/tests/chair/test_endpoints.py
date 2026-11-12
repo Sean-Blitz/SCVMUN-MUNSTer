@@ -80,23 +80,6 @@ CHAIR_ROUTES = [
 # --- builders --------------------------------------------------------------------------
 
 
-def _save_rubric(factory, kind: str, items: list[dict]) -> None:
-    """Store a rubric document the way PUT /admin/rubrics does."""
-    factory.db.add(Rubric(kind=kind, items=items, updated_at=utcnow(), updated_by="admin:1"))
-    factory.db.commit()
-
-
-def _delegate_in(factory, committee, school, *, country="France", **fields):
-    """A delegate account plus its profile, in the given committee and school."""
-    return factory.delegate(
-        factory.account(role="delegate"),
-        committee=committee,
-        school=school,
-        country=country,
-        **fields,
-    )
-
-
 def _other_committee(factory, name: str = "UNSC"):
     return factory.committee(name)
 
@@ -162,11 +145,11 @@ def test_the_overview_counts_only_the_chairs_own_committee(
     )
     factory.delegate(registered, committee=committee, school=school, country="Argentina",
                      paper_status="submitted")
-    _delegate_in(factory, committee, school, country="France", paper_status="graded")
-    _delegate_in(factory, committee, school, country="Spain", paper_status="unsubmitted")
+    factory.new_delegate(committee, school, country="France", paper_status="graded")
+    factory.new_delegate(committee, school, country="Spain", paper_status="unsubmitted")
 
     rival = _other_committee(factory)
-    _delegate_in(factory, rival, school, country="Italy", paper_status="graded")
+    factory.new_delegate(rival, school, country="Italy", paper_status="graded")
 
     body = client.get("/api/chair/committee/overview", headers=chair_headers).json()
 
@@ -243,7 +226,7 @@ def test_the_paper_rubric_is_empty_until_an_admin_saves_one(client, chair_header
 
 
 def test_a_stored_paper_rubric_is_published(client, factory, chair_headers):
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
+    factory.rubric("paper", PAPER_RUBRIC)
 
     body = client.get("/api/chair/rubric", headers=chair_headers).json()
 
@@ -256,8 +239,7 @@ def test_a_stored_paper_rubric_is_published(client, factory, chair_headers):
 
 def test_a_criterion_without_an_id_is_skipped(client, factory, chair_headers):
     """The id keys every stored mark, so an id-less criterion could never be graded."""
-    _save_rubric(
-        factory,
+    factory.rubric(
         "paper",
         [{"label": "No id", "maxScore": 5}, {"id": "ok", "label": "Ok", "maxScore": 3}],
     )
@@ -270,7 +252,7 @@ def test_a_criterion_without_an_id_is_skipped(client, factory, chair_headers):
 def test_a_criterion_without_a_label_or_a_max_falls_back(client, factory, chair_headers):
     """Both fallbacks matter: a blank label renders nothing, and a missing max would break
     the ``0..max`` validation in the grading screen."""
-    _save_rubric(factory, "paper", [{"id": "bare"}])
+    factory.rubric("paper", [{"id": "bare"}])
 
     assert client.get("/api/chair/rubric", headers=chair_headers).json() == [
         {"id": "bare", "label": "bare", "maxScore": 0.0}
@@ -286,8 +268,8 @@ def test_the_roster_lists_the_committees_delegates_ordered_by_country(
     client, factory, chair_headers, committee, school
 ):
     for country in ("Spain", "Argentina"):
-        _delegate_in(factory, committee, school, country=country)
-    _delegate_in(factory, _other_committee(factory), school, country="France")
+        factory.new_delegate(committee, school, country=country)
+    factory.new_delegate(_other_committee(factory), school, country="France")
 
     body = client.get("/api/chair/delegates", headers=chair_headers).json()
 
@@ -295,8 +277,7 @@ def test_the_roster_lists_the_committees_delegates_ordered_by_country(
 
 
 def test_the_roster_reports_grading_state(client, factory, chair_headers, committee, school):
-    delegate = _delegate_in(
-        factory,
+    delegate = factory.new_delegate(
         committee,
         school,
         paper_status="graded",
@@ -323,7 +304,7 @@ def test_the_submission_date_is_the_newest_upload_with_a_utc_offset(
     client, factory, chair_headers, committee, school
 ):
     """Naive-UTC columns are rendered with an explicit offset, newest upload wins."""
-    delegate = _delegate_in(factory, committee, school, paper_status="submitted")
+    delegate = factory.new_delegate(committee, school, paper_status="submitted")
     factory.upload(delegate, when=datetime(2026, 10, 4, 9, 0), file_path="old.pdf")
     factory.upload(delegate, when=datetime(2026, 10, 5, 9, 30), file_path="new.pdf")
 
@@ -336,7 +317,7 @@ def test_a_delegate_who_never_uploaded_has_an_empty_submission_date(
     client, factory, chair_headers, committee, school
 ):
     """Empty string, not null: the view prints it as-is."""
-    _delegate_in(factory, committee, school)
+    factory.new_delegate(committee, school)
 
     entry = client.get("/api/chair/delegates", headers=chair_headers).json()[0]
 
@@ -369,8 +350,8 @@ def test_grading_stores_the_marks_and_recomputes_the_total(
     The body claims ``999/999``; the response and the row both say ``17/20``, which is the
     sum of the marks over the sum of the maxima. Comments are trimmed on the way in.
     """
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
-    delegate = _delegate_in(factory, committee, school, paper_status="submitted")
+    factory.rubric("paper", PAPER_RUBRIC)
+    delegate = factory.new_delegate(committee, school, paper_status="submitted")
 
     response = client.post(
         f"/api/chair/papers/{delegate.account_id}/grade",
@@ -397,8 +378,8 @@ def test_a_mark_equal_to_the_maximum_is_accepted(
     client, factory, chair_headers, committee, school
 ):
     """Full marks must not be lost to floating-point comparison."""
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
-    delegate = _delegate_in(factory, committee, school, paper_status="submitted")
+    factory.rubric("paper", PAPER_RUBRIC)
+    delegate = factory.new_delegate(committee, school, paper_status="submitted")
 
     response = client.post(
         f"/api/chair/papers/{delegate.account_id}/grade",
@@ -417,8 +398,8 @@ def test_a_mark_equal_to_the_maximum_is_accepted(
 def test_a_mark_above_the_maximum_is_400_and_names_the_criterion(
     client, factory, chair_headers, committee, school
 ):
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
-    delegate = _delegate_in(factory, committee, school, paper_status="submitted")
+    factory.rubric("paper", PAPER_RUBRIC)
+    delegate = factory.new_delegate(committee, school, paper_status="submitted")
 
     response = client.post(
         f"/api/chair/papers/{delegate.account_id}/grade",
@@ -433,8 +414,8 @@ def test_a_mark_above_the_maximum_is_400_and_names_the_criterion(
 
 
 def test_a_negative_mark_is_400(client, factory, chair_headers, committee, school):
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
-    delegate = _delegate_in(factory, committee, school, paper_status="submitted")
+    factory.rubric("paper", PAPER_RUBRIC)
+    delegate = factory.new_delegate(committee, school, paper_status="submitted")
 
     response = client.post(
         f"/api/chair/papers/{delegate.account_id}/grade",
@@ -450,8 +431,8 @@ def test_a_criterion_that_left_the_rubric_is_400(
     client, factory, chair_headers, committee, school
 ):
     """A stale tab can still hold the old ids; the server refuses rather than parking them."""
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
-    delegate = _delegate_in(factory, committee, school, paper_status="submitted")
+    factory.rubric("paper", PAPER_RUBRIC)
+    delegate = factory.new_delegate(committee, school, paper_status="submitted")
 
     response = client.post(
         f"/api/chair/papers/{delegate.account_id}/grade",
@@ -469,7 +450,7 @@ def test_grading_without_a_configured_rubric_is_400(
     client, factory, chair_headers, committee, school
 ):
     """Nothing can be graded before an admin writes the rubric."""
-    delegate = _delegate_in(factory, committee, school, paper_status="submitted")
+    delegate = factory.new_delegate(committee, school, paper_status="submitted")
 
     response = client.post(
         f"/api/chair/papers/{delegate.account_id}/grade",
@@ -487,8 +468,8 @@ def test_an_unsubmitted_paper_is_409_when_grading(
     client, factory, chair_headers, committee, school
 ):
     """409, not 404: the delegate exists, the paper does not - the request conflicts."""
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
-    delegate = _delegate_in(factory, committee, school, paper_status="unsubmitted")
+    factory.rubric("paper", PAPER_RUBRIC)
+    delegate = factory.new_delegate(committee, school, paper_status="unsubmitted")
 
     response = client.post(
         f"/api/chair/papers/{delegate.account_id}/grade",
@@ -506,8 +487,8 @@ def test_a_delegate_from_another_committee_cannot_be_graded(
     client, factory, chair_headers, school
 ):
     """The scope is the committee, so a foreign delegate is simply not found."""
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
-    foreign = _delegate_in(factory, _other_committee(factory), school)
+    factory.rubric("paper", PAPER_RUBRIC)
+    foreign = factory.new_delegate(_other_committee(factory), school)
 
     response = client.post(
         f"/api/chair/papers/{foreign.account_id}/grade",
@@ -523,8 +504,8 @@ def test_regrading_overwrites_the_previous_marks(
     client, factory, db, chair_headers, committee, school
 ):
     """Correcting a mistake is allowed and replaces the marks rather than adding to them."""
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
-    delegate = _delegate_in(factory, committee, school, paper_status="submitted")
+    factory.rubric("paper", PAPER_RUBRIC)
+    delegate = factory.new_delegate(committee, school, paper_status="submitted")
     path = f"/api/chair/papers/{delegate.account_id}/grade"
 
     first = client.post(
@@ -552,9 +533,9 @@ def test_the_path_id_wins_over_the_body_delegate_id(
     Grading is addressed by the path, so a mismatched body must apply to the path's delegate
     and leave the other one untouched.
     """
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
-    target = _delegate_in(factory, committee, school, country="France", paper_status="submitted")
-    other = _delegate_in(factory, committee, school, country="Spain", paper_status="submitted")
+    factory.rubric("paper", PAPER_RUBRIC)
+    target = factory.new_delegate(committee, school, country="France", paper_status="submitted")
+    other = factory.new_delegate(committee, school, country="Spain", paper_status="submitted")
 
     client.post(
         f"/api/chair/papers/{target.account_id}/grade",
@@ -574,8 +555,8 @@ def test_comments_over_the_column_limit_are_rejected_by_validation(
 
     The message still has to be the friendly sentence, because it goes into a toast.
     """
-    _save_rubric(factory, "paper", PAPER_RUBRIC)
-    delegate = _delegate_in(factory, committee, school, paper_status="submitted")
+    factory.rubric("paper", PAPER_RUBRIC)
+    delegate = factory.new_delegate(committee, school, paper_status="submitted")
 
     response = client.post(
         f"/api/chair/papers/{delegate.account_id}/grade",
@@ -600,7 +581,7 @@ def test_comments_over_the_column_limit_are_rejected_by_validation(
 def test_downloads_the_paper_as_a_pdf_named_after_the_country(
     client, factory, chair_headers, committee, school
 ):
-    delegate = _delegate_in(factory, committee, school, country="France")
+    delegate = factory.new_delegate(committee, school, country="France")
     factory.upload(delegate, file_path="live.pdf", write_bytes=b"%PDF-live")
 
     response = client.get(
@@ -616,7 +597,7 @@ def test_downloads_the_paper_as_a_pdf_named_after_the_country(
 def test_the_newest_upload_is_the_one_served(
     client, factory, chair_headers, committee, school
 ):
-    delegate = _delegate_in(factory, committee, school)
+    delegate = factory.new_delegate(committee, school)
     factory.upload(
         delegate, when=datetime(2026, 10, 1), file_path="old.pdf", write_bytes=b"%PDF-old"
     )
@@ -635,7 +616,7 @@ def test_an_unsubmitted_paper_is_404_when_downloading(
     client, factory, chair_headers, committee, school
 ):
     """The same domain condition as the 409 above, specialised for a fetch."""
-    delegate = _delegate_in(factory, committee, school)
+    delegate = factory.new_delegate(committee, school)
 
     response = client.get(
         f"/api/chair/papers/{delegate.account_id}/download", headers=chair_headers
@@ -648,7 +629,7 @@ def test_an_unsubmitted_paper_is_404_when_downloading(
 def test_a_delegate_from_another_committee_cannot_be_downloaded(
     client, factory, chair_headers, school
 ):
-    foreign = _delegate_in(factory, _other_committee(factory), school)
+    foreign = factory.new_delegate(_other_committee(factory), school)
     factory.upload(foreign, file_path="foreign.pdf", write_bytes=b"%PDF-foreign")
 
     response = client.get(
@@ -662,7 +643,7 @@ def test_a_delegate_from_another_committee_cannot_be_downloaded(
 def test_a_row_whose_file_is_gone_is_404(
     client, factory, chair_headers, committee, school, papers_dir
 ):
-    delegate = _delegate_in(factory, committee, school)
+    delegate = factory.new_delegate(committee, school)
     factory.upload(delegate, file_path="gone.pdf", write_bytes=b"%PDF-gone")
     (papers_dir / "gone.pdf").unlink()
 
@@ -723,7 +704,7 @@ def test_a_stored_awards_rubric_keeps_its_levels_and_their_order(
     client, factory, chair_headers
 ):
     """Levels are rendered as score cells in the order they were saved."""
-    _save_rubric(factory, "awards", AWARDS_RUBRIC)
+    factory.rubric("awards", AWARDS_RUBRIC)
 
     body = client.get("/api/chair/awards/rubric", headers=chair_headers).json()
 
@@ -739,8 +720,7 @@ def test_a_stored_awards_rubric_keeps_its_levels_and_their_order(
 
 def test_a_criterion_without_levels_is_skipped(client, factory, chair_headers):
     """The view derives each maximum with Math.max(...levels), which is -Infinity if empty."""
-    _save_rubric(
-        factory,
+    factory.rubric(
         "awards",
         [
             {"id": "empty", "label": "Empty", "levels": []},
@@ -755,8 +735,7 @@ def test_a_criterion_without_levels_is_skipped(client, factory, chair_headers):
 
 def test_a_level_without_a_label_is_skipped(client, factory, chair_headers):
     """There would be nothing to render on the score cell."""
-    _save_rubric(
-        factory,
+    factory.rubric(
         "awards",
         [
             {
@@ -781,7 +760,7 @@ def test_the_award_roster_defaults_to_none_and_a_hidden_total(
     client, factory, chair_headers, committee, school
 ):
     """A delegate nobody has scored has ``totalScore: null``, so the view hides the badge."""
-    delegate = _delegate_in(factory, committee, school)
+    delegate = factory.new_delegate(committee, school)
 
     entry = client.get("/api/chair/awards/delegates", headers=chair_headers).json()[0]
 
@@ -798,8 +777,7 @@ def test_the_award_roster_defaults_to_none_and_a_hidden_total(
 def test_the_award_roster_reports_saved_scores_and_total(
     client, factory, chair_headers, committee, school
 ):
-    _delegate_in(
-        factory,
+    factory.new_delegate(
         committee,
         school,
         assigned_award="Best Delegate",
@@ -818,8 +796,8 @@ def test_the_award_roster_is_scoped_to_the_committee(
     client, factory, chair_headers, committee, school
 ):
     for country in ("Spain", "Argentina"):
-        _delegate_in(factory, committee, school, country=country)
-    _delegate_in(factory, _other_committee(factory), school, country="France")
+        factory.new_delegate(committee, school, country=country)
+    factory.new_delegate(_other_committee(factory), school, country="France")
 
     body = client.get("/api/chair/awards/delegates", headers=chair_headers).json()
 
@@ -835,8 +813,8 @@ def test_an_official_award_requires_every_criterion_and_recomputes_the_total(
     client, factory, db, chair_headers, committee, school
 ):
     """The body's ``totalScore`` is ignored; the total is the sum of the marks."""
-    _save_rubric(factory, "awards", AWARDS_RUBRIC)
-    delegate = _delegate_in(factory, committee, school)
+    factory.rubric("awards", AWARDS_RUBRIC)
+    delegate = factory.new_delegate(committee, school)
 
     response = client.post(
         f"/api/chair/awards/{delegate.account_id}",
@@ -863,8 +841,8 @@ def test_none_and_candidate_need_no_scores(client, factory, db, chair_headers, c
 
     The total stays NULL rather than 0.0, so the view keeps the badge hidden.
     """
-    _save_rubric(factory, "awards", AWARDS_RUBRIC)
-    delegate = _delegate_in(factory, committee, school)
+    factory.rubric("awards", AWARDS_RUBRIC)
+    delegate = factory.new_delegate(committee, school)
 
     response = client.post(
         f"/api/chair/awards/{delegate.account_id}",
@@ -888,8 +866,8 @@ def test_an_unscored_official_award_is_400_and_lists_what_is_missing(
     client, factory, chair_headers, committee, school
 ):
     """The frontend greys the button out; the server enforces it because a script would not."""
-    _save_rubric(factory, "awards", AWARDS_RUBRIC)
-    delegate = _delegate_in(factory, committee, school)
+    factory.rubric("awards", AWARDS_RUBRIC)
+    delegate = factory.new_delegate(committee, school)
 
     response = client.post(
         f"/api/chair/awards/{delegate.account_id}",
@@ -912,8 +890,8 @@ def test_an_unscored_official_award_is_400_and_lists_what_is_missing(
 def test_an_unknown_award_name_is_400_and_lists_the_allowed_ones(
     client, factory, chair_headers, committee, school
 ):
-    _save_rubric(factory, "awards", AWARDS_RUBRIC)
-    delegate = _delegate_in(factory, committee, school)
+    factory.rubric("awards", AWARDS_RUBRIC)
+    delegate = factory.new_delegate(committee, school)
 
     response = client.post(
         f"/api/chair/awards/{delegate.account_id}",
@@ -936,8 +914,8 @@ def test_an_unknown_award_name_is_400_and_lists_the_allowed_ones(
 def test_an_unknown_criterion_in_the_award_scores_is_400(
     client, factory, chair_headers, committee, school
 ):
-    _save_rubric(factory, "awards", AWARDS_RUBRIC)
-    delegate = _delegate_in(factory, committee, school)
+    factory.rubric("awards", AWARDS_RUBRIC)
+    delegate = factory.new_delegate(committee, school)
 
     response = client.post(
         f"/api/chair/awards/{delegate.account_id}",
@@ -959,8 +937,8 @@ def test_an_unknown_criterion_in_the_award_scores_is_400(
 def test_a_delegate_from_another_committee_cannot_be_awarded(
     client, factory, chair_headers, school
 ):
-    _save_rubric(factory, "awards", AWARDS_RUBRIC)
-    foreign = _delegate_in(factory, _other_committee(factory), school)
+    factory.rubric("awards", AWARDS_RUBRIC)
+    foreign = factory.new_delegate(_other_committee(factory), school)
 
     response = client.post(
         f"/api/chair/awards/{foreign.account_id}",

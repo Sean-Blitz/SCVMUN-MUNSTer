@@ -132,6 +132,7 @@ from crud.database_schema import (  # noqa: E402
     Broadcast,
     Committees,
     Delegates,
+    Rubric,
     School,
     Uploads,
 )
@@ -375,6 +376,31 @@ class Factory:
         self.db.commit()
         return row
 
+
+    def new_delegate(self, committee, school, *, country: str = "France", **fields) -> Delegates:
+        """A delegate plus a fresh account, for tests that do not care about the account.
+
+        ``delegate()`` takes an existing account because a test sometimes needs a specific
+        identifier or a password on it; this is the shorthand for the common case.
+        """
+        return self.delegate(
+            self.account(role="delegate"),
+            committee=committee,
+            school=school,
+            country=country,
+            **fields,
+        )
+
+    def rubric(self, kind: str, items: list[dict]) -> None:
+        """Store a rubric document the way PUT /admin/rubrics does.
+
+        ``kind`` is the table's primary key ('paper' or 'awards'). The per-test truncation
+        means an insert is always safe here; production upserts instead.
+        """
+        self.db.add(
+            Rubric(kind=kind, items=items, updated_at=utcnow(), updated_by="admin:1")
+        )
+        self.db.commit()
 
 @pytest.fixture()
 def factory(db) -> Factory:
