@@ -177,8 +177,13 @@ def clean_database(schema):
     with engine.begin() as connection:
         connection.execute(text(f"TRUNCATE {_TABLES} RESTART IDENTITY CASCADE"))
 
+    # Remove files *and* subdirectories: a test may store a paper at a nested relative
+    # path, and an empty leftover directory is enough to break every later assertion that
+    # the upload root is empty.
     for stale in PAPER_DIR.iterdir():
-        if stale.is_file():
+        if stale.is_dir():
+            shutil.rmtree(stale, ignore_errors=True)
+        else:
             stale.unlink()
 
     yield
@@ -383,11 +388,19 @@ def committee(factory) -> Committees:
 
 @pytest.fixture()
 def advisor(factory) -> Account:
+    """An advisor *account only* - no ``schools`` row until ``school`` is requested.
+
+    That distinction is load-bearing: a route that resolves the school from the account
+    raises ``SchoolNotFound`` without one, so a test that asks for ``advisor`` alone and
+    then calls an advisor use case is testing the "no school" path whether it meant to or
+    not. Request ``school`` too whenever the happy path is what you want.
+    """
     return factory.account(role="advisor", name="Advisor Person", identifier="ADV-0001")
 
 
 @pytest.fixture()
 def school(factory, advisor) -> School:
+    """The advisor's school row. Pulling this in is what makes ``advisor`` complete."""
     return factory.school(advisor)
 
 
