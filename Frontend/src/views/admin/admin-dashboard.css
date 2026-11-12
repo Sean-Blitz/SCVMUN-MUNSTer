@@ -640,6 +640,159 @@
   padding: 12px 14px;
 }
 
+/* CHECKLIST PROGRESS: every school at a glance */
+.admin-dashboard .overview-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.admin-dashboard .overview-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.admin-dashboard .overview-block h3 {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.admin-dashboard .overview-select-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.8rem;
+  color: #4a5578;
+  cursor: pointer;
+}
+
+.admin-dashboard .overview-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 260px;
+  overflow-y: auto;
+}
+
+/* Checkbox selects the school for the bulk editor; the name opens it for individual ticks. */
+.admin-dashboard .overview-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) minmax(50px, 110px) 52px;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background-color: #f7fafd;
+}
+
+.admin-dashboard .overview-row.is-selected {
+  border-color: rgba(0, 157, 219, 0.45);
+  background-color: #ffffff;
+}
+
+.admin-dashboard .overview-open {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 0.86rem;
+  color: inherit;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.admin-dashboard .overview-open:hover {
+  color: #00007e;
+  text-decoration: underline;
+}
+
+.admin-dashboard .overview-bar {
+  height: 6px;
+  border-radius: 999px;
+  background-color: rgba(3, 4, 94, 0.1);
+  overflow: hidden;
+}
+
+.admin-dashboard .overview-fill {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background-color: #15803d;
+  transition: width 0.3s ease;
+}
+
+.admin-dashboard .overview-count {
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: #5b6b7d;
+  text-align: right;
+}
+
+/* BULK EDIT: one row per checklist line, applied to every selected school. */
+.admin-dashboard .bulk-block {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid #e8c604;
+  border-radius: 8px;
+  background-color: #fffdf3;
+}
+
+.admin-dashboard .bulk-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  font-size: 0.82rem;
+  font-weight: 650;
+  color: #00007e;
+}
+
+.admin-dashboard .bulk-count {
+  font-weight: 400;
+  font-size: 0.76rem;
+  color: #5b6b7d;
+}
+
+.admin-dashboard .bulk-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+.admin-dashboard .bulk-line {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 4px 2px;
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.admin-dashboard .bulk-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-dashboard .bulk-meta {
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  color: #5b6b7d;
+}
+
 .admin-dashboard .rubric-conflict p {
   flex: 1 1 320px;
   margin: 0;

@@ -33,13 +33,15 @@ from schemas.request_models import (
     BroadcastRequest, BroadcastUpdateRequest, ChairHashRequest, ChairRequest,
     ChairUpdateRequest, CommitteeRequest, CommitteeUpdateRequest, DelegateUpdateRequest,
     SchoolRequest, SchoolUpdateRequest, ChecklistProgressRequest, ChecklistUpdateRequest,
-    DelegateHashRequest, NewHashRequest, RubricUpdateRequest, TimelineUpdateRequest,
+    BulkChecklistProgressRequest, DelegateHashRequest, NewHashRequest, RubricUpdateRequest,
+    TimelineUpdateRequest,
 )
 from schemas.response_models import (
     AdminDashboardStatsResponse, AwardsOverviewResponse, BroadcastEntry,
     BroadcastListResponse, CommitteeChairEntry, CommitteeDetailResponse,
     ConferenceChecklistResponse, DelegateRemovedResponse, HashEntry, HashListResponse,
-    PasswordResetResponse, PortHealth, SchoolChecklistResponse, SchoolDelegateEntry,
+    BulkChecklistProgressResponse, PasswordResetResponse, PortHealth, SchoolChecklistResponse,
+    SchoolDelegateEntry,
     SchoolDetailResponse, RubricResponse, SchoolDeletedResponse, SchoolEntry, SchoolListResponse,
     TimelineListResponse,
 )
@@ -912,6 +914,31 @@ def update_school_checklist(
     try:
         return schedule_domain.update_school_checklist(
             db, school_id, items=payload.items, actor=core.audit.actor(user)
+        )
+    except domain_errors.DomainError as exc:
+        raise _schedule_error(exc) from exc
+
+
+@router.patch("/checklist/progress", response_model=BulkChecklistProgressResponse)
+def update_checklists_bulk(
+    payload: BulkChecklistProgressRequest,
+    user: Annotated[CurrentUser, Depends(get_current_user)],
+    db: Session = Depends(get_db),
+) -> BulkChecklistProgressResponse:
+    """
+        Tick or untick the same checklist lines for many schools in one request.
+
+        `school_ids` omitted means every school - the dashboard's "select all schools" case,
+        so a line can be closed for the whole conference in one action. Lines are addressed
+        the same way the single-school route accepts them (id or label), and everything is
+        written in one transaction: an unknown id or label rejects the whole call rather than
+        leaving some schools ticked."""
+    try:
+        return schedule_domain.update_checklists_bulk(
+            db,
+            school_ids=payload.school_ids,
+            items=payload.items,
+            actor=core.audit.actor(user),
         )
     except domain_errors.DomainError as exc:
         raise _schedule_error(exc) from exc

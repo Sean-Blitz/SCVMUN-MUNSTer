@@ -986,6 +986,32 @@ requests.patch(
 ).raise_for_status()
 ```
 
+#### 8.7.7 `PATCH /admin/checklist/progress`
+
+The same ticks applied to many schools in one request — the dashboard's "select all schools"
+case.
+
+```json
+{
+  "school_ids": [1, 2, 3],
+  "items": [
+    { "id": 3, "completed": true },
+    { "label": "Pay the conference fee", "completed": false }
+  ]
+}
+```
+
+Field notes:
+- `school_ids` **omitted (or `null`) means every school** — that is the "one click, all
+  schools" path rather than a special school id.
+- `items` follows the same rules as §8.7.6: exactly one of `id` or `label` per entry, matched
+  case-insensitively after trimming.
+- One transaction for all of it: an unknown school (`404`) or line (`404`) rejects the whole
+  call, so there is never a half-ticked conference. `partial` semantics are per *line*, not
+  per school — lines that are not listed keep whatever they had.
+- Response `200`: `{ "schools": 3, "lines": 2 }` — how many schools were written and how many
+  lines were applied. Re-read §8.7.5 per school (or the dashboard's own overview) for state.
+
 ### 8.8 Conference timeline
 
 The schedule shown on every chair's committee overview (§5.1) is a single conference-wide list
@@ -1400,7 +1426,8 @@ Field notes:
 | 53 | Admin | POST | `/admin/hashes/regenerate/chair` | `{name, hash}` |
 | 54 | Admin | PUT | `/admin/rubrics` | both rubrics |
 | 55 | Admin | POST | `/admin/accounts/{id}/reset-password` | `{name, role, hash}` |
-| 56 | Public | GET | `/conference` | `{label, starts_at}` |
+| 56 | Admin | PATCH | `/admin/checklist/progress` | `{schools, lines}` |
+| 57 | Public | GET | `/conference` | `{label, starts_at}` |
 
 **Roles** (from the router): `delegate`, `advisor`, `chair`, `admin`. Chair views also accept
 `admin`.

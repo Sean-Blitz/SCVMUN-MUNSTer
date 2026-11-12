@@ -48,6 +48,7 @@ from crud.database_schema import (
 )
 from crud.db import utcnow
 from schemas.response_models import (
+    BulkChecklistProgressResponse,
     ConferenceChecklistItem,
     ConferenceChecklistResponse,
     SchoolChecklistItem,
@@ -170,21 +171,51 @@ def replace_checklist(
     return get_checklist(db)
 
 
+def update_checklists_bulk(
+    db: Session, *, school_ids: list[int] | None, items: list, actor: str
+) -> BulkChecklistProgressResponse:
+    """Apply the same ticks to many schools at once, in one transaction.
+
+    `school_ids=None` means every school, which is the dashboard's "select all" case. The
+    lines are resolved once and written for each target, so a bad id or label fails the whole
+    call before anything is stored - there is no half-ticked conference.
+    """
+    resolved = _resolve_progress_items(db, items)
+
+    if school_ids is None:
+        schools = list(db.scalars(select(School).order_by(School.school_name)).all())
+    else:
+        schools = [require_school_by_id(db, school_id) for school_id in school_ids]
+
+    for school in schools:
+        _write_progress(db, school, resolved)
+
+    db.commit()
+
+    ticked = sum(1 for _, completed in resolved if completed)
+    core.audit.business(
+        "checklist.progress_all",
+        actor=actor,
+        schools=len(schools),
+        lines=len(resolved),
+        ticked=ticked,
+        cleared=len(resolved) - ticked,
+    )
+
+    return BulkChecklistProgressResponse(schools=len(schools), lines=len(resolved))
+
+
 def get_school_checklist(db: Session, school_id: int) -> SchoolChecklistResponse:
     """The shared labels with this school's ticks - what its advisor sees, plus the ids."""
     return _school_checklist(db, require_school_by_id(db, school_id))
 
 
-def update_school_checklist(
-    db: Session, school_id: int, *, items: list, actor: str
-) -> SchoolChecklistResponse:
-    """Tick or untick lines for one school, addressing each by id or by label.
+def _resolve_progress_items(db: Session, items: list) -> list[tuple[ConferenceChecklist, bool]]:
+    """Resolve submitted lines to (item, completed), addressing each by id or by label.
 
-    A partial update: lines that are not listed keep their current state, which is what makes
-    this convenient to call from a script ("mark 'Pay the conference fee' done"). The admin UI
-    sends every line, which amounts to a full save. Returns the school's checklist afterwards.
+    Shared by the single-school and the many-school update, so both accept exactly the same
+    addressing and fail the same way - a bad id is a 404 either way, never a partial write.
     """
-    school = require_school_by_id(db, school_id)
     by_id = {item.id: item for item in _ordered_items(db)}
     by_label = {item.label.casefold(): item for item in by_id.values()}
 
@@ -203,8 +234,12 @@ def update_school_checklist(
                 raise ChecklistLabelNotFound(entry.label or "")
 
         resolved.append((item, bool(entry.completed)))
+    return resolved
 
-    # Upsert: the pair (school, item) is the primary key, so a second save updates the row.
+
+def _write_progress(db: Session, school: School, resolved: list) -> None:
+    """Upsert one school's ticks for the resolved lines. No commit: the caller owns that."""
+    # The pair (school, item) is the primary key, so a second save updates the row.
     for item, completed in resolved:
         row = db.get(ChecklistProgress, (school.account_id, item.id))
         if row is None:
@@ -219,6 +254,20 @@ def update_school_checklist(
         else:
             row.completed = completed
             row.updated_at = utcnow()
+
+
+def update_school_checklist(
+    db: Session, school_id: int, *, items: list, actor: str
+) -> SchoolChecklistResponse:
+    """Tick or untick lines for one school, addressing each by id or by label.
+
+    A partial update: lines that are not listed keep their current state, which is what makes
+    this convenient to call from a script ("mark 'Pay the conference fee' done"). The admin UI
+    sends every line, which amounts to a full save. Returns the school's checklist afterwards.
+    """
+    school = require_school_by_id(db, school_id)
+    resolved = _resolve_progress_items(db, items)
+    _write_progress(db, school, resolved)
 
     db.commit()
 

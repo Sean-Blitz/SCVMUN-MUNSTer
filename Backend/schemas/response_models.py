@@ -329,6 +329,13 @@ class SchoolChecklistItem(BaseModel):
     completed: bool = False
 
 
+class BulkChecklistProgressResponse(BaseModel):
+    """How many schools one bulk tick reached. The caller re-reads the progress itself."""
+
+    schools: int
+    lines: int
+
+
 class SchoolChecklistResponse(BaseModel):
     """One school's checklist state. `school_name` is included so a script can confirm it
     addressed the school it meant to."""

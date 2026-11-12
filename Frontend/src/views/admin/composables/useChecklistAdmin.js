@@ -1,6 +1,7 @@
 import { computed, ref } from 'vue'
 import apiClient from '@/api/client'
 import { useToastStore } from '@/stores/toast'
+import { useSchools } from './useSchools'
 
 /**
  * The conference-wide action checklist and its per-school ticks, shared by the two cards that
@@ -30,6 +31,13 @@ const progressDirty = ref(false)
 const progressDone = computed(
   () => progressItems.value.filter((item) => item.completed).length
 )
+
+// Every school's tick count, for the "all schools" summary. The API is per school, so this
+// is a fan-out of the same GET the editor uses - kept here rather than in the card so saving
+// the labels (which changes the line ids) can refresh it in one place.
+const { schools } = useSchools()
+const allProgress = ref({}) // { [schoolId]: { done, total } }
+const loadingAllProgress = ref(false)
 
 // ---------- Shared labels ----------
 const loadChecklist = async () => {
@@ -108,11 +116,12 @@ const saveChecklist = async () => {
     checklistDirty.value = false
     toastStore.showToast('Checklist saved.', 'success')
 
-    // Line ids may have been added or removed, so re-read the progress view rather than
-    // keep ticking against a stale list.
+    // Line ids may have been added or removed, so re-read the progress views rather than
+    // keep ticking (or counting) against a stale list.
     if (progressSchoolId.value !== null) {
       await loadProgress()
     }
+    await loadAllProgress()
   } catch (error) {
     // Backend errors pop up via the global toast interceptor
   } finally {
@@ -148,11 +157,73 @@ const saveProgress = async () => {
       completed: item.completed
     }))
     progressDirty.value = false
+    allProgress.value = {
+      ...allProgress.value,
+      [progressSchoolId.value]: {
+        done: progressItems.value.filter((item) => item.completed).length,
+        total: progressItems.value.length,
+        completedIds: progressItems.value
+          .filter((item) => item.completed)
+          .map((item) => item.id)
+      }
+    }
     toastStore.showToast('Progress saved.', 'success')
   } catch (error) {
     // Backend errors pop up via the global toast interceptor
   } finally {
     savingProgress.value = false
+  }
+}
+
+const loadAllProgress = async () => {
+  if (!schools.value.length) {
+    allProgress.value = {}
+    loadingAllProgress.value = false
+    return
+  }
+
+  loadingAllProgress.value = true
+  try {
+    // One request per school; allSettled so a single failure does not blank the whole
+    // summary (the interceptor has already reported it).
+    const results = await Promise.allSettled(
+      schools.value.map((school) => apiClient.get(`/admin/schools/${school.id}/checklist`))
+    )
+
+    const next = {}
+    results.forEach((result, index) => {
+      if (result.status !== 'fulfilled') return
+      const items = result.value.data.items || []
+      next[schools.value[index].id] = {
+        done: items.filter((item) => item.completed).length,
+        total: items.length,
+        completedIds: items.filter((item) => item.completed).map((item) => item.id)
+      }
+    })
+    allProgress.value = next
+  } finally {
+    loadingAllProgress.value = false
+  }
+}
+
+// One line, many schools: written server-side in a single transaction so a bad id cannot
+// leave the conference half-ticked.
+const bulkSaving = ref(false)
+const applyToSchools = async (schoolIds, changes) => {
+  bulkSaving.value = true
+  try {
+    const response = await apiClient.patch('/admin/checklist/progress', {
+      school_ids: schoolIds,
+      items: changes
+    })
+    await loadAllProgress()
+    // The editor below shows one school; refresh it too, unless it holds unsaved ticks.
+    if (progressSchoolId.value !== null && !progressDirty.value) {
+      await loadProgress()
+    }
+    return response.data
+  } finally {
+    bulkSaving.value = false
   }
 }
 
@@ -176,6 +247,12 @@ export function useChecklistAdmin() {
     progressDirty,
     progressDone,
     loadProgress,
+    // every school, for the summary
+    allProgress,
+    loadingAllProgress,
+    loadAllProgress,
+    bulkSaving,
+    applyToSchools,
     onProgressSchoolChange,
     saveProgress
   }

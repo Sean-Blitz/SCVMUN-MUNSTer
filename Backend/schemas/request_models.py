@@ -247,6 +247,18 @@ class ChecklistProgressUpdate(BaseModel):
     completed: bool
 
 
+class BulkChecklistProgressRequest(BaseModel):
+    """The same ticks applied to many schools at once.
+
+    `school_ids` omitted (or null) means **every** school, which is the dashboard's
+    "select all schools" case. The lines follow the same id-or-label rules as the
+    single-school update.
+    """
+
+    school_ids: list[int] | None = None
+    items: list[ChecklistProgressUpdate]
+
+
 class ChecklistProgressRequest(BaseModel):
     """A partial update: lines not listed keep whatever state they already have."""
 
