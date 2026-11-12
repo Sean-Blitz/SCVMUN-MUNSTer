@@ -5,23 +5,8 @@
 
     <!-- DASHBOARD: the whole brief on one screen - no scrolling, no scroll-driven motion -->
     <main class="dashboard">
-      <!-- ANNOUNCEMENT BAR (the backend sends at most 3: 2 general + 1 for this committee) -->
-      <div v-if="dashboardData.announcements.length" class="announcement-bar">
-        <span class="announcement-label">
-          {{ dashboardData.announcements.length > 1 ? 'Announcements' : 'Announcement' }}
-        </span>
-        <div class="announcement-lines">
-          <span
-            v-for="(announcement, index) in dashboardData.announcements"
-            :key="index"
-            class="announcement-text"
-          >
-            {{ announcement }}
-          </span>
-        </div>
-      </div>
-
-      <!-- THREE COLUMNS: identity + links, the paper, and the chair's verdict -->
+      <!-- THREE COLUMNS: identity + links on the left, announcements over the submission form
+           in the middle, and the chair's verdict running the full height on the right. -->
       <div class="board">
         <div class="column">
           <!-- DELEGATE INFO PANEL -->
@@ -71,64 +56,85 @@
           </section>
         </div>
 
-        <!-- SUBMISSION PANEL -->
-        <section class="panel panel-paper">
-          <h2 class="panel-title">Position Paper Submission</h2>
-
-          <!-- INSTRUCTIONS LIST -->
-          <div v-if="positionPaper.instructions.length" class="instructions-block">
-            <ol class="instructions-list">
-              <li
-                v-for="(instruction, index) in positionPaper.instructions"
+        <!-- MIDDLE COLUMN: announcements on top, the submission form beneath them -->
+        <div class="column">
+          <section
+            v-if="dashboardData.announcements.length"
+            class="panel announcement-card"
+          >
+            <h2 class="panel-title">
+              {{ dashboardData.announcements.length > 1 ? 'Announcements' : 'Announcement' }}
+            </h2>
+            <div class="announcement-lines">
+              <p
+                v-for="(announcement, index) in dashboardData.announcements"
                 :key="index"
+                class="announcement-line"
               >
-                {{ instruction }}
-              </li>
-            </ol>
-          </div>
+                {{ announcement }}
+              </p>
+            </div>
+          </section>
 
-          <!-- STATUS DISPLAY -->
-          <div class="status-block">
-            <span class="status-label">Current Status</span>
-            <span :class="['status-badge', statusClass]">
-              {{ positionPaper.status.toUpperCase() }}
-            </span>
-          </div>
+          <!-- SUBMISSION PANEL -->
+          <section class="panel panel-paper">
+            <h2 class="panel-title">Position Paper Submission</h2>
 
-          <!-- OWN PAPER DOWNLOAD, once something has been submitted -->
-          <div v-if="positionPaper.status !== 'unsubmitted'" class="paper-download-block">
-            <button class="btn-download-paper" :disabled="downloadingPaper" @click="downloadMyPaper">
-              <span class="btn-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M12 4v10" />
-                  <path d="m8 10 4 4 4-4" />
-                  <path d="M5 19h14" />
-                </svg>
+            <!-- INSTRUCTIONS LIST -->
+            <div v-if="positionPaper.instructions.length" class="instructions-block">
+              <ol class="instructions-list">
+                <li
+                  v-for="(instruction, index) in positionPaper.instructions"
+                  :key="index"
+                >
+                  {{ instruction }}
+                </li>
+              </ol>
+            </div>
+
+            <!-- STATUS DISPLAY -->
+            <div class="status-block">
+              <span class="status-label">Current Status</span>
+              <span :class="['status-badge', statusClass]">
+                {{ positionPaper.status.toUpperCase() }}
               </span>
-              <span>{{ downloadingPaper ? 'Preparing…' : 'Download my position paper' }}</span>
-            </button>
-            <span class="download-hint">The copy you submitted, as a PDF.</span>
-          </div>
+            </div>
 
-          <!-- FILE UPLOAD BOX -->
-          <form @submit.prevent="submitPaper" class="upload-box">
-            <label for="pdf-upload" class="upload-label">Select PDF Document</label>
-            <input
-              id="pdf-upload"
-              type="file"
-              accept="application/pdf"
-              @change="handleFileSelect"
-              class="file-input"
-            />
-            <button
-              type="submit"
-              class="btn-submit"
-              :disabled="!selectedFile"
-            >
-              Upload Position Paper
-            </button>
-          </form>
-        </section>
+            <!-- OWN PAPER DOWNLOAD, once something has been submitted -->
+            <div v-if="positionPaper.status !== 'unsubmitted'" class="paper-download-block">
+              <button class="btn-download-paper" :disabled="downloadingPaper" @click="downloadMyPaper">
+                <span class="btn-icon" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 4v10" />
+                    <path d="m8 10 4 4 4-4" />
+                    <path d="M5 19h14" />
+                  </svg>
+                </span>
+                <span>{{ downloadingPaper ? 'Preparing…' : 'Download my position paper' }}</span>
+              </button>
+              <span class="download-hint">The copy you submitted, as a PDF.</span>
+            </div>
+
+            <!-- FILE UPLOAD BOX -->
+            <form @submit.prevent="submitPaper" class="upload-box">
+              <label for="pdf-upload" class="upload-label">Select or Drag PDF Document</label>
+              <input
+                id="pdf-upload"
+                type="file"
+                accept="application/pdf"
+                @change="handleFileSelect"
+                class="file-input"
+              />
+              <button
+                type="submit"
+                class="btn-submit"
+                :disabled="!selectedFile"
+              >
+                Upload Position Paper
+              </button>
+            </form>
+          </section>
+        </div>
 
         <!-- GRADE & FEEDBACK PANEL -->
         <section class="panel panel-grade">
@@ -437,42 +443,38 @@ onMounted(async () => {
   min-height: 0;
 }
 
-/* ANNOUNCEMENT BAR */
-.announcement-bar {
+/* ANNOUNCEMENTS
+   The first block of the board's middle column, not a banner floating over it: Delegate
+   Information sits to its left, Grade & Chair Feedback runs the full height on its right, and
+   the submission form is directly beneath it. The warm fill and gold edge are what keep it
+   reading as a notice rather than as one more white card. */
+.announcement-card {
   flex: none;
-  display: flex;
-  align-items: flex-start;
-  gap: 14px;
-  padding: clamp(9px, 1.3vh, 13px) clamp(14px, 1.4vw, 20px);
-  border: 1px solid var(--line);
+  gap: clamp(7px, 1vh, 11px);
   border-left: 3px solid var(--gold);
-  border-radius: 14px;
-  background-color: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 1px 2px rgba(3, 4, 94, 0.04);
-  animation: panel-in 0.75s var(--ease) 0.1s both;
-}
-
-.announcement-label {
-  flex: none;
-  padding-top: 0.15em;
-  font-size: 0.66em;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink);
+  background:
+    linear-gradient(180deg, rgba(255, 253, 242, 0.98), rgba(255, 253, 242, 0.9));
+  animation-delay: 0.1s;
 }
 
 .announcement-lines {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 6px;
   min-width: 0;
 }
 
-.announcement-text {
-  color: var(--ink-2);
-  font-size: 0.88em;
-  line-height: 1.45;
+/* Plain lines inside the one card: a separator instead of a border per announcement. */
+.announcement-line {
+  margin: 0;
+  font-size: 0.95em;
+  line-height: 1.5;
+  color: var(--ink);
+}
+
+.announcement-line + .announcement-line {
+  padding-top: 7px;
+  border-top: 1px dashed rgba(3, 4, 94, 0.14);
 }
 
 /* PANELS: white cards on the tinted page, hairline edges, one soft shadow. */
@@ -573,7 +575,8 @@ onMounted(async () => {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 0.84em;
+  /* Sized up from 0.84em: this is the panel's actual content, not a caption. */
+  font-size: 0.95em;
   font-weight: 600;
   letter-spacing: 0.005em;
   color: var(--ink);
@@ -583,7 +586,7 @@ onMounted(async () => {
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
-  font-size: 0.74em;
+  font-size: 0.84em;
   color: var(--muted);
 }
 
@@ -614,9 +617,11 @@ onMounted(async () => {
   margin: 0;
   padding: 0 12px 2px 15px;
   border-left: 2px solid rgba(3, 4, 94, 0.12);
-  font-size: 0.78em;
+  /* Sized with the values around it rather than as small print: it is the one line that says
+     what the committee is actually debating. */
+  font-size: 0.92em;
   line-height: 1.5;
-  color: var(--muted);
+  color: var(--ink-2);
 }
 
 .info-label {
@@ -640,6 +645,9 @@ onMounted(async () => {
 /* POSITION PAPER PANEL */
 .panel-paper {
   gap: clamp(9px, 1.3vh, 13px);
+  /* Grows into the space left under the announcements, so the middle column ends level with
+     the other two instead of stopping short of the bottom. */
+  flex: 1;
 }
 
 .instructions-block {
@@ -1045,7 +1053,7 @@ onMounted(async () => {
 
 /* Motion is decoration here: keep the layout, drop the movement. */
 @media (prefers-reduced-motion: reduce) {
-  .announcement-bar,
+  .announcement-card,
   .panel,
   .criterion-bar-fill,
   .grade-empty-icon {

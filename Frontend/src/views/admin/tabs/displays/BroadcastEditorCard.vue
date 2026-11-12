@@ -24,12 +24,9 @@
     <span
       v-for="row in broadcastCapacity"
       :key="row.label"
-      :class="['capacity-chip', { full: row.full }]"
+      :class="['capacity-chip', { full: row.full, 'is-target': row.selected }]"
     >
       {{ row.label }}: {{ row.used }}/{{ row.limit }}
-    </span>
-    <span class="capacity-note">
-      counted per target, and a line that has not ended yet still holds its place
     </span>
   </p>
 
@@ -95,7 +92,7 @@
         {{ savingBroadcast ? 'Saving...' : 'Publish' }}
       </button>
       <span v-if="targetFull" class="capacity-warning">
-        That target is full — delete one of its lines first.
+        This showing category is full.
       </span>
     </div>
   </div>

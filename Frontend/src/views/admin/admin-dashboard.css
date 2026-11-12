@@ -1080,6 +1080,13 @@
   white-space: nowrap;
 }
 
+/* The target the "Shown to" picker currently points at, now that every target is listed. */
+.admin-dashboard .capacity-chip.is-target {
+  border-color: #009ddb;
+  background-color: #f2fbfe;
+  font-weight: 650;
+}
+
 .admin-dashboard .capacity-chip.full {
   border-color: #b33;
   color: #b33;

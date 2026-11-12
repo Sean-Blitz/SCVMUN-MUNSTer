@@ -72,17 +72,28 @@ const usedFor = (kind, committeeName) =>
       countsTowardCapacity(row)
   ).length
 
-// Capacity for the general target plus whichever target the form is pointing at.
+// Capacity for every target the form can publish to: the general strip plus one line per
+// committee. Listing them all (even at 0/1) is the point - hiding the committees the form was
+// not pointing at made the remaining space look like a single shared budget.
 const broadcastCapacity = computed(() => {
   const limits = broadcastLimits[broadcastKind.value]
-  const targets = [{ label: 'All delegates', key: null, limit: limits.global }]
   const selected = newBroadcast.value.committee_name
-  if (selected) {
-    targets.push({ label: selected, key: selected, limit: limits.committee })
-  }
+
+  const targets = [
+    { label: 'All delegates', key: null, limit: limits.global, selected: !selected }
+  ]
+  committees.value.forEach((committee) => {
+    targets.push({
+      label: committee,
+      key: committee,
+      limit: limits.committee,
+      selected: selected === committee
+    })
+  })
+
   return targets.map((target) => {
     const used = usedFor(broadcastKind.value, target.key)
-    return { label: target.label, used, limit: target.limit, full: used >= target.limit }
+    return { ...target, used, full: used >= target.limit }
   })
 })
 

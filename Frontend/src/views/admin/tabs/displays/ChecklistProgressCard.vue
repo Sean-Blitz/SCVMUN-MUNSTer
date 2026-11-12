@@ -72,7 +72,7 @@
       </div>
     </div>
 
-    <p class="capacity-note">Click a school's name to tick its individual lines below.</p>
+    <p class="capacity-note">Alternatively, click a school's name to tick its individual lines below.</p>
   </div>
 
   <label class="field-label" for="progress-school">School</label>
