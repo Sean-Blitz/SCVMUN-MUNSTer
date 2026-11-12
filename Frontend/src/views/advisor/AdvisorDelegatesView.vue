@@ -4,7 +4,7 @@
     <div class="toggle-container">
     <button 
       class="toggle-btn active" 
-      @click="switchView('advisor-roster')"
+      @click="switchView('advisor-delegates')"
     >
       Delegates Overview
     </button>

@@ -128,6 +128,7 @@
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { getHomeRouteForRole } from '@/router'
 import apiClient from '@/api/client'
 import { useAuthStore } from '@/stores/auth'
 import { useToastStore } from '@/stores/toast'
@@ -390,7 +391,7 @@ const handleLogin = async () => {
     toastStore.showToast(`Welcome back, ${user.name || 'User'}!`, 'success')
 
     // 4. Redirect based on their role
-    router.push(`/${user.role}/dashboard`)
+    router.push(getHomeRouteForRole(user.role))
   } catch (error) {
     // Backend error message will automatically trigger via the global Toast Interceptor
     resetCaptcha()
@@ -426,7 +427,7 @@ const handleRegister = async () => {
     toastStore.showToast('Account registered successfully!', 'success')
 
     // 3. Redirect to role portal
-    router.push(`/${user.role}/dashboard`)
+    router.push(getHomeRouteForRole(user.role))
   } catch (error) {
     // Backend error message handles popup automatically
     resetCaptcha()

@@ -34,6 +34,9 @@ const routes = [
       },
 
       // Advisor Routes
+      // Landing redirects: the login screen used to push `/<role>/dashboard`, so these keep
+      // that URL (and any bookmark of it) working instead of falling through to the 404.
+      { path: 'advisor/dashboard', redirect: '/advisor/school-overview' },
       {
         path: 'advisor/delegates',
         name: 'advisor-delegates',
@@ -48,6 +51,7 @@ const routes = [
       },
 
       // Chair Routes
+      { path: 'chair/dashboard', redirect: '/chair/committee' },
       {
         path: 'chair/committee',
         name: 'chair-committee',
@@ -90,11 +94,16 @@ const router = createRouter({
   routes
 })
 
-// Helper function to map role to home route
-const getHomeRouteForRole = (role) => {
+// Helper function to map role to home route.
+// Exported because the login screen redirects with it: `/advisor/dashboard` and
+// `/chair/dashboard` are not routes, so building the path from the role name sent those two
+// roles to the 404 page.
+export const getHomeRouteForRole = (role) => {
   switch (role) {
     case 'delegate': return '/delegate/dashboard'
-    case 'advisor': return '/advisor/delegates'
+    // The school overview is the advisor's landing page: it is where the conference
+    // checklist and billing live, which is what they open the app for.
+    case 'advisor': return '/advisor/school-overview'
     case 'chair': return '/chair/committee'
     case 'admin': return '/admin/dashboard'
     default: return '/'
