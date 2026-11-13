@@ -83,24 +83,38 @@ def test_storage_is_reported_in_gib(client, admin_headers):
     assert 0 <= storage["usedGb"] <= storage["totalGb"]
 
 
-def test_no_recorded_outage_reads_as_full_uptime(client, admin_headers):
-    """An empty list is the "100% Uptime" state, including on a fresh install."""
+def test_no_recorded_outage_reads_as_full_uptime(
+    client, admin_headers, monkeypatch, tmp_path
+):
+    """An empty list is the "100% Uptime" state, including on a fresh install.
+
+    ``LOG_DIR`` is redirected so this really is a fresh install: ``downtime.log`` accumulates
+    for the whole session, and other tests legitimately record outages in it.
+    """
+    monkeypatch.setenv("LOG_DIR", str(tmp_path))
+
     assert client.get("/api/admin/dashboard-stats", headers=admin_headers).json()[
         "downtimeEvents"
     ] == []
 
 
 def test_a_recorded_outage_reaches_the_dashboard(client, admin_headers):
-    """The monitor infers outages from heartbeat gaps; the dashboard reports the last week."""
-    end = datetime.now(timezone.utc)
-    core.monitor.record_outage(end - timedelta(minutes=5), end, "service restart")
+    """The monitor infers outages from heartbeat gaps; the dashboard reports the last week.
 
-    events = client.get("/api/admin/dashboard-stats", headers=admin_headers).json()[
-        "downtimeEvents"
+    The reason is unique to this test because ``downtime.log`` accumulates for the session.
+    """
+    end = datetime.now(timezone.utc)
+    core.monitor.record_outage(end - timedelta(minutes=5), end, "api-test-outage")
+
+    events = [
+        event
+        for event in client.get(
+            "/api/admin/dashboard-stats", headers=admin_headers
+        ).json()["downtimeEvents"]
+        if event["reason"] == "api-test-outage"
     ]
 
     assert len(events) == 1
-    assert events[0]["reason"] == "service restart"
     # Pre-formatted display strings: the view renders them verbatim.
     assert {"id", "startTime", "endTime", "duration", "reason"} == set(events[0])
 
