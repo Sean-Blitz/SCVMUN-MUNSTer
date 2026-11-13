@@ -4,6 +4,8 @@ A hash is the login code; a password is what its holder chose at registration. T
 the same row but neither derives from the other, so resetting a password is its own
 operation: it clears `password_hash` (back to the unclaimed state) and ends the sessions,
 after which the same hash claims the account again through First-Time Register.
+
+The admin account and its header come from ``admin_headers`` in ``tests/admin/conftest.py``.
 """
 
 from sqlalchemy import select
@@ -11,18 +13,14 @@ from sqlalchemy import select
 from crud.database_schema import AuthSession
 
 
-def _admin_headers(factory):
-    admin = factory.account(role="admin", name="Admin Person", identifier="ADMIN-0001")
-    return factory.headers(admin)
-
-
-def test_reset_clears_the_password_and_the_sessions(client, factory, delegate, delegate_account):
+def test_reset_clears_the_password_and_the_sessions(
+    client, factory, delegate, delegate_account, admin_headers
+):
     """The account goes back to unclaimed, the old token dies, and the hash still works."""
     delegate_account.password_hash = "some-existing-hash"
     factory.db.commit()
 
     delegate_headers = factory.headers(delegate_account)  # a live session to revoke
-    admin_headers = _admin_headers(factory)
 
     response = client.post(
         f"/api/admin/accounts/{delegate_account.id}/reset-password", headers=admin_headers
@@ -53,10 +51,10 @@ def test_reset_clears_the_password_and_the_sessions(client, factory, delegate, d
     assert claim.json()["user"]["role"] == "delegate"
 
 
-def test_reset_is_refused_when_the_account_never_registered(client, factory, delegate_account):
+def test_reset_is_refused_when_the_account_never_registered(
+    client, delegate_account, admin_headers
+):
     """An unclaimed hash has no password to clear; saying "done" would be misleading."""
-    admin_headers = _admin_headers(factory)
-
     response = client.post(
         f"/api/admin/accounts/{delegate_account.id}/reset-password", headers=admin_headers
     )
@@ -65,8 +63,11 @@ def test_reset_is_refused_when_the_account_never_registered(client, factory, del
     assert "not registered" in response.json()["message"]
 
 
-def test_reset_of_an_unknown_account_is_404(client, factory):
-    response = client.post("/api/admin/accounts/999999/reset-password", headers=_admin_headers(factory))
+def test_reset_of_an_unknown_account_is_404(client, admin_headers):
+    response = client.post(
+        "/api/admin/accounts/999999/reset-password", headers=admin_headers
+    )
+
     assert response.status_code == 404
     assert response.json()["message"] == "No account has that id."
 

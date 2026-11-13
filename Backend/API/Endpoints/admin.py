@@ -677,6 +677,14 @@ def _school_error(exc: domain_errors.DomainError) -> HTTPException:
             status.HTTP_404_NOT_FOUND,
             f"Unknown school '{exc.school_name}'. Create it with POST /admin/schools first.",
         )
+    # Moving a delegate validates its committee (`require_committee`), so this route can raise
+    # it too. Without this branch the failure fell through to the catch-all and answered 500
+    # for what is a client-side mistake - the same mapping `_hash_error` already had.
+    if isinstance(exc, domain_errors.UnknownCommittee):
+        return HTTPException(
+            status.HTTP_404_NOT_FOUND,
+            f"Unknown committee '{exc.committee_name}'. Create it on the Committees tab first.",
+        )
     if isinstance(exc, domain_errors.MissingSchoolFields):
         return HTTPException(
             status.HTTP_400_BAD_REQUEST,
