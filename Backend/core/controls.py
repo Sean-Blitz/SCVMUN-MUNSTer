@@ -1,23 +1,6 @@
-from typing import List, Dict, Any
+from typing import Dict
 
-# --- The two rubrics ---------------------------------------------------------------------
-# These are now *defaults*, not the live rubric. Both documents live in the `rubrics` table
-# and are edited from the admin dashboard (PUT /admin/rubrics, §8.11 of the contract), so
-# changing a criterion is a UI action rather than an edit here and a restart.
-#
-# They still matter in two places:
-#   1. crud/seed.py copies them in when the row is missing, so whatever was hand-written
-#      here before the table existed lands in the database instead of being lost;
-#   2. core/domain/rubrics.py falls back to them when a database has no row at all, which is
-#      what keeps a test that monkeypatches these attributes in control of the rubric.
-#
-# Read at call time for that second reason - do not `from core.controls import ...` a rubric
-# anywhere, or a patched value will be silently ignored.
-paper_rubric_data: List[Dict[str, Any]] = []
-# Ex: [{"id": "criterion1", "label": "Clarity of Argument", "maxScore": 10}, ...]
 award_options = ["Verbal Commendation", "Honorable Mention", "Outstanding Delegate", "Best Delegate"]
-awards_rubric: List[Dict[str, Any]] = []
-# Ex: [{"id": "string | number", "label": "string", "levels": [{ "score": 4, "label": "string", "description": "string" }]}]
 
 # --- Delegate-facing broadcasts (announcements & conference links) ---
 # How many not-yet-ended rows each target may have at once. A "global" row
