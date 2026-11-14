@@ -1,0 +1,24 @@
+# The build inputs themselves: never needed inside the image.
+Dockerfile
+.dockerignore
+
+# Secrets. crud/.env holds DATABASE_URL and the live TURNSTILE_SECRET; configuration
+# reaches the container as environment variables instead (compose env_file).
+crud/.env
+
+# Local runtime state that must never be baked in: real audit lines and real papers
+# from development, plus the throwaway directories tests write to.
+logs/
+crud/pdf_uploads/
+
+# Development-only files.
+.venv/
+.pytest_cache/
+**/__pycache__/
+*.py[cod]
+tests/
+requirements-dev.txt
+example.py
+
+# Tool and editor noise.
+.DS_Store
