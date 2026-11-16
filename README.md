@@ -46,16 +46,30 @@ Placeholder, in progress
 
 ## Docker Usage
 
-Placeholder.
+The whole platform runs as three containers — nginx serving the built SPA and terminating
+TLS, the FastAPI backend, and PostgreSQL:
 
 ```bash
-# Start the application in development mode
-npm run dev
-
-# Build the application for production
-npm run build
+cp .env.example .env          # set POSTGRES_PASSWORD at minimum
+# put fullchain.pem and privkey.pem in tls/  (see deploy/TLS.md)
+docker compose up -d --build
+docker compose run --rm api python crud/seed.py
+docker compose run --rm api python -m crud.bootstrap --admin-name "Your Name"
 ```
 
+`bootstrap.py` prints the admin access code once; claim it with "First-Time Register" on the
+login page.
+
+- **Full self-hosting guide:** [`deploy/README.md`](deploy/README.md)
+- **Certificate setup, renewal and troubleshooting:** [`deploy/TLS.md`](deploy/TLS.md)
+
+For frontend development without containers:
+
+```bash
+cd Frontend
+npm install
+npm run dev
+```
 
 ## 🗺️ Roadmap
 - [ ] First release and conference use at SCVMUN LVI

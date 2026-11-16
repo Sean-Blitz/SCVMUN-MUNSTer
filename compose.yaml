@@ -1,0 +1,130 @@
+# SCVMUN Platform - three containers on one host.
+#
+#   web   nginx + the Vite build, terminates TLS, publishes 80 and 443, proxies /api to api
+#   api   FastAPI + uvicorn, reachable only from web
+#   db    PostgreSQL 18.6, reachable only from api
+#
+# Everything is configured from a .env file next to this one (gitignored). The keys:
+#
+#   POSTGRES_PASSWORD       required
+#   POSTGRES_USER           default scvmun
+#   POSTGRES_DB             default scvmun
+#   VITE_TURNSTILE_SITE_KEY public widget key; empty disables the human check
+#   TURNSTILE_SECRET        server-side secret; must agree with the key above
+#   TURNSTILE_HOSTNAMES     required whenever the secret is set, e.g. scvmun.esuhsd.org
+#   CORS_ALLOW_ORIGINS      only needed if the SPA ever calls a different origin
+#   SCVMUN_TAG              image tag to build/pull, default "local"
+#   WEB_PORT / WEB_TLS_PORT host ports to publish, default 80 and 443
+#   TLS_DIR                 directory holding fullchain.pem and privkey.pem, default ./tls
+#
+# TLS is REQUIRED: nginx will not start without the two files in TLS_DIR. Put them there
+# before the first `up` - deploy/TLS.md explains how to build them and what permissions
+# they need. The directory is gitignored, and it must stay that way.
+#
+# First run, on a fresh volume, schema and data come from one-shot jobs - never from an
+# entrypoint, which would re-mint access codes on every restart:
+#
+#   docker compose up -d --build
+#   docker compose run --rm api python crud/seed.py
+#   docker compose run --rm api python -m crud.bootstrap --admin-name "..."
+#
+# See deploy/README.md for the full self-hosting walkthrough.
+
+name: scvmun
+
+services:
+  # --- database --------------------------------------------------------------
+  db:
+    image: postgres:18.6
+    environment:
+      # Timestamps are stored as `timestamp without time zone` holding naive UTC, and
+      # created_at columns use server_default=func.now(). A locally-zoned server would
+      # shift those values away from what the Python code assumes.
+      TZ: UTC
+      POSTGRES_DB: ${POSTGRES_DB:-scvmun}
+      POSTGRES_USER: ${POSTGRES_USER:-scvmun}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+    volumes:
+      # PostgreSQL 18 moved PGDATA to /var/lib/postgresql/18/docker and declares
+      # /var/lib/postgresql as its volume. Mounting the pre-18 /var/lib/postgresql/data
+      # path would leave the cluster in the container's writable layer, where it is lost
+      # on the next `docker compose up` - silently, after the fact.
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      # TCP, not the unix socket: while the entrypoint runs initdb it serves a temporary
+      # instance on the socket only, so a socket probe reports ready before the cluster
+      # exists. $$ passes a literal $ to the shell, which reads the container's own env.
+      test: ["CMD-SHELL", 'pg_isready -h 127.0.0.1 -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    restart: unless-stopped
+    # Postgres gets a clean shutdown instead of the default 10s SIGKILL.
+    stop_grace_period: 1m
+    # No ports: nothing outside the compose network should reach the database.
+
+  # --- backend ---------------------------------------------------------------
+  api:
+    build:
+      context: ./Backend
+    # For Docker Hub, prefix this with your account: youruser/scvmun-api:${SCVMUN_TAG}.
+    image: scvmun-api:${SCVMUN_TAG:-local}
+    environment:
+      # The driver is spelled out on purpose. A bare postgresql:// makes SQLAlchemy load
+      # psycopg 3, which requirements.txt does not install, and the container dies at
+      # import with ModuleNotFoundError: No module named 'psycopg'.
+      DATABASE_URL: postgresql+psycopg2://${POSTGRES_USER:-scvmun}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-scvmun}
+      # Empty secret = the human check is off (development). A secret with no hostname
+      # list is a misconfiguration that rejects every login by design, so set both or
+      # neither.
+      TURNSTILE_SECRET: ${TURNSTILE_SECRET:-}
+      TURNSTILE_HOSTNAMES: ${TURNSTILE_HOSTNAMES:-}
+      # The SPA and the API share an origin through nginx, so CORS is not exercised in
+      # this topology. Set this only if something will call the API cross-origin.
+      CORS_ALLOW_ORIGINS: ${CORS_ALLOW_ORIGINS:-}
+    volumes:
+      # Uploaded papers, both audit logs and the heartbeat files. A named volume inherits
+      # the image's uid 10001 ownership on first mount; a bind mount would need
+      # `chown -R 10001:10001` on the host or uploads fail with a 500.
+      - app-data:/data
+    depends_on:
+      db:
+        condition: service_healthy
+    # uvicorn stops the heartbeat thread on SIGTERM and finishes an upload in flight.
+    # The healthcheck is defined in Backend/Dockerfile - it is inherited, not repeated,
+    # and web's depends_on below relies on it.
+    init: true
+    restart: unless-stopped
+
+  # --- frontend --------------------------------------------------------------
+  web:
+    build:
+      context: ./Frontend
+      args:
+        # Relative, so the SPA calls its own origin and this image is not tied to a
+        # hostname. nginx proxies /api to the api container.
+        VITE_API_BASE_URL: /api
+        VITE_TURNSTILE_SITE_KEY: ${VITE_TURNSTILE_SITE_KEY:-}
+    image: scvmun-web:${SCVMUN_TAG:-local}
+    ports:
+      # 80 serves only the health probe and the redirect to 443.
+      - "${WEB_PORT:-80}:80"
+      - "${WEB_TLS_PORT:-443}:443"
+    volumes:
+      # The certificate and key, read-only from the host. Never baked into the image:
+      # these images are distributed, and a private key in a layer would be a leak.
+      # Missing files here are the usual cause of nginx refusing to start - see
+      # deploy/TLS.md.
+      - ${TLS_DIR:-./tls}:/etc/nginx/tls:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+    # Healthcheck is defined in Frontend/Dockerfile. It probes the SPA *and* the
+    # certificate's remaining lifetime, so an expiring certificate shows up as an
+    # unhealthy container roughly a month before browsers start complaining.
+
+volumes:
+  db-data:
+  app-data:

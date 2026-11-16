@@ -242,3 +242,9 @@ Backend/logs/*
 Frontend/.DS_Store
 Frontend/src/.DS_Store
 Frontend/src/assets/.DS_Store
+
+# TLS material. A private key that reaches git is leaked, and must be reissued.
+tls/
+*.pem
+*.crt
+*.key

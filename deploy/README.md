@@ -140,64 +140,116 @@ Startup tells you which state you are in, in the technical log:
 | `captcha.misconfigured` | secret set but `TURNSTILE_HOSTNAMES` empty: every login is rejected |
 | (neither) | the check is on |
 
-## Running it in Docker
+## Self-hosting with Docker Compose
 
-The image is `Backend/Dockerfile`, built from `Backend/`:
+The supported deployment is three containers, defined in [`compose.yaml`](../compose.yaml)
+at the repository root:
+
+| Container | What it runs | Published |
+| --- | --- | --- |
+| `web` | nginx, the Vite build, TLS termination, the `/api` proxy | 80 and 443 |
+| `api` | FastAPI + uvicorn | nothing |
+| `db` | PostgreSQL 18.6 | nothing |
+
+Only `web` is reachable from outside. Because the SPA and the API share an origin through
+nginx, CORS is not exercised in this topology.
+
+### 1. Configure
 
 ```bash
-docker build -t scvmun-api Backend/
+cp .env.example .env
+chmod 600 .env
 ```
 
-Everything the app writes lives under `/data` — submitted papers, audit logs, and the
-heartbeat history the dashboard reports as uptime — so one volume holds all the state that
-must survive a rebuild:
+`POSTGRES_PASSWORD` is required — compose refuses to start without it, by design. Every key
+is documented in `.env.example`; the ones most deployments change are `TURNSTILE_SECRET` /
+`TURNSTILE_HOSTNAMES` (set both or neither) and `SCVMUN_TAG` (the image version).
 
-```bash
-docker run -d --name scvmun-api \
-  --env-file Backend/crud/.env \
-  -e DATABASE_URL='postgresql+psycopg2://scvmun:CHANGEME@host.docker.internal:5432/scvmun' \
-  -e FORWARDED_ALLOW_IPS=172.17.0.1 \
-  --add-host host.docker.internal:host-gateway \
-  -p 127.0.0.1:8001:8000 \
-  -v /srv/scvmun/data:/data \
-  --restart unless-stopped \
-  scvmun-api
-```
+### 2. TLS
 
-Notes that matter:
+The certificate is neither in this repository nor in the image — the images are public. Put
+two files in `tls/` next to `compose.yaml`:
 
-- **`-p 127.0.0.1:8001:8000`** keeps uvicorn off the public interface; nginx is the only
-  thing listening publicly. Point `proxy_pass` at `127.0.0.1:8001`.
-- **The driver must be in the URL**: `postgresql+psycopg2://…`, not `postgresql://`.
-  SQLAlchemy resolves the bare form to the psycopg **v3** dialect, while
-  `requirements.txt` installs `psycopg2-binary`, so the bare form dies at import with
-  `ModuleNotFoundError: No module named 'psycopg'`. Either spell the driver out (what the
-  project does) or add `psycopg[binary]` to the requirements.
-- **`--add-host host.docker.internal:host-gateway`** is how the container reaches a
-  Postgres on the bare metal host. Postgres needs `listen_addresses = '*'` and a
-  `pg_hba.conf` line for the docker bridge, e.g.
-  `host all all 172.17.0.0/16 scram-sha-256`.
-- **`FORWARDED_ALLOW_IPS`** must name the proxy that reaches the container. With the
-  command above that is the bridge gateway (`172.17.0.1`); leaving it at `127.0.0.1` makes
-  every request look like one client and silently collapses the per-IP limits.
-- **The image contains no secrets.** `Backend/crud/.env` is excluded by
-  `Backend/.dockerignore` and configuration arrives through `--env-file`/`-e`.
-- **One worker.** The audit log handlers and the heartbeat thread are per-process; add
-  `--workers` only after revisiting `core/monitor.py`'s deduplication.
-- **`/data` ownership.** The container runs as uid 10001, and storage plus audit logs are
-  written `0600`, so a bind mount must be owned by that uid: `chown -R 10001:10001 /srv/scvmun/data`.
+- `fullchain.pem` — your certificate **followed by** its intermediate(s)
+- `privkey.pem` — the matching private key
 
-The health probe is `GET /healthz`, which runs `SELECT 1`, so `docker ps` shows unhealthy
-when the API is up but the database is not. `HEALTHCHECK` is built into the image.
+[`TLS.md`](TLS.md) is the full procedure: telling which delivered file is which, building
+the chain, the three pre-flight checks, permissions, renewal, and troubleshooting. Read it
+before the first `up`, because nginx will not start without those two files.
 
-For local development there is a compose file at the repo root that pairs the API with a
-`postgres:16` container (no Postgres install needed on the Mac):
+### 3. Start
 
 ```bash
 docker compose up -d --build
-docker compose exec api python -m crud.bootstrap --admin-name "You"
-curl -s localhost:8001/healthz
+docker compose ps
 ```
+
+`web` failing immediately is almost always the TLS mount — `docker compose logs web` says
+which file it could not load.
+
+### 4. First-run data
+
+```bash
+docker compose run --rm api python crud/seed.py
+docker compose run --rm api python -m crud.bootstrap --admin-name "Your Name"
+```
+
+Both are one-shot jobs on purpose, never entrypoint steps: bootstrap mints access codes and
+must not run again on every restart. `seed.py` creates the tables and the pinned
+"Conference Start" timeline event; `bootstrap.py` prints the admin code **once**. See
+[First-run bootstrap](#first-run-bootstrap) below.
+
+### 5. Verify
+
+```bash
+curl -sI https://your.hostname/ | head -3          # 200, and Strict-Transport-Security
+curl -s  https://your.hostname/api/conference      # JSON from the API
+curl -sI http://your.hostname/ | grep -i location  # 301 -> https
+docker compose logs -f web
+```
+
+### Upgrading
+
+```bash
+docker compose pull
+docker compose up -d
+```
+
+**There are no schema migrations yet.** `crud/seed.py` and `crud/bootstrap.py` call
+`Base.metadata.create_all()`, which creates missing tables but never alters an existing one.
+A release that adds or changes a column therefore needs a manual `ALTER TABLE` (or a
+dump/restore) on every existing installation. Take a backup first:
+
+```bash
+docker compose exec db pg_dump -U scvmun scvmun > backup-$(date +%F).sql
+docker run --rm -v scvmun_app-data:/data -v "$PWD":/backup alpine \
+  tar czf /backup/data-$(date +%F).tgz -C /data .
+```
+
+The database and `/data` (papers, audit logs, heartbeat) must be backed up together:
+`position_papers` stores a relative path, so restoring one without the other gives broken
+downloads.
+
+### Notes that matter
+
+These live in the Dockerfiles and `compose.yaml` as comments; repeated here because each one
+produces a confusing symptom when ignored.
+
+- **The driver must be spelled out** in `DATABASE_URL`: `postgresql+psycopg2://…`. A bare
+  `postgresql://` makes SQLAlchemy load psycopg 3, which is not installed, and the API
+  container dies at import.
+- **One worker.** The audit handlers, the heartbeat thread and the module state in
+  `core/controls.py` are per-process, so `--workers` above 1 duplicates heartbeats and
+  splits the audit log.
+- **`/data` is where the state lives** — papers, both audit logs, the heartbeat files. It is
+  the `app-data` volume. Delete it and the audit trail is gone even though the database
+  survives.
+- **The healthchecks mean something.** `api`'s runs `SELECT 1`, so it reports unhealthy when
+  the API is up but the database is not. `web`'s checks the SPA *and* the certificate's
+  remaining lifetime — it goes unhealthy about 30 days before expiry.
+- **PostgreSQL 18 moved `PGDATA`.** The volume mounts `/var/lib/postgresql`, not the pre-18
+  `/var/lib/postgresql/data`. Mounting the old path silently puts the cluster in the
+  container's writable layer.
 
 ## First-run bootstrap
 
