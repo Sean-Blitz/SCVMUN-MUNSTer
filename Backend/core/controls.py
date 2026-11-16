@@ -1,4 +1,4 @@
-from typing import Dict
+from typing import Dict, List, Any
 
 award_options = ["Verbal Commendation", "Honorable Mention", "Outstanding Delegate", "Best Delegate"]
 
@@ -17,6 +17,11 @@ BROADCAST_LIMITS: Dict[str, Dict[str, int]] = {
 # expects them. Kept here because both the admin editor (which validates `phase`) and the
 # chair overview (which must always return both keys, even when empty) need the same list.
 TIMELINE_PHASES = ("preConference", "duringConference")
+
+paper_rubric_data = []
+# Ex: [{"id": "criterion1", "label": "Clarity of Argument", "maxScore": 10}, ...]
+awards_rubric: List[Dict[str, Any]] = []
+# Ex: [{"id": "string | number", "label": "string", "levels": [{ "score": 4, "label": "string", "description": "string" }]}]
 
 # How many position papers one delegate may upload in a rolling hour. Each upload costs up
 # to PAPER_MAX_MB, and re-uploading is allowed until the paper is graded, so without a cap

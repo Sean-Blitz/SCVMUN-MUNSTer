@@ -1,0 +1,17 @@
+# The build inputs themselves.
+Dockerfile
+.dockerignore
+
+# Installed and generated locally; `npm ci` recreates node_modules from the lockfile and
+# `npm run build` recreates dist/.
+node_modules/
+dist/
+
+# Local configuration. VITE_* values arrive as build arguments so the image does not
+# carry a developer's .env, and so one image is not tied to one environment.
+.env
+.env.*
+
+# Editor and OS noise.
+.DS_Store
+*.log
