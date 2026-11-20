@@ -248,3 +248,6 @@ tls/
 *.pem
 *.crt
 *.key
+
+# setup.py backs up .env before rewriting it; those copies hold the same secrets.
+.env.backup-*
